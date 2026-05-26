@@ -53,11 +53,11 @@ db-cluster receipts
 
 ## Status
 
-**Phase 12 — Dogfood Findings Repair: COMPLETE.** 485 tests passing across 37 files.
+**Phase 13 — Dashboard / Truth Inspector Integration: COMPLETE.** 539 tests passing across 43 files.
 
-Phase 12 converts Phase 11's PASS_WITH_CONDITIONS into a stronger product foundation. Four findings repaired: artifact restore now preserves content + IDs with integrity verification; command state is shared across kernel instances (disk-backed, no stale cache); `commitMutation(create_entity/update_entity)` auto-indexes consistently; rebuild produces content-aware index text (headings + key terms, not just filenames).
+Phase 13 turns the ClusterTruthInspector template into a real inspector over dogfood data. The dashboard never reads raw adapters — it consumes DashboardObject instances built from kernel verbs. Components: StoreLanesMap, OperationsPanel, CommandPreviewPanel, PolicyViewToggle. Every object carries URI, ownerStore, and sourceType. Redaction is view-layer only — source truth is never mutated.
 
-Previous: Phase 11 — Dogfood Gate.
+Previous: Phase 12 — Dogfood Findings Repair.
 
 ## License
 

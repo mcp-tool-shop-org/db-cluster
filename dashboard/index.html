@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ClusterTruthInspector — db-cluster</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;450;500;600;700&display=swap"
+    rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+          },
+          colors: {
+            ink: {
+              950: '#08090b',
+              925: '#0b0d10',
+              900: '#0f1115',
+              875: '#13161b',
+              850: '#171a20',
+              800: '#1e2229',
+              750: '#262b34',
+              700: '#2f343f',
+              650: '#3a4150',
+              600: '#4a5160',
+              500: '#6b7282',
+              400: '#8a91a1',
+              300: '#a8aebc',
+              200: '#c6cbd6',
+              100: '#e2e5ec',
+              50: '#f3f5f9',
+            },
+            // store accents — distinct but muted enough to coexist
+            canonical: { DEFAULT: '#e8b54a', soft: '#3a2e16', line: '#5c4720' },
+            artifact: { DEFAULT: '#5ec2e6', soft: '#11313d', line: '#1d4d61' },
+            index: { DEFAULT: '#b08cf5', soft: '#241a3e', line: '#3a2c63' },
+            ledger: { DEFAULT: '#7fcf9f', soft: '#143025', line: '#234d3b' },
+            // states
+            warn: { DEFAULT: '#f0a043', soft: '#3a2912', line: '#5c401d' },
+            danger: { DEFAULT: '#ef6c6c', soft: '#3a1717', line: '#5c2424' },
+            ok: { DEFAULT: '#6dc790', soft: '#15301f', line: '#244c36' },
+          },
+          boxShadow: {
+            'inset-hair': 'inset 0 0 0 1px rgba(255,255,255,0.04)',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html,
+    body {
+      background: #08090b;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      color: #c6cbd6;
+      font-feature-settings: 'ss01', 'cv11';
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    /* subtle dot grid for the cluster substrate background */
+    .substrate-bg {
+      background-image:
+        radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.035) 1px, transparent 0);
+      background-size: 22px 22px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background: #262b34;
+      border-radius: 4px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+      background: #3a4150;
+    }
+
+    /* a small caret used in stores */
+    .caret::before {
+      content: '›';
+      padding-right: 6px;
+      color: #6b7282;
+    }
+
+    /* selection highlight */
+    ::selection {
+      background: rgba(232, 181, 74, 0.25);
+      color: #fff;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen">
+
+  <!-- Demo page chrome: deliberately minimal — frames the component without competing with it -->
+  <header class="border-b border-ink-800 bg-ink-925/80 backdrop-blur">
+    <div class="max-w-[1400px] mx-auto px-6 py-3 flex items-center gap-6">
+      <div class="flex items-center gap-2.5">
+        <!-- four-store glyph -->
+        <svg width="22" height="22" viewBox="0 0 22 22" class="shrink-0">
+          <rect x="1.5" y="1.5" width="8" height="8" rx="1" fill="none" stroke="#e8b54a" stroke-width="1.4" />
+          <rect x="12.5" y="1.5" width="8" height="8" rx="1" fill="none" stroke="#5ec2e6" stroke-width="1.4" />
+          <rect x="1.5" y="12.5" width="8" height="8" rx="1" fill="none" stroke="#b08cf5" stroke-width="1.4" />
+          <rect x="12.5" y="12.5" width="8" height="8" rx="1" fill="none" stroke="#7fcf9f" stroke-width="1.4" />
+        </svg>
+        <span class="mono text-[13px] font-semibold tracking-tight text-ink-100">db-cluster</span>
+        <span class="mono text-[11px] text-ink-500">v0.1.0 · phase-1</span>
+      </div>
+      <nav class="ml-auto flex items-center gap-5 text-[12.5px] text-ink-400">
+        <a class="hover:text-ink-100 transition" href="#">cluster</a>
+        <a class="text-ink-100" href="#">inspect</a>
+        <a class="hover:text-ink-100 transition" href="#">find</a>
+        <a class="hover:text-ink-100 transition" href="#">trace</a>
+        <a class="hover:text-ink-100 transition" href="#">receipts</a>
+        <span class="w-px h-4 bg-ink-800"></span>
+        <span class="mono text-[11px] text-ink-500">.db-cluster/</span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-[1400px] mx-auto px-6 py-8">
+    <div class="mb-5 flex items-end justify-between">
+      <div>
+        <div class="mono text-[11px] uppercase tracking-[0.18em] text-ink-500 mb-1.5">component · ClusterTruthInspector
+        </div>
+        <h1 class="text-[22px] font-semibold text-ink-100 tracking-tight">Inspect one object across the cluster.</h1>
+        <p class="text-[13.5px] text-ink-400 mt-1.5 max-w-[64ch]">
+          Specialized truth stores behave as one governed substrate. The index discovers, the kernel routes,
+          the cluster owns truth — and the AI proposes, never mutates.
+        </p>
+      </div>
+      <div class="mono text-[11px] text-ink-500 text-right leading-relaxed">
+        <div>4 stores · append-only ledger</div>
+        <div>command-gated mutation</div>
+      </div>
+    </div>
+
+    <!-- The component mounts here -->
+    <div id="root"></div>
+
+  </main>
+
+  <footer class="max-w-[1400px] mx-auto px-6 pb-10 pt-2 mono text-[11px] text-ink-500">
+    drop-in component · MIT · github.com/mcp-tool-shop-org/db-cluster
+  </footer>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"
+    integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L"
+    crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"
+    integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm"
+    crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"
+    integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y"
+    crossorigin="anonymous"></script>
+
+  <script type="text/babel" data-presets="react" src="demo-data.js"></script>
+  <script type="text/babel" data-presets="react" src="ClusterTruthInspector.jsx"></script>
+  <script type="text/babel" data-presets="react">
+    // small wait loop in case the external babel script hasn't finished transforming yet
+    (function mount(tries) {
+      if (typeof window.ClusterTruthInspector === 'function') {
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ClusterTruthInspector />);
+      } else if (tries < 50) {
+        setTimeout(() => mount(tries + 1), 50);
+      } else {
+        document.getElementById('root').innerHTML =
+          '<pre style="color:#ef6c6c;font-family:JetBrains Mono;padding:1rem">Failed to load ClusterTruthInspector.jsx</pre>';
+      }
+    })(0);
+  </script>
+</body>
+
+</html>

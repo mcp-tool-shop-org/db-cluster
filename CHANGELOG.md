@@ -1,5 +1,52 @@
 # Changelog
 
+## Phase 13 — Dashboard / Truth Inspector Integration (2026-05-27)
+
+Turns the ClusterTruthInspector template into a real inspector over dogfood data. Dashboard consumes cluster state through kernel verbs only — never raw adapter access.
+
+### New modules
+- `src/dashboard/dashboard-model.ts` — DashboardObject type contract (URI, ownerStore, sourceType, freshness, provenance, receipts, warnings)
+- `src/dashboard/inspector-data.ts` — maps kernel verbs → DashboardObject instances
+- `src/dashboard/ops-model.ts` — operations health model from doctor/verify
+- `scripts/dashboard-snapshot.ts` — generates static JSON from live cluster
+
+### React components (CDN, no build step)
+- `dashboard/ClusterTruthInspector.jsx` — main inspector (StoreLanesMap, ProvenanceTimeline, ExplainIndexPanel)
+- `dashboard/components/OperationsPanel.jsx` — cluster health and integrity at a glance
+- `dashboard/components/CommandPreviewPanel.jsx` — command lifecycle visualization (proposed ≠ truth)
+- `dashboard/components/PolicyViewToggle.jsx` — view-as operator/agent/observer/external + applyRedaction
+
+### Demo + data
+- `dashboard/demo-data.js` — 6 shaped DashboardObject instances + policy views + ops status
+- `dashboard/index.html` — demo host page
+- `dashboard/README.md` — doctrine and usage
+
+### Test files
+- `test/dashboard-model.test.ts` — 14 tests
+- `test/dashboard-snapshot.test.ts` — 8 tests
+- `test/dashboard-ops.test.ts` — 6 tests
+- `test/dashboard-command-preview.test.ts` — 6 tests
+- `test/dashboard-policy-view.test.ts` — 8 tests
+- `test/phase13-proof.test.ts` — 12 architecture proofs
+
+### 12 proofs verified
+1. Dashboard model never reads raw adapters directly
+2. Every DashboardObject has URI, ownerStore, and sourceType
+3. Index records labeled derivative
+4. Canonical = owner-truth, artifact = source-truth
+5. Provenance graph has nodes and edges from real cluster data
+6. Receipts connected to command lifecycle
+7. Command preview lives in ledger (append-only, non-editable)
+8. Redaction returns new copy — source never mutated
+9. Ops model uses doctor() and kernel verbs
+10. Snapshot generates from live cluster
+11. Template files exist and expose window globals
+12. No dashboard copy positions product as CRUD/RAG/admin
+
+### Stats
+- 539 tests passing (48 skipped), 0 failures
+- 47 test files
+
 ## Phase 12 — Dogfood Findings Repair (2026-05-27)
 
 Converts Phase 11's PASS_WITH_CONDITIONS into a stronger product foundation by fixing the four gaps discovered through self-dogfood.
