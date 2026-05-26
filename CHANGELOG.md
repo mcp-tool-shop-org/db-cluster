@@ -1,5 +1,45 @@
 # Changelog
 
+## Phase 2 — Cross-Store Identity and Rebuildable Index (2026-05-26)
+
+### Wave 1 — Cluster URI Model
+- `cluster://<store>/<id>` URI scheme: canonical, artifact, index, ledger, receipt
+- `parseClusterUri`, `formatClusterUri`, `isClusterUri`, `uriForObject`
+- `ClusterUriError` for malformed/unknown store URIs
+- 24 URI tests
+
+### Wave 2 — Resolver Spine
+- `ClusterResolver`: resolve, resolveAll, tryResolve
+- Always resolves to owner store, never index
+- `ResolveError` for missing objects
+- 14 resolver tests
+
+### Wave 3 — Index Rebuild
+- `kernel.rebuildIndex()` — clear + re-derive from truth stores
+- `kernel.indexStatus()` — count, per-store breakdown, staleness estimate
+- CLI: `db-cluster index rebuild`, `db-cluster index status`
+- 9 rebuild tests
+
+### Wave 4 — Index Explain/Stale
+- `kernel.explainIndex(recordId)` — why record exists, owner truth, freshness
+- `kernel.listStaleRecords()` — detect all stale index records
+- CLI: `db-cluster index explain <id>`, `db-cluster index stale`
+- CLI: `db-cluster resolve <uri>`
+- 7 explain tests
+
+### Wave 5 — Proof Tests
+- URI roundtrip: parse → format → resolve
+- Resolver returns owner truth after index destruction
+- Rebuild produces identical find results
+- Stale detection catches mutations that bypass index
+- Explain names specific owner truth
+- Cross-store identity stable across restart
+- 13 proof tests
+
+**Phase 2 total: 67 new tests (113 cumulative), all passing.**
+
+---
+
 ## Phase 1 — Cluster Spine (2026-05-26)
 
 ### Wave 1 — Identity + Contracts

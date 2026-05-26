@@ -49,11 +49,11 @@ db-cluster receipts
 
 ## Status
 
-**Phase 1 — Cluster Spine: COMPLETE.** 46 tests passing.
+**Phase 2 — Cross-Store Identity and Rebuildable Index: COMPLETE.** 113 tests passing.
 
-The smallest real cluster that proves specialized truth stores can behave as one governed AI-native substrate — defended with destructive and cross-process proof tests.
+The cluster can name, resolve, rebuild, explain, and distrust its own derivative index. Every object has a stable `cluster://` URI, a resolver that goes to owner truth (never index), and stale-detection that turns drift into a visible condition.
 
-Next: Phase 2 — Cross-Store Identity and Rebuildable Index.
+Next: Phase 3 — Retrieval Planner and Evidence Bundles.
 
 ## License
 
