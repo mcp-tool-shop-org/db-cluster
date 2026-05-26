@@ -28,3 +28,5 @@ export {
     redactIndexSourceUri,
     REDACTED,
 } from './redactor.js';
+
+export type { Principal, Policy, TrustZone, VisibilityRule } from '../types/policy.js';

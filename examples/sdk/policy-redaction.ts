@@ -7,11 +7,10 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createLocalCluster } from '../../src/adapters/local/index.js';
-import { ClusterKernel } from '../../src/kernel/cluster-kernel.js';
-import { PolicyEnforcedKernel } from '../../src/kernel/policy-enforced-kernel.js';
-import { DEFAULT_POLICIES, DEFAULT_TRUST_ZONES, DEFAULT_VISIBILITY_RULES } from '../../src/policy/default-policies.js';
-import type { Principal } from '../../src/types/policy.js';
+import { createLocalCluster, ClusterKernel } from 'db-cluster';
+import { PolicyEnforcedKernel } from 'db-cluster/policy';
+import { DEFAULT_POLICIES, DEFAULT_TRUST_ZONES, DEFAULT_VISIBILITY_RULES } from 'db-cluster/policy';
+import type { Principal } from 'db-cluster/policy';
 
 async function main() {
     const dataDir = mkdtempSync(join(tmpdir(), 'db-cluster-policy-'));

@@ -12,10 +12,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createLocalCluster } from '../../src/adapters/local/index.js';
-import { ClusterKernel } from '../../src/kernel/cluster-kernel.js';
-import { backup, restore } from '../../src/ops/backup.js';
-import { doctor } from '../../src/ops/doctor.js';
+import { createLocalCluster, ClusterKernel, backup, restore, doctor } from 'db-cluster';
 
 async function main() {
     const dataDir = mkdtempSync(join(tmpdir(), 'project-memory-'));

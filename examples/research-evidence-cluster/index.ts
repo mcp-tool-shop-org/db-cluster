@@ -12,10 +12,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createLocalCluster } from '../../src/adapters/local/index.js';
-import { ClusterKernel } from '../../src/kernel/cluster-kernel.js';
-import { doctor } from '../../src/ops/doctor.js';
-import { rebuildIndex } from '../../src/ops/rebuild.js';
+import { createLocalCluster, ClusterKernel, doctor } from 'db-cluster';
 
 async function main() {
     const dataDir = mkdtempSync(join(tmpdir(), 'research-cluster-'));
@@ -87,7 +84,7 @@ async function main() {
     console.log('Repair available:', indexCheck?.repairAvailable);
 
     // Rebuild
-    const rebuilt = await rebuildIndex(stores);
+    const rebuilt = await kernel.rebuildIndex('example-actor');
     console.log('Rebuilt:', rebuilt.rebuilt, 'records');
 
     // Cleanup

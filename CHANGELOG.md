@@ -1,5 +1,33 @@
 # Changelog
 
+## Phase 15 — Release Readiness & Package Boundary (2026-05-26)
+
+Prepares db-cluster for a real versioned release. Deliberate public API, package boundary documentation, fresh install smoke tests, and release gate automation. **Verdict: PASS.**
+
+### Public API surface (`src/index.ts` rewritten)
+- Main entry exports: ClusterKernel, store contracts, domain types, factory, ops, URI
+- Subpath exports: `db-cluster/sdk`, `db-cluster/mcp`, `db-cluster/policy`, `db-cluster/types`
+- Internal details intentionally excluded (adapters, command queue, repo-knowledge)
+
+### Package boundary
+- `exports` map in package.json with explicit subpath conditions
+- `files` field restricts to dist/docs/examples/dashboard/README/CHANGELOG/LICENSE
+- `prepack` script ensures build before pack
+- `docs/package-boundary.md` documents public vs private
+
+### Release gate automation
+- `scripts/release-gate.mjs` — 6-stage gate (build, test, pack, smoke, drift, exports)
+- `scripts/smoke-install.mjs` — 9-test fresh install validation from tarball
+
+### Documentation
+- `docs/release-notes-v0.1.md` — honest positioning (is/is-not table)
+- `docs/release-readiness.md` — readiness assessment checklist
+- `docs/package-boundary.md` — public/private boundary reference
+- All examples updated to use package import paths
+
+### Proof suite
+- `test/phase15-proof.test.ts` — 10 proofs: API surface, exports, bins, pack, examples, positioning, lifecycle, release-gate
+
 ## Phase 14 — Repo-Knowledge Integration Gate (2026-05-26)
 
 Proves db-cluster adds value as a backing substrate for repo-knowledge workflows — provenance, evidence bundles, mutation safety, and recovery — without replacing the existing system. **Verdict: PASS.**

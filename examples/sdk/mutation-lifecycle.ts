@@ -7,8 +7,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createLocalCluster } from '../../src/adapters/local/index.js';
-import { ClusterKernel } from '../../src/kernel/cluster-kernel.js';
+import { createLocalCluster, ClusterKernel } from 'db-cluster';
 
 async function main() {
     const dataDir = mkdtempSync(join(tmpdir(), 'db-cluster-mutation-'));

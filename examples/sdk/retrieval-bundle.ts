@@ -7,9 +7,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createLocalCluster } from '../../src/adapters/local/index.js';
-import { ClusterKernel } from '../../src/kernel/cluster-kernel.js';
-import { rebuildIndex } from '../../src/ops/rebuild.js';
+import { createLocalCluster, ClusterKernel } from 'db-cluster';
 
 async function main() {
     const dataDir = mkdtempSync(join(tmpdir(), 'db-cluster-bundle-'));
@@ -48,8 +46,8 @@ async function main() {
 
     // Rebuild index from owner truth
     console.log('\n=== After rebuild ===');
-    const result = await rebuildIndex(stores);
-    console.log('Rebuilt:', result.rebuilt, 'records');
+    const rebuildResult = await kernel.rebuildIndex('example-actor');
+    console.log('Rebuilt:', rebuildResult.rebuilt, 'records');
 
     const restoredBundle = await kernel.retrieveBundle('architecture');
     console.log('Entities after rebuild:', restoredBundle.resolvedEntities.length);

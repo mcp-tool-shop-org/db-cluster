@@ -5,8 +5,8 @@ The `ClusterSDK` provides programmatic access to db-cluster. It wraps the kernel
 ## Setup
 
 ```typescript
-import { ClusterSDK } from 'db-cluster';
-import { createLocalCluster } from 'db-cluster/adapters/local';
+import { ClusterSDK } from 'db-cluster/sdk';
+import { createLocalCluster } from 'db-cluster';
 
 const stores = createLocalCluster('.db-cluster');
 const sdk = new ClusterSDK({ stores, dataDir: '.db-cluster' });
@@ -15,13 +15,12 @@ const sdk = new ClusterSDK({ stores, dataDir: '.db-cluster' });
 With Postgres canonical backend:
 
 ```typescript
-import { createCluster } from 'db-cluster/adapters/factory';
+import { createCluster } from 'db-cluster';
 
-const stores = createCluster({
-    canonical: { backend: 'postgres', connectionString: process.env.DB_CLUSTER_POSTGRES_URL! },
-    artifact: { backend: 'local', dataDir: '.db-cluster/artifact' },
-    index: { backend: 'local', dataDir: '.db-cluster/index' },
-    ledger: { backend: 'local', dataDir: '.db-cluster/ledger' },
+const { stores } = createCluster({
+    rootDir: '.db-cluster',
+    backends: { canonical: 'postgres' },
+    postgresUrl: process.env.DB_CLUSTER_POSTGRES_URL!,
 });
 const sdk = new ClusterSDK({ stores, dataDir: '.db-cluster' });
 ```

@@ -8,8 +8,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createCluster } from '../../src/adapters/factory.js';
-import { ClusterKernel } from '../../src/kernel/cluster-kernel.js';
+import { createCluster, ClusterKernel } from 'db-cluster';
 
 async function main() {
     const postgresUrl = process.env.DB_CLUSTER_POSTGRES_URL;

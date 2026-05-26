@@ -333,14 +333,23 @@ describe('Wave 6 — Phase 6 Proof: MCP Cannot Bypass Cluster Law', () => {
     // ─── Proof 9: no raw adapter or store method exported ────────────
 
     describe('Proof 9: no raw adapter or store exported through public surface', () => {
-        it('main package index exports only types', async () => {
+        it('main package index exports only deliberate public API', async () => {
             const indexContent = readFileSync(join(import.meta.dirname, '..', 'src', 'index.ts'), 'utf-8');
 
-            // Every export must be a type export
-            const exportLines = indexContent.split('\n').filter((l) => l.startsWith('export'));
-            for (const line of exportLines) {
-                expect(line).toMatch(/export\s+type/);
-            }
+            // Phase 15: main index now exports the deliberate public API surface.
+            // It must NOT export raw adapter implementations.
+            expect(indexContent).not.toContain('LocalCanonicalStore');
+            expect(indexContent).not.toContain('LocalArtifactStore');
+            expect(indexContent).not.toContain('LocalIndexStore');
+            expect(indexContent).not.toContain('LocalLedgerStore');
+            expect(indexContent).not.toContain('PostgresCanonicalStore');
+            expect(indexContent).not.toContain('CommandQueue');
+            expect(indexContent).not.toContain('ingestRepoKnowledge');
+
+            // It MUST export the kernel and factory
+            expect(indexContent).toContain('ClusterKernel');
+            expect(indexContent).toContain('createLocalCluster');
+            expect(indexContent).toContain('createCluster');
         });
 
         it('MCP index does not export store adapters or kernel', async () => {

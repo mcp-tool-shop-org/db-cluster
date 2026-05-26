@@ -53,11 +53,11 @@ db-cluster receipts
 
 ## Status
 
-**Phase 14 — Repo-Knowledge Integration Gate: PASS.** 604 tests passing across 49 files.
+**Phase 15 — Release Readiness & Package Boundary: PASS.** 614 tests passing across 51 files.
 
-Phase 14 proves db-cluster adds value as a parallel substrate for repo-knowledge workflows — provenance, evidence bundles, mutation safety, and operational recovery — without replacing the existing system. Integration adapter at `src/integrations/repo-knowledge/`.
+Phase 15 establishes a deliberate public API surface, package boundary, fresh install smoke tests, and release gate automation. The package is ready for versioned release as v0.1.0.
 
-Previous: Phase 13 — Dashboard / Truth Inspector Integration.
+Previous: Phase 14 — Repo-Knowledge Integration Gate.
 
 ## License
 
