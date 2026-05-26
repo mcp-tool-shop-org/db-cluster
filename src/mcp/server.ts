@@ -230,6 +230,70 @@ export const TOOLS: AnnotatedTool[] = [
         },
         annotations: { readOnly: true, writesCluster: false, approvalSensitive: false, stagedOnly: false, requiresExistingCommand: false },
     },
+    {
+        name: 'cluster_policy_explain',
+        description: 'Explain what the policy engine would decide for a given principal + capability + resource. Does NOT execute the action — dry-run policy check only. Never returns restricted object data. Includes decision, reason, matched policy, approval requirement, and visibility status.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                principal: {
+                    type: 'object',
+                    description: 'Principal to evaluate',
+                    properties: {
+                        id: { type: 'string' },
+                        name: { type: 'string' },
+                        roles: { type: 'array', items: { type: 'string' } },
+                        trustZone: { type: 'string' },
+                    },
+                    required: ['id', 'name', 'roles', 'trustZone'],
+                },
+                capability: { type: 'string', description: 'Capability to check (e.g. read_owner_truth, commit_command)' },
+                resourceUri: { type: 'string', description: 'Cluster URI of the target resource (optional)' },
+                ownerStore: { type: 'string', enum: ['canonical', 'artifact', 'index', 'ledger'], description: 'Owner store (optional)' },
+                entityKind: { type: 'string', description: 'Entity kind filter (optional)' },
+                commandVerb: { type: 'string', description: 'Command verb filter (optional)' },
+            },
+            required: ['principal', 'capability'],
+        },
+        annotations: { readOnly: true, writesCluster: false, approvalSensitive: false, stagedOnly: false, requiresExistingCommand: false },
+    },
+    {
+        name: 'cluster_policy_test',
+        description: 'Test a policy scenario — evaluates multiple actions for a principal without executing any. Returns per-action allow/deny decisions and a summary. Useful for verifying what an agent/role can and cannot do.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                scenario: { type: 'string', description: 'Human-readable scenario name' },
+                principal: {
+                    type: 'object',
+                    description: 'Principal to test',
+                    properties: {
+                        id: { type: 'string' },
+                        name: { type: 'string' },
+                        roles: { type: 'array', items: { type: 'string' } },
+                        trustZone: { type: 'string' },
+                    },
+                    required: ['id', 'name', 'roles', 'trustZone'],
+                },
+                actions: {
+                    type: 'array',
+                    description: 'Actions to test',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            capability: { type: 'string' },
+                            resourceUri: { type: 'string' },
+                            ownerStore: { type: 'string' },
+                            commandVerb: { type: 'string' },
+                        },
+                        required: ['capability'],
+                    },
+                },
+            },
+            required: ['scenario', 'principal', 'actions'],
+        },
+        annotations: { readOnly: true, writesCluster: false, approvalSensitive: false, stagedOnly: false, requiresExistingCommand: false },
+    },
 ];
 
 // ─── Tool handlers (exported for parity testing) ───────────────────────────
@@ -448,6 +512,53 @@ export async function handleTool(name: string, args: Record<string, unknown>, sd
             return {
                 _meta: { operation: 'read', writesCluster: false },
                 receipts,
+            };
+        }
+
+        case 'cluster_policy_explain': {
+            const result = sdk.policyExplain({
+                principal: args.principal as any,
+                capability: args.capability as any,
+                resourceUri: args.resourceUri as string | undefined,
+                ownerStore: args.ownerStore as any,
+                entityKind: args.entityKind as string | undefined,
+                commandVerb: args.commandVerb as string | undefined,
+            });
+            return {
+                _meta: {
+                    operation: 'read',
+                    writesCluster: false,
+                    note: 'Policy explanation only — no action was executed. No restricted object data is included.',
+                },
+                decision: result.decision,
+                matchedPolicyId: result.matchedPolicyId,
+                matchedPolicyName: result.matchedPolicyName,
+                capability: result.capability,
+                reason: result.reason,
+                principalId: result.principalId,
+                trustZone: result.trustZone,
+                requiresApproval: result.requiresApproval,
+                explanation: result.explanation,
+                visibility: result.visibility,
+            };
+        }
+
+        case 'cluster_policy_test': {
+            const result = sdk.policyTest({
+                scenario: args.scenario as string,
+                principal: args.principal as any,
+                actions: args.actions as any[],
+            });
+            return {
+                _meta: {
+                    operation: 'read',
+                    writesCluster: false,
+                    note: 'Policy scenario test — no actions were executed.',
+                },
+                scenario: result.scenario,
+                principalId: result.principalId,
+                results: result.results,
+                summary: result.summary,
             };
         }
 

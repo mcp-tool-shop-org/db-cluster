@@ -6,6 +6,9 @@ import { createLocalCluster } from './adapters/local/index.js';
 import { ClusterKernel } from './kernel/cluster-kernel.js';
 import { ClusterResolver } from './resolver/index.js';
 import { formatClusterUri, parseClusterUri, isClusterUri } from './uri/index.js';
+import { evaluatePolicy, explainPolicyDecision, checkVisibility } from './policy/policy-engine.js';
+import { DEFAULT_POLICIES, DEFAULT_TRUST_ZONES, DEFAULT_VISIBILITY_RULES } from './policy/default-policies.js';
+import type { Principal, Capability } from './types/policy.js';
 
 const CLUSTER_DIR = resolve(process.cwd(), '.db-cluster');
 
@@ -550,6 +553,89 @@ program
         } else {
             console.log(kernel.explainTrace(graph));
         }
+    });
+
+// --- policy ---
+const policy = program.command('policy').description('Policy explain and test surface');
+
+policy
+    .command('explain')
+    .description('Explain what the policy engine would decide for a given action (dry-run)')
+    .requiredOption('--principal <id>', 'Principal ID')
+    .requiredOption('--capability <cap>', 'Capability to check')
+    .option('--roles <roles>', 'Comma-separated roles', '')
+    .option('--trust-zone <zone>', 'Trust zone', 'internal')
+    .option('--uri <uri>', 'Resource URI')
+    .option('--store <store>', 'Owner store')
+    .option('--kind <kind>', 'Entity kind')
+    .option('--verb <verb>', 'Command verb')
+    .action((opts) => {
+        const principal: Principal = {
+            id: opts.principal,
+            name: opts.principal,
+            roles: opts.roles ? opts.roles.split(',') : [],
+            trustZone: opts.trustZone,
+        };
+
+        const decision = evaluatePolicy({
+            principal,
+            capability: opts.capability as Capability,
+            resourceUri: opts.uri,
+            ownerStore: opts.store,
+            entityKind: opts.kind,
+            commandVerb: opts.verb,
+            trustZone: opts.trustZone,
+        }, { policies: DEFAULT_POLICIES, trustZones: DEFAULT_TRUST_ZONES });
+
+        const explanation = explainPolicyDecision(decision);
+        console.log(explanation);
+
+        if (decision.decision === 'deny' && opts.uri) {
+            const vis = checkVisibility(opts.uri, opts.store, DEFAULT_VISIBILITY_RULES);
+            console.log(`\nVisibility: existence ${vis.existenceVisible ? 'VISIBLE' : 'HIDDEN'}${vis.emitPlaceholder ? ' (placeholder emitted)' : ''}`);
+        }
+    });
+
+policy
+    .command('test')
+    .description('Test a policy scenario — evaluate multiple capabilities for a principal')
+    .requiredOption('--principal <id>', 'Principal ID')
+    .requiredOption('--capabilities <caps>', 'Comma-separated capabilities to test')
+    .option('--roles <roles>', 'Comma-separated roles', '')
+    .option('--trust-zone <zone>', 'Trust zone', 'internal')
+    .option('--store <store>', 'Owner store')
+    .option('--uri <uri>', 'Resource URI')
+    .action((opts) => {
+        const principal: Principal = {
+            id: opts.principal,
+            name: opts.principal,
+            roles: opts.roles ? opts.roles.split(',') : [],
+            trustZone: opts.trustZone,
+        };
+
+        const capabilities = opts.capabilities.split(',') as Capability[];
+        const results = capabilities.map((capability) => {
+            const decision = evaluatePolicy({
+                principal,
+                capability,
+                resourceUri: opts.uri,
+                ownerStore: opts.store,
+                trustZone: opts.trustZone,
+            }, { policies: DEFAULT_POLICIES, trustZones: DEFAULT_TRUST_ZONES });
+            return { capability, decision: decision.decision, reason: decision.reason, policyId: decision.matchedPolicyId };
+        });
+
+        const allowed = results.filter((r) => r.decision === 'allow').length;
+        const denied = results.filter((r) => r.decision === 'deny').length;
+
+        console.log(`Policy test for ${principal.id} [${principal.roles.join(', ')}] in zone ${opts.trustZone}:`);
+        console.log('');
+        for (const r of results) {
+            const icon = r.decision === 'allow' ? '✓' : '✗';
+            console.log(`  ${icon} ${r.capability}: ${r.decision.toUpperCase()} — ${r.reason} (${r.policyId})`);
+        }
+        console.log('');
+        console.log(`Summary: ${allowed} allowed, ${denied} denied out of ${results.length} actions.`);
     });
 
 program.parse();

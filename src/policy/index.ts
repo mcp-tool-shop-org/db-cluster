@@ -16,3 +16,15 @@ export {
 
 export { PolicyEnforcedKernel, PolicyDeniedError } from '../kernel/policy-enforced-kernel.js';
 export type { PolicyContext, PolicyKernelOptions } from '../kernel/policy-enforced-kernel.js';
+
+export {
+    redactArtifact,
+    redactEntity,
+    redactCommand,
+    redactReceipt,
+    redactProvenanceActors,
+    redactGraphNodes,
+    sanitizeWarnings,
+    redactIndexSourceUri,
+    REDACTED,
+} from './redactor.js';

@@ -1,13 +1,22 @@
 import type { ClusterStores } from '../contracts/index.js';
-import type { Principal, Capability, PolicyDecision, TrustZone, Policy, VisibilityRule } from '../types/policy.js';
+import type { Principal, Capability, PolicyDecision, TrustZone, Policy, VisibilityRule, RedactionRule } from '../types/policy.js';
 import type { Entity } from '../types/entity.js';
 import type { Artifact } from '../types/artifact.js';
 import type { EvidenceBundle } from '../types/evidence-bundle.js';
-import type { ProvenanceGraph, TraceOptions } from '../types/provenance-graph.js';
+import type { ProvenanceGraph, TraceOptions, ProvenanceNode } from '../types/provenance-graph.js';
 import type { Receipt } from '../types/receipt.js';
 import type { Command } from '../types/command.js';
 import { evaluatePolicy, checkVisibility } from '../policy/policy-engine.js';
 import type { PolicyEngineOptions } from '../policy/policy-engine.js';
+import {
+    redactArtifact,
+    redactEntity,
+    redactCommand,
+    redactReceipt,
+    redactProvenanceActors,
+    redactGraphNodes,
+    sanitizeWarnings,
+} from '../policy/redactor.js';
 import { ClusterKernel } from './cluster-kernel.js';
 import type {
     KernelOptions,
@@ -99,48 +108,80 @@ export class PolicyEnforcedKernel {
         return decision;
     }
 
+    // ─── Redaction rule collector ────────────────────────────────────
+
+    private collectRedactionRules(decision: PolicyDecision): RedactionRule[] {
+        const rules: RedactionRule[] = [];
+
+        // From matched policy
+        if (decision.redaction) {
+            rules.push(decision.redaction);
+        }
+
+        // From trust zone
+        const zoneName = this.context.trustZone ?? this.context.principal.trustZone;
+        if (zoneName && this.policyOptions.trustZones) {
+            const zone = this.policyOptions.trustZones.find((z) => z.id === zoneName);
+            if (zone?.redactionRules.length) {
+                rules.push(...zone.redactionRules);
+            }
+        }
+
+        return rules;
+    }
+
     // ─── Read verbs ──────────────────────────────────────────────────
 
     async inspectEntity(id: string): Promise<Entity> {
-        this.enforce('read_owner_truth', { ownerStore: 'canonical', resourceUri: `cluster://canonical/${id}` });
-        return this.kernel.inspectEntity(id);
+        const decision = this.enforce('read_owner_truth', { ownerStore: 'canonical', resourceUri: `cluster://canonical/${id}` });
+        const entity = await this.kernel.inspectEntity(id);
+        const rules = this.collectRedactionRules(decision);
+        return rules.length > 0 ? redactEntity(entity, rules) : entity;
     }
 
     async findSources(input: FindSourcesInput): Promise<FindSourcesResult> {
-        this.enforce('discover_existence', { ownerStore: 'index' });
+        const decision = this.enforce('discover_existence', { ownerStore: 'index' });
 
         const result = await this.kernel.findSources(input);
 
-        // Apply visibility filtering: remove results the principal cannot see
+        // Apply per-entity policy filtering + redaction
         const filteredEntities: Entity[] = [];
         const filteredArtifacts: Artifact[] = [];
 
         for (const entity of result.resolvedEntities) {
+            const uri = `cluster://canonical/${entity.id}`;
             const canRead = evaluatePolicy({
                 principal: this.context.principal,
                 capability: 'read_owner_truth',
                 trustZone: this.context.trustZone ?? this.context.principal.trustZone,
                 ownerStore: 'canonical',
-                resourceUri: `cluster://canonical/${entity.id}`,
+                resourceUri: uri,
                 entityKind: entity.kind,
             }, this.policyOptions);
 
             if (canRead.decision === 'allow') {
-                filteredEntities.push(entity);
+                const rules = this.collectRedactionRules(canRead);
+                filteredEntities.push(rules.length > 0 ? redactEntity(entity, rules) : entity);
+            } else {
+                // Denied — check visibility. If hidden, silently exclude (no leakage)
+                // If visible with placeholder, could add placeholder — but for findSources we just exclude
+                // to prevent existence leakage through the search surface
             }
         }
 
         for (const artifact of result.resolvedArtifacts) {
+            const uri = `cluster://artifact/${artifact.id}`;
             const canRead = evaluatePolicy({
                 principal: this.context.principal,
                 capability: 'read_owner_truth',
                 trustZone: this.context.trustZone ?? this.context.principal.trustZone,
                 ownerStore: 'artifact',
-                resourceUri: `cluster://artifact/${artifact.id}`,
+                resourceUri: uri,
             }, this.policyOptions);
 
             if (canRead.decision === 'allow') {
-                filteredArtifacts.push(artifact);
+                const rules = this.collectRedactionRules(canRead);
+                filteredArtifacts.push(rules.length > 0 ? redactArtifact(artifact, rules) : artifact);
             }
         }
 
@@ -152,8 +193,29 @@ export class PolicyEnforcedKernel {
     }
 
     async retrieveBundle(query: string, options?: { limit?: number }): Promise<EvidenceBundle> {
-        this.enforce('read_derivative', { ownerStore: 'index' });
-        return this.kernel.retrieveBundle(query, options);
+        const decision = this.enforce('read_derivative', { ownerStore: 'index' });
+        const bundle = await this.kernel.retrieveBundle(query, options);
+        const rules = this.collectRedactionRules(decision);
+
+        if (rules.length === 0) return bundle;
+
+        // Redact resolved entities (already allowed by read_derivative, apply redaction rules)
+        const redactedEntities = bundle.resolvedEntities.map((re) => ({
+            ...re,
+            object: redactEntity(re.object, rules),
+        }));
+
+        // Redact resolved artifacts
+        const redactedArtifacts = bundle.resolvedArtifacts.map((ra) => ({
+            ...ra,
+            object: redactArtifact(ra.object, rules),
+        }));
+
+        return {
+            ...bundle,
+            resolvedEntities: redactedEntities,
+            resolvedArtifacts: redactedArtifacts,
+        };
     }
 
     async explainRetrieval(bundle: EvidenceBundle) {
@@ -164,8 +226,25 @@ export class PolicyEnforcedKernel {
     // ─── Provenance verbs ────────────────────────────────────────────
 
     async traceObject(uri: string, options?: Partial<TraceOptions>): Promise<ProvenanceGraph> {
-        this.enforce('trace_provenance', { resourceUri: uri });
-        return this.kernel.traceObject(uri, options);
+        const decision = this.enforce('trace_provenance', { resourceUri: uri });
+        const graph = await this.kernel.traceObject(uri, options);
+        const rules = this.collectRedactionRules(decision);
+
+        // Apply visibility: hide nodes the principal cannot see
+        let redacted = redactGraphNodes(graph, (node: ProvenanceNode) => {
+            if (!node.uri) return true;
+            const vis = checkVisibility(node.uri, node.ownerStore ?? undefined, this.visibilityRules);
+            return vis.existenceVisible;
+        });
+
+        // Apply actor redaction if rules target provenance_actors
+        if (rules.length > 0) {
+            redacted = redactProvenanceActors(redacted, rules);
+        }
+
+        // Sanitize warnings to not leak hidden URIs
+        const { warnings, gaps } = sanitizeWarnings(redacted.warnings, redacted.gaps, this.visibilityRules);
+        return { ...redacted, warnings, gaps };
     }
 
     async why(uri: string): Promise<string> {
@@ -216,25 +295,39 @@ export class PolicyEnforcedKernel {
     // ─── Receipt verbs ───────────────────────────────────────────────
 
     async inspectCommand(commandId: string): Promise<Command> {
-        this.enforce('read_command');
-        return this.kernel.inspectCommand(commandId);
+        const decision = this.enforce('read_command');
+        const command = await this.kernel.inspectCommand(commandId);
+        const rules = this.collectRedactionRules(decision);
+        return rules.length > 0 ? redactCommand(command, rules) : command;
     }
 
     async listReceipts(filter?: { commandId?: string; since?: string; limit?: number }): Promise<Receipt[]> {
-        this.enforce('read_receipts');
-        return this.kernel.listReceipts(filter);
+        const decision = this.enforce('read_receipts');
+        const receipts = await this.kernel.listReceipts(filter);
+        const rules = this.collectRedactionRules(decision);
+        if (rules.length === 0) return receipts;
+        return receipts.map((r) => redactReceipt(r, rules));
     }
 
     // ─── Index verbs ─────────────────────────────────────────────────
 
     async explainIndex(recordId: string) {
         this.enforce('explain_retrieval', { ownerStore: 'index' });
-        return this.kernel.explainIndex(recordId);
+        const explanation = await this.kernel.explainIndex(recordId);
+        // explainIndex returns a string — safe as long as it doesn't expose hidden URIs
+        return explanation;
     }
 
     async listStaleRecords() {
         this.enforce('explain_retrieval', { ownerStore: 'index' });
-        return this.kernel.listStaleRecords();
+        const records = await this.kernel.listStaleRecords();
+
+        // Filter stale records to not expose hidden source URIs
+        return records.filter((r) => {
+            const uri = `cluster://${r.sourceStore}/${r.sourceId}`;
+            const vis = checkVisibility(uri, r.sourceStore, this.visibilityRules);
+            return vis.existenceVisible;
+        });
     }
 
     async rebuildIndex(actorId: string) {
