@@ -1,5 +1,65 @@
 # Changelog
 
+## Phase 9 — Operations, Rebuild, and Recovery (2026-05-26)
+
+### Wave 1 — Operations Doctrine + Health Model
+- `HealthStatus`, `HealthCheck`, `ClusterHealth`, `StoreHealth` types
+- Health is explicit — not inferred from absence of errors
+- `buildClusterHealth()` computes worst-of status from individual checks
+- `worstStatus()` priority ordering: corrupt > unreachable > missing > stale > degraded > unverified > healthy
+
+### Wave 2 — Doctor and Verify
+- `doctor()` — full cluster reachability assessment (canonical, artifact, index, ledger)
+- Detects: empty index when data exists, missing Postgres migrations, unloadable policies
+- `verify()` — proves data consistency invariants (index→source, provenance→subject, receipt→event)
+- Both are read-only: they never mutate state
+
+### Wave 3 — Index Rebuild and Stale Repair
+- `rebuildIndex()` — reconstructs index from canonical + artifact truth
+- `checkStale()` — detects orphan index records and missing index entries
+- `clear()` + re-index cycle: index is always derivative, never authoritative
+- Dry-run mode for safe preview
+
+### Wave 4 — Provenance + Receipt Checks
+- `checkProvenance()` — verifies provenance events reference valid subjects
+- `checkReceipts()` — verifies receipts reference valid provenance events
+- Both return structured `HealthCheck[]` results
+
+### Wave 5 — Backup and Restore
+- `backup()` — exports entities, artifacts, events, receipts as portable JSON
+- `restore()` — imports cluster state, rebuilds index after import
+- Restore is additive: duplicate restores don't corrupt state
+- Backup version field for future format evolution
+
+### Wave 6 — Migration Status + Schema Verify
+- `checkMigrationStatus()` — reports whether Postgres tables exist
+- `verifySchema()` — validates column structure matches expectations
+- Both work against live Postgres pool
+
+### Wave 7 — Operational CLI Surface
+- `db-cluster doctor` — full health assessment (with `--json`)
+- `db-cluster verify` — invariant proofs (with `--json`, `--sample`)
+- `db-cluster rebuild index` — reconstruct from truth (with `--dry-run`)
+- `db-cluster rebuild check` — report stale records
+- `db-cluster backup` — export cluster state
+- `db-cluster restore <file>` — import from backup
+- `db-cluster migration-status` — Postgres schema state
+- `db-cluster verify-schema` — validate physical schema structure
+
+### Wave 8 — Phase 9 Proof Suite (12 tests)
+- Doctor reports healthy after clean setup
+- Doctor detects degraded state when index wiped
+- Verify detects stale index after unindexed entity insert
+- rebuildIndex restores full discoverability after clear
+- checkStale detects orphan index records
+- Provenance check verifies event integrity
+- Receipt check verifies receipt→event links
+- Backup captures all cluster state
+- Restore recovers state into empty cluster
+- Restore is additive (no corruption on repeat)
+- worstStatus computes correct severity ordering
+- Full cycle: damage → detect → rebuild → verify passes
+
 ## Phase 8 — Physical Store Expansion (2026-05-26)
 
 ### Wave 1 — Backend Adapter Doctrine

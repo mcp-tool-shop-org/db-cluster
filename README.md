@@ -53,11 +53,11 @@ db-cluster receipts
 
 ## Status
 
-**Phase 8 — Physical Store Expansion: COMPLETE.** 387 tests passing across 25 files.
+**Phase 9 — Operations, Rebuild, and Recovery: COMPLETE.** 399 tests passing across 26 files.
 
-The cluster can bind a real physical backend (Postgres) to a logical truth store without weakening cluster ownership, retrieval, provenance, policy, redaction, or mutation law. Physical backends implement store law — they do not become the product center. Canonical truth now survives Postgres while artifact, index, and ledger remain local.
+The cluster can detect, explain, repair, rebuild, migrate, backup, and restore cluster state without weakening store ownership, provenance, policy, redaction, or command-gated mutation law. Operational state is explicit, inspectable, and cluster-native. Derivative state (index) can be destroyed and rebuilt from owner truth. Audit history is independently verifiable.
 
-Next: Phase 9 — TBD.
+Next: Phase 10 — TBD.
 
 ## License
 
