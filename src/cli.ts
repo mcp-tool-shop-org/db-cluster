@@ -347,6 +347,64 @@ program
         }
     });
 
+// --- retrieve ---
+program
+    .command('retrieve <query>')
+    .description('Retrieve an evidence bundle (structured cluster retrieval)')
+    .option('--limit <n>', 'Max index candidates', '20')
+    .action(async (query: string, opts: { limit: string }) => {
+        const kernel = getKernel();
+        const bundle = await kernel.retrieveBundle(query, { limit: parseInt(opts.limit) });
+
+        console.log(`Evidence Bundle: ${bundle.id}`);
+        console.log(`  query:     "${bundle.query}"`);
+        console.log(`  assembled: ${bundle.assembledAt}`);
+        console.log(`  entities:  ${bundle.resolvedEntities.length}`);
+        console.log(`  artifacts: ${bundle.resolvedArtifacts.length}`);
+        console.log(`  index:     ${bundle.indexRecords.length} candidates`);
+        console.log(`  provenance: ${bundle.provenanceEvents.length} events`);
+        console.log(`  fresh:     ${bundle.freshness.allFresh ? 'YES' : 'NO'}`);
+
+        if (bundle.resolvedEntities.length > 0) {
+            console.log(`\nResolved entities:`);
+            for (const e of bundle.resolvedEntities) {
+                const staleTag = e.indexStale ? ' [STALE]' : '';
+                console.log(`  ${e.uri} — ${e.object.kind}/${e.object.name}${staleTag}`);
+            }
+        }
+        if (bundle.resolvedArtifacts.length > 0) {
+            console.log(`\nResolved artifacts:`);
+            for (const a of bundle.resolvedArtifacts) {
+                console.log(`  ${a.uri} — ${a.object.filename} v${a.object.version}`);
+            }
+        }
+        if (bundle.missingContext.length > 0) {
+            console.log(`\nMissing context:`);
+            for (const gap of bundle.missingContext) {
+                console.log(`  [${gap.impact}] ${gap.description}`);
+            }
+        }
+        if (bundle.confidenceBoundaries.length > 0) {
+            console.log(`\nConfidence boundaries:`);
+            for (const b of bundle.confidenceBoundaries) {
+                console.log(`  [${b.level}] ${b.claim}`);
+            }
+        }
+    });
+
+// --- explain-retrieval ---
+program
+    .command('explain-retrieval <query>')
+    .description('Retrieve and explain — shows what was found, missing, and confidence')
+    .option('--limit <n>', 'Max index candidates', '20')
+    .action(async (query: string, opts: { limit: string }) => {
+        const kernel = getKernel();
+        const bundle = await kernel.retrieveBundle(query, { limit: parseInt(opts.limit) });
+        const explanation = await kernel.explainRetrieval(bundle);
+
+        console.log(explanation.summary);
+    });
+
 program.parse();
 
 function guessMime(filename: string): string {

@@ -5,11 +5,13 @@ import type { IndexRecord } from '../types/index-record.js';
 import type { ProvenanceEvent } from '../types/provenance-event.js';
 import type { Command } from '../types/command.js';
 import type { Receipt } from '../types/receipt.js';
+import type { EvidenceBundle } from '../types/evidence-bundle.js';
 import { proposeCommand, validateCommand, markCommitted, markRejected } from './commands.js';
 import { recordProvenance, traceSubjectProvenance } from './provenance.js';
 import { emitReceipt } from './receipts.js';
 import { NotFoundError, CommandNotValidatedError, CommandRejectedError } from './errors.js';
 import { CommandQueue } from './command-queue.js';
+import { RetrievalPlanner } from '../retrieval/retrieval-planner.js';
 
 export interface KernelOptions {
     /** Directory for kernel working state (command queue). If omitted, commands live in-memory only. */
@@ -634,6 +636,65 @@ export class ClusterKernel {
 
         return stale;
     }
+
+    /**
+     * Retrieve an EvidenceBundle — structured cluster retrieval, not search.
+     * Queries index → resolves owner truth → attaches provenance → classifies freshness/gaps.
+     */
+    async retrieveBundle(query: string, options?: { limit?: number }): Promise<EvidenceBundle> {
+        const planner = new RetrievalPlanner(this.stores);
+        return planner.plan(query, options);
+    }
+
+    /**
+     * Explain a retrieval bundle — summarize what was found, what is missing,
+     * and what confidence boundaries apply.
+     */
+    async explainRetrieval(bundle: EvidenceBundle): Promise<RetrievalExplanation> {
+        const resolvedCount = bundle.resolvedEntities.length + bundle.resolvedArtifacts.length;
+        const lines: string[] = [];
+
+        lines.push(`Query: "${bundle.query}"`);
+        lines.push(`Assembled: ${bundle.assembledAt}`);
+        lines.push(`Index candidates: ${bundle.indexRecords.length}`);
+        lines.push(`Resolved: ${resolvedCount} (${bundle.resolvedEntities.length} entities, ${bundle.resolvedArtifacts.length} artifacts)`);
+        lines.push(`Provenance events: ${bundle.provenanceEvents.length}`);
+        lines.push(`Freshness: ${bundle.freshness.allFresh ? 'ALL FRESH' : `${bundle.freshness.staleCount} stale, ${bundle.freshness.unprovenanced} unprovenanced`}`);
+
+        if (bundle.missingContext.length > 0) {
+            lines.push(`Missing context: ${bundle.missingContext.length} gap(s)`);
+            for (const gap of bundle.missingContext) {
+                lines.push(`  - [${gap.impact}] ${gap.description}`);
+            }
+        }
+
+        if (bundle.confidenceBoundaries.length > 0) {
+            lines.push(`Confidence boundaries:`);
+            for (const b of bundle.confidenceBoundaries) {
+                lines.push(`  - [${b.level}] ${b.claim}: ${b.reason}`);
+            }
+        }
+
+        return {
+            bundleId: bundle.id,
+            summary: lines.join('\n'),
+            resolvedCount,
+            indexCandidates: bundle.indexRecords.length,
+            missingCount: bundle.missingContext.length,
+            allFresh: bundle.freshness.allFresh,
+            boundaries: bundle.confidenceBoundaries,
+        };
+    }
+}
+
+export interface RetrievalExplanation {
+    bundleId: string;
+    summary: string;
+    resolvedCount: number;
+    indexCandidates: number;
+    missingCount: number;
+    allFresh: boolean;
+    boundaries: EvidenceBundle['confidenceBoundaries'];
 }
 
 export interface IndexStatusResult {
