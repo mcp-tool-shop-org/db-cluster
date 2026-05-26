@@ -41,7 +41,11 @@ db-cluster ingest ./source.md
 db-cluster entity create ...
 db-cluster find "..."
 db-cluster inspect <id>
-db-cluster trace <id>
+db-cluster trace <uri> [--direction] [--depth] [--graph]
+db-cluster why <uri>
+db-cluster lineage <uri>
+db-cluster retrieve "..."
+db-cluster trace-bundle "..."
 db-cluster propose ...
 db-cluster commit ...
 db-cluster receipts
@@ -49,11 +53,11 @@ db-cluster receipts
 
 ## Status
 
-**Phase 2 — Cross-Store Identity and Rebuildable Index: COMPLETE.** 113 tests passing.
+**Phase 4 — Provenance Graph and Trace Surface: COMPLETE.** 149 tests passing.
 
-The cluster can name, resolve, rebuild, explain, and distrust its own derivative index. Every object has a stable `cluster://` URI, a resolver that goes to owner truth (never index), and stale-detection that turns drift into a visible condition.
+The cluster can trace any surfaced object, answer, retrieval bundle, mutation, receipt, or index record back through the cluster as a navigable provenance graph. Traces cross all four stores, surface gaps and stale projections honestly, and render as both machine-readable graphs and human-readable explanations.
 
-Next: Phase 3 — Retrieval Planner and Evidence Bundles.
+Next: Phase 5 — Mutation Law and Command Runtime.
 
 ## License
 
