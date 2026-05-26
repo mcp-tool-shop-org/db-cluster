@@ -1,5 +1,31 @@
 # Changelog
 
+## Phase 14 — Repo-Knowledge Integration Gate (2026-05-26)
+
+Proves db-cluster adds value as a backing substrate for repo-knowledge workflows — provenance, evidence bundles, mutation safety, and recovery — without replacing the existing system. **Verdict: PASS.**
+
+### Integration adapter (`src/integrations/repo-knowledge/`)
+- `mapping.ts` — 10 entity kinds, 7 artifact kinds, 7 provenance edge types
+- `ingest.ts` — parallel ingest (read-only, source files untouched)
+- `compare-retrieval.ts` — evidence bundle vs flat-file comparison
+- `update-workflow.ts` — typed command lifecycle (propose/validate/approve/commit)
+
+### Scripts
+- `scripts/repo-knowledge-dashboard-snapshot.ts` — dashboard snapshot of imported memory
+- `scripts/repo-knowledge-update-demo.ts` — mutation workflow demonstration
+- `scripts/repo-knowledge-ops.ts` — operations/recovery demonstration
+
+### Documentation
+- `docs/phase-14-repo-knowledge-integration-gate.md` — doctrine + boundary
+- `docs/repo-knowledge-mapping.md` — mapping reference
+- `docs/phase-14-repo-knowledge-integration-report.md` — gate verdict + evidence matrix
+- `docs/phase-14-closeout.md` — closeout summary
+
+### Tests (+65)
+- 12 mapping tests, 9 ingest tests, 8 retrieval tests
+- 8 dashboard tests, 8 mutation tests, 8 ops tests
+- 12 integration gate proofs (`test/phase14-proof.test.ts`)
+
 ## Phase 13 — Dashboard / Truth Inspector Integration (2026-05-27)
 
 Turns the ClusterTruthInspector template into a real inspector over dogfood data. Dashboard consumes cluster state through kernel verbs only — never raw adapter access.

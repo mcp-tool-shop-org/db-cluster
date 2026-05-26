@@ -53,11 +53,11 @@ db-cluster receipts
 
 ## Status
 
-**Phase 13 — Dashboard / Truth Inspector Integration: COMPLETE.** 539 tests passing across 43 files.
+**Phase 14 — Repo-Knowledge Integration Gate: PASS.** 604 tests passing across 49 files.
 
-Phase 13 turns the ClusterTruthInspector template into a real inspector over dogfood data. The dashboard never reads raw adapters — it consumes DashboardObject instances built from kernel verbs. Components: StoreLanesMap, OperationsPanel, CommandPreviewPanel, PolicyViewToggle. Every object carries URI, ownerStore, and sourceType. Redaction is view-layer only — source truth is never mutated.
+Phase 14 proves db-cluster adds value as a parallel substrate for repo-knowledge workflows — provenance, evidence bundles, mutation safety, and operational recovery — without replacing the existing system. Integration adapter at `src/integrations/repo-knowledge/`.
 
-Previous: Phase 12 — Dogfood Findings Repair.
+Previous: Phase 13 — Dashboard / Truth Inspector Integration.
 
 ## License
 
