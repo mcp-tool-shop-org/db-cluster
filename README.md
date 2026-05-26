@@ -53,11 +53,11 @@ db-cluster receipts
 
 ## Status
 
-**Phase 7 — Policy, Permissions, and Trust Boundaries: COMPLETE.** 339 tests passing across 21 files.
+**Phase 8 — Physical Store Expansion: COMPLETE.** 387 tests passing across 25 files.
 
-The cluster now enforces policy, redaction, and existence boundaries across kernel, SDK, CLI, and MCP without leaking restricted truth or weakening retrieval, provenance, or command-gated mutation law. Every read path applies principal-scoped policy with deny-wins evaluation, existence-aware visibility, and structured redaction that preserves object shape without exposing restricted content.
+The cluster can bind a real physical backend (Postgres) to a logical truth store without weakening cluster ownership, retrieval, provenance, policy, redaction, or mutation law. Physical backends implement store law — they do not become the product center. Canonical truth now survives Postgres while artifact, index, and ledger remain local.
 
-Next: Phase 8 — TBD.
+Next: Phase 9 — TBD.
 
 ## License
 

@@ -1,5 +1,70 @@
 # Changelog
 
+## Phase 8 — Physical Store Expansion (2026-05-26)
+
+### Wave 1 — Backend Adapter Doctrine
+- Physical backends are implementations of store law, not new product centers
+- Postgres canonical adapter is first target
+- No vector DB, graph DB, or distributed behavior yet
+- No schema drift from existing CanonicalStore contract
+
+### Wave 2 — Postgres Canonical Schema
+- `canonical_entities` table: id, kind, name, attributes (JSONB), owner, timestamps
+- Idempotent migration with `CREATE TABLE IF NOT EXISTS`
+- Indexes on kind and name for query performance
+
+### Wave 3 — PostgresCanonicalStore Adapter
+- Implements `CanonicalStore` interface exactly: create, get, list, update, exists
+- Parameterized queries (SQL injection safe)
+- Proper UUID handling, JSONB attributes roundtrip
+- `migrate()` and `teardown()` lifecycle methods
+
+### Wave 4 — Store Factory and Config
+- `createCluster()` — explicit backend config, no silent fallback
+- `createClusterFromEnv()` — environment variable driven
+- Fail-fast: missing Postgres URL throws immediately
+- Mixed mode: Postgres canonical + local artifact/index/ledger
+
+### Wave 5 — Kernel Regression Against Postgres (9 tests)
+- ingest artifact writes to local, not Postgres
+- create entity writes to Postgres canonical
+- find resolves owner truth from Postgres
+- inspect reads Postgres canonical truth
+- retrieve bundle includes Postgres-backed entity
+- trace graph crosses Postgres canonical + local ledger
+- mutation lifecycle updates Postgres canonical truth
+- receipts remain in ledger
+- policy denies Postgres-backed entity for restricted principal
+
+### Wave 6 — CLI Support
+- `db-cluster stores verify` — backend config, connection status, migration status
+- `db-cluster stores migrate` — run pending Postgres migrations
+- `db-cluster stores list` — list configured backends per store
+
+### Wave 7 — Backend Parity Tests (10 tests)
+- Equivalent entity shape across backends
+- Kernel behavior unchanged when backend changes
+- Index remains derivative
+- Ledger remains append-only
+- Artifact store remains immutable
+- Policy enforcement identical
+- Redaction identical
+- Mutation receipts identical
+- Cross-process persistence stronger with Postgres
+- Factory refuses unsafe/missing config
+
+### Wave 8 — Phase 8 Proof Suite (10 tests)
+- Delete index, rebuild from Postgres canonical truth
+- Mutate only through command lifecycle
+- Direct adapter mutation detectable as drift (no receipt)
+- Retrieve bundle resolves Postgres owner truth
+- Trace graph crosses Postgres canonical + local ledger
+- Policy denial prevents reading Postgres owner truth
+- Redaction hides Postgres-backed entity attributes
+- MCP cannot distinguish backend except via allowed metadata
+- SDK observes Postgres-backed mutation consistently
+- Local and Postgres pass shared contract suite
+
 ## Phase 7 — Policy, Permissions, and Trust Boundaries (2026-05-26)
 
 ### Wave 1 — Policy Type Model
