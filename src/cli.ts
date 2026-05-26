@@ -741,6 +741,191 @@ stores
         console.log(`local       ledger`);
     });
 
+// --- Operations commands ---
+
+program
+    .command('doctor')
+    .description('Run full cluster health assessment')
+    .option('--json', 'Output as JSON')
+    .action(async (opts) => {
+        const stores = createLocalCluster(CLUSTER_DIR);
+        const { doctor } = await import('./ops/doctor.js');
+        const health = await doctor(stores);
+        if (opts.json) {
+            console.log(JSON.stringify(health, null, 2));
+        } else {
+            console.log(`Cluster: ${health.status}`);
+            console.log(`Checks: ${health.summary.total} total, ${health.summary.healthy} healthy, ${health.summary.errors} errors, ${health.summary.warnings} warnings`);
+            for (const check of health.checks) {
+                const icon = check.status === 'healthy' ? '✓' : check.severity === 'error' ? '✗' : '!';
+                console.log(`  ${icon} [${check.store}] ${check.name}: ${check.message}`);
+                if (check.suggestedCommand) {
+                    console.log(`    → fix: ${check.suggestedCommand}`);
+                }
+            }
+        }
+    });
+
+program
+    .command('verify')
+    .description('Verify cluster invariants (data consistency)')
+    .option('--json', 'Output as JSON')
+    .option('--sample <n>', 'Max records to sample per store', '100')
+    .action(async (opts) => {
+        const stores = createLocalCluster(CLUSTER_DIR);
+        const { verify } = await import('./ops/verify.js');
+        const health = await verify(stores, { sampleLimit: parseInt(opts.sample, 10) });
+        if (opts.json) {
+            console.log(JSON.stringify(health, null, 2));
+        } else {
+            console.log(`Verification: ${health.status}`);
+            for (const check of health.checks) {
+                const icon = check.status === 'healthy' ? '✓' : check.severity === 'error' ? '✗' : '!';
+                console.log(`  ${icon} ${check.name}: ${check.message}`);
+            }
+        }
+    });
+
+const rebuild = program
+    .command('rebuild')
+    .description('Rebuild derivative state from owner truth');
+
+rebuild
+    .command('index')
+    .description('Rebuild the index from canonical + artifact stores')
+    .option('--dry-run', 'Show what would be rebuilt without mutating')
+    .option('--json', 'Output as JSON')
+    .action(async (opts) => {
+        const stores = createLocalCluster(CLUSTER_DIR);
+        const { rebuildIndex } = await import('./ops/rebuild.js');
+        const result = await rebuildIndex(stores, { dryRun: opts.dryRun });
+        if (opts.json) {
+            console.log(JSON.stringify(result, null, 2));
+        } else {
+            console.log(`Rebuilt: ${result.rebuilt} records${result.dryRun ? ' (dry run)' : ''}`);
+            if (result.errors.length > 0) {
+                console.log(`Errors: ${result.errors.length}`);
+                for (const e of result.errors) console.log(`  ${e}`);
+            }
+        }
+    });
+
+rebuild
+    .command('check')
+    .description('Check for stale or orphan index records')
+    .option('--json', 'Output as JSON')
+    .action(async (opts) => {
+        const stores = createLocalCluster(CLUSTER_DIR);
+        const { checkStale } = await import('./ops/rebuild.js');
+        const stale = await checkStale(stores);
+        if (opts.json) {
+            console.log(JSON.stringify(stale, null, 2));
+        } else {
+            if (stale.length === 0) {
+                console.log('No stale records found.');
+            } else {
+                console.log(`Found ${stale.length} stale record(s):`);
+                for (const s of stale) {
+                    console.log(`  [${s.type}] ${s.sourceStore}/${s.sourceId}: ${s.message}`);
+                }
+            }
+        }
+    });
+
+program
+    .command('backup')
+    .description('Export cluster state to JSON backup')
+    .option('-o, --output <file>', 'Output file path')
+    .option('--json', 'Write to stdout as JSON')
+    .action(async (opts) => {
+        const stores = createLocalCluster(CLUSTER_DIR);
+        const { backup } = await import('./ops/backup.js');
+        const data = await backup(stores);
+        const json = JSON.stringify(data, null, 2);
+        if (opts.output) {
+            const { writeFileSync } = await import('node:fs');
+            writeFileSync(resolve(opts.output), json, 'utf-8');
+            console.log(`Backup written to ${opts.output}`);
+        } else {
+            console.log(json);
+        }
+    });
+
+program
+    .command('restore <file>')
+    .description('Restore cluster state from a backup file')
+    .option('--json', 'Output as JSON')
+    .action(async (file, opts) => {
+        const stores = createLocalCluster(CLUSTER_DIR);
+        const { restore } = await import('./ops/backup.js');
+        const raw = readFileSync(resolve(file), 'utf-8');
+        const data = JSON.parse(raw);
+        const result = await restore(stores, data);
+        if (opts.json) {
+            console.log(JSON.stringify(result, null, 2));
+        } else {
+            console.log(`Entities: ${result.entities.created} created, ${result.entities.skipped} skipped`);
+            console.log(`Events: ${result.events.created} created, ${result.events.skipped} skipped`);
+            console.log(`Receipts: ${result.receipts.created} created, ${result.receipts.skipped} skipped`);
+        }
+    });
+
+program
+    .command('migration-status')
+    .description('Check Postgres schema migration state')
+    .option('--json', 'Output as JSON')
+    .action(async (opts) => {
+        const url = process.env.DB_CLUSTER_POSTGRES_URL;
+        if (!url) {
+            console.error('DB_CLUSTER_POSTGRES_URL not set.');
+            process.exit(1);
+        }
+        const pg = await import('pg');
+        const pool = new pg.default.Pool({ connectionString: url });
+        try {
+            const { checkMigrationStatus } = await import('./ops/migrations.js');
+            const status = await checkMigrationStatus(pool);
+            if (opts.json) {
+                console.log(JSON.stringify(status, null, 2));
+            } else {
+                console.log(`Backend: ${status.backend}`);
+                console.log(`Migrated: ${status.migrated}`);
+                console.log(`Tables: ${status.tables.join(', ') || '(none)'}`);
+                console.log(status.message);
+            }
+        } finally {
+            await pool.end();
+        }
+    });
+
+program
+    .command('verify-schema')
+    .description('Validate physical backend schema structure')
+    .option('--json', 'Output as JSON')
+    .action(async (opts) => {
+        const url = process.env.DB_CLUSTER_POSTGRES_URL;
+        if (!url) {
+            console.error('DB_CLUSTER_POSTGRES_URL not set.');
+            process.exit(1);
+        }
+        const pg = await import('pg');
+        const pool = new pg.default.Pool({ connectionString: url });
+        try {
+            const { verifySchema } = await import('./ops/migrations.js');
+            const result = await verifySchema(pool);
+            if (opts.json) {
+                console.log(JSON.stringify(result, null, 2));
+            } else {
+                console.log(`Schema valid: ${result.valid}`);
+                if (result.issues.length > 0) {
+                    for (const issue of result.issues) console.log(`  ✗ ${issue}`);
+                }
+            }
+        } finally {
+            await pool.end();
+        }
+    });
+
 program.parse();
 
 function guessMime(filename: string): string {
