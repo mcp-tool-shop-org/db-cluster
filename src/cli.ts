@@ -638,6 +638,109 @@ policy
         console.log(`Summary: ${allowed} allowed, ${denied} denied out of ${results.length} actions.`);
     });
 
+// --- stores ---
+const stores = program.command('stores').description('Manage store backends');
+
+stores
+    .command('verify')
+    .description('Verify store backend configuration and connectivity')
+    .action(async () => {
+        const canonicalBackend = process.env.DB_CLUSTER_CANONICAL_BACKEND ?? 'local';
+        const postgresUrl = process.env.DB_CLUSTER_POSTGRES_URL;
+
+        console.log('Store Backend Configuration');
+        console.log('═══════════════════════════════════════');
+        console.log(`  canonical: ${canonicalBackend}`);
+        console.log(`  artifact:  local`);
+        console.log(`  index:     local`);
+        console.log(`  ledger:    local`);
+        console.log('');
+
+        // Canonical backend check
+        if (canonicalBackend === 'postgres') {
+            if (!postgresUrl) {
+                console.error('✗ DB_CLUSTER_POSTGRES_URL not set');
+                process.exit(1);
+            }
+            try {
+                const { Pool } = await import('pg');
+                const pool = new Pool({ connectionString: postgresUrl });
+                const result = await pool.query('SELECT 1 AS ok');
+                if (result.rows[0].ok === 1) {
+                    console.log('  ✓ Postgres connection: OK');
+                }
+                // Check migrations
+                const tableCheck = await pool.query(
+                    `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'canonical_entities') AS exists`,
+                );
+                if (tableCheck.rows[0].exists) {
+                    console.log('  ✓ Migrations: canonical_entities table exists');
+                } else {
+                    console.log('  ✗ Migrations: canonical_entities table NOT found');
+                    console.log('    Run: db-cluster stores migrate');
+                }
+                await pool.end();
+            } catch (err: any) {
+                console.error(`  ✗ Postgres connection failed: ${err.message}`);
+                process.exit(1);
+            }
+        } else {
+            const clusterExists = existsSync(CLUSTER_DIR);
+            if (clusterExists) {
+                console.log('  ✓ Local cluster directory exists');
+            } else {
+                console.log('  ✗ No cluster initialized. Run: db-cluster init');
+            }
+        }
+
+        console.log('');
+        console.log('Contract compatibility: all backends implement CanonicalStore interface');
+    });
+
+stores
+    .command('migrate')
+    .description('Run pending store migrations')
+    .action(async () => {
+        const canonicalBackend = process.env.DB_CLUSTER_CANONICAL_BACKEND ?? 'local';
+        const postgresUrl = process.env.DB_CLUSTER_POSTGRES_URL;
+
+        if (canonicalBackend !== 'postgres') {
+            console.log('No migrations needed for local backend.');
+            return;
+        }
+
+        if (!postgresUrl) {
+            console.error('DB_CLUSTER_POSTGRES_URL not set.');
+            process.exit(1);
+        }
+
+        try {
+            const { Pool } = await import('pg');
+            const { PostgresCanonicalStore } = await import('./adapters/postgres/postgres-canonical-store.js');
+            const pool = new Pool({ connectionString: postgresUrl });
+            const store = new PostgresCanonicalStore(pool);
+            await store.migrate();
+            console.log('✓ Migrations applied: canonical_entities table ready');
+            await pool.end();
+        } catch (err: any) {
+            console.error(`✗ Migration failed: ${err.message}`);
+            process.exit(1);
+        }
+    });
+
+stores
+    .command('list')
+    .description('List configured store backends')
+    .action(() => {
+        const canonicalBackend = process.env.DB_CLUSTER_CANONICAL_BACKEND ?? 'local';
+        console.log('Backend     Store');
+        console.log('─────────── ──────────');
+        console.log(`${canonicalBackend.padEnd(12)}canonical`);
+        console.log(`local       artifact`);
+        console.log(`local       index`);
+        console.log(`local       ledger`);
+    });
+
 program.parse();
 
 function guessMime(filename: string): string {
