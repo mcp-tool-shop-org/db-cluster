@@ -1,5 +1,54 @@
 # Changelog
 
+## Phase 7 — Policy, Permissions, and Trust Boundaries (2026-05-26)
+
+### Wave 1 — Policy Type Model
+- `Policy`, `Principal`, `TrustZone`, `VisibilityRule`, `RedactionRule` types
+- Principal: identity + roles + trustZone binding
+- Policy: verb + resource + effect (allow/deny) + conditions + redactionRules
+- TrustZone: named boundary with default policies + zone-level redaction
+
+### Wave 2 — Deterministic Policy Engine
+- `evaluatePolicy(principal, verb, resource, policies)` — first-match deny-wins
+- `checkVisibility(principal, resource, rules)` — existence + metadata visibility
+- `matchPolicy(principal, policy)` — role + zone + condition matching
+- `DEFAULT_POLICIES`, `DEFAULT_TRUST_ZONES`, `DEFAULT_VISIBILITY_RULES`
+
+### Wave 3 — Kernel Enforcement
+- `PolicyEnforcedKernel` wraps `ClusterKernel` with policy checks on every operation
+- Read enforcement: `inspectEntity`, `findSources`, `retrieveBundle`, `traceObject`, `why`
+- Command enforcement: `inspectCommand`, `listReceipts`
+- Mutation enforcement: `proposeMutation`, `commitMutation`
+- Visibility-aware: denied reads either throw AccessDenied or silently exclude based on existence visibility
+
+### Wave 4 — MCP/SDK/CLI Policy Surface
+- `cluster_policy_explain` MCP tool — surfaces effective policy for a principal
+- `cluster_policy_test` MCP tool — tests a specific action against policy
+- SDK methods: `policyExplain`, `policyTest`
+- CLI subcommands: `policy explain`, `policy test`
+
+### Wave 5 — Redaction and Existence Leakage
+- `redactArtifact()` — strips/masks/summarizes/hashes artifact storagePath
+- `redactEntity()` — masks/strips entity attributes preserving object shape
+- `redactCommand()` — strips command payloads preserving lifecycle metadata
+- `redactReceipt()` — strips receipt details preserving audit shape
+- `redactProvenanceActors()` — strips actor identities from graph nodes/edges
+- `redactGraphNodes()` — replaces hidden nodes with `[Access restricted]` placeholders
+- `sanitizeWarnings()` — removes stale/gap warnings referencing hidden URIs
+- PolicyEnforcedKernel applies redaction on every read path
+
+### Wave 6 — Phase 7 Proof Suite (34 tests)
+- Denied reads cannot access entity owner truth
+- Index-only access cannot escalate to owner truth
+- Hidden existence: denied entities invisible in find results
+- Redacted provenance trace preserves graph structure
+- Redacted receipts preserve audit shape with stripped payloads
+- MCP/SDK policy parity: same enforcement through both surfaces
+- CLI safety: policy explain/test work without elevation
+- Proposer-only principal cannot approve or commit
+- Approver-only principal cannot propose mutations
+- Existing kernel law preserved: command lifecycle, receipt emission, provenance
+
 ## Phase 6 — AI-Facing Interface: MCP and SDK (2026-05-26)
 
 ### Wave 1 — SDK Surface

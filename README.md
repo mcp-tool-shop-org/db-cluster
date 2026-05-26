@@ -53,11 +53,11 @@ db-cluster receipts
 
 ## Status
 
-**Phase 6 — AI-Facing Interface: MCP and SDK: COMPLETE.** 210 tests passing.
+**Phase 7 — Policy, Permissions, and Trust Boundaries: COMPLETE.** 339 tests passing across 21 files.
 
-The cluster now exposes AI-facing tools through MCP (14 tools) and a programmatic SDK, both proven to preserve cluster law. MCP cannot bypass retrieval truth, provenance graph law, artifact safety, or command-gated mutation. Every operation delegates through SDK → kernel → stores with no alternate write path.
+The cluster now enforces policy, redaction, and existence boundaries across kernel, SDK, CLI, and MCP without leaking restricted truth or weakening retrieval, provenance, or command-gated mutation law. Every read path applies principal-scoped policy with deny-wins evaluation, existence-aware visibility, and structured redaction that preserves object shape without exposing restricted content.
 
-Next: Phase 7 — Policy, Permissions, and Trust Boundaries.
+Next: Phase 8 — TBD.
 
 ## License
 
