@@ -53,7 +53,7 @@ db-cluster receipts
 
 ## Status
 
-**Phase 10 — Developer Product Surface: COMPLETE.** 434 tests passing across 29 files.
+**Phase 11 — Dogfood Gate: COMPLETE.** 484 tests passing across 35 files.
 
 The cluster is legible and runnable as a developer product. Documentation architecture covers all subsystems (quickstart, architecture, store contracts, cluster URIs, retrieval bundles, provenance graphs, mutation law, policy/redaction, MCP, SDK, CLI, operations). SDK and MCP examples compile and demonstrate the full cluster thesis. Installation smoke tests prove a fresh developer can install, build, and run without repo-local assumptions. The proof suite verifies product positioning never reduces to RAG, CRUD, MCP demo, or generic database middleware.
 

@@ -1,5 +1,47 @@
 # Changelog
 
+## Phase 11 — Dogfood Gate (2026-05-27)
+
+### Wave 1 — Schema + Overview
+- `examples/dogfood-project-memory/schema.md` — entity kinds, artifact kinds, provenance edges, trust zones, invariants
+- `examples/dogfood-project-memory/README.md` — dogfood overview
+
+### Wave 2 — Dogfood Ingest
+- `scripts/dogfood-ingest.ts` — 12 artifacts (README, CHANGELOG, 10 closeout docs), 22 canonical entities (1 project, 10 phases, 6 decisions, 2 milestones, 3 findings), 19 provenance links
+
+### Wave 3 — Retrieval Tests
+- `scripts/dogfood-query.ts` — 9 retrieval queries
+- `test/dogfood-retrieval.test.ts` — 10 tests (evidence bundles, not flat hits)
+
+### Wave 4 — Trace Tests
+- `scripts/dogfood-trace.ts` — 5 object traces
+- `test/dogfood-trace.test.ts` — 7 tests (provenance graph navigation, why() explanations)
+
+### Wave 5 — Mutation Tests
+- `scripts/dogfood-update.ts` — full command lifecycle demo
+- `test/dogfood-mutation.test.ts` — 7 tests (propose→validate→approve→commit→receipt)
+
+### Wave 6 — Policy Tests
+- `scripts/dogfood-policy.ts` — 4 principals with extended policies
+- `test/dogfood-policy.test.ts` — 7 tests (operator/agent/observer/external enforcement)
+
+### Wave 7 — Operations Tests
+- `scripts/dogfood-ops.ts` — doctor, rebuild, backup, restore demo
+- `test/dogfood-ops.test.ts` — 7 tests (health, rebuild, backup/restore)
+
+### Wave 8 — Proof Suite + Value Report
+- `test/phase11-proof.test.ts` — 12 proofs: ingest completeness, URI resolution, evidence bundles, trace-to-source, command lifecycle, agent denied, operator approved, redaction shape, index rebuild, backup/restore, report existence, friction surfaced
+- `docs/phase-11-dogfood-report.md` — structured value report with real product findings
+
+### Product Findings
+1. `restore()` does not restore artifacts — only entities/events/receipts + index rebuild
+2. `commitMutation(create_entity)` does not auto-index — entities not discoverable until rebuild
+3. In-memory command state not shared across PolicyEnforcedKernel instances
+4. Index stores entity names, not artifact content — limits semantic retrieval
+
+### Summary
+484 tests passing across 35 files. db-cluster proves value as project-memory substrate — structured retrieval, safe mutation, inspectable provenance, enforceable policy. Verdict: PASS_WITH_CONDITIONS.
+
 ## Phase 10 — Developer Product Surface (2026-05-27)
 
 ### Wave 1 — Documentation Architecture
