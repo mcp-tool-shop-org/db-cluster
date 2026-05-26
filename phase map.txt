@@ -1,0 +1,841 @@
+I’ll structure this as a phase map with explicit drift traps, gates, and “do not build” boundaries so Phase 1+ does not collapse into search, middleware, or CRUD.
+
+Thought for 13s
+
+Below is the drift-protection phase outline I would freeze for db-cluster.
+
+The premise it protects is simple:
+
+db-cluster is an AI-native federated database cluster.
+The cluster is the product. The index and kernel exist to make the cluster coherent, searchable, governable, and safe.
+
+That matches the Phase 0 direction in the uploaded architecture draft: specialized truth stores preserve native truth; the shared index is derivative and discoverability-oriented; the kernel mediates routing, contracts, permissions, provenance, and mutation control.
+
+db-cluster Phase Map
+Phase 0 — Doctrine Freeze
+
+Purpose: Lock the product thesis before code.
+
+Goal
+
+Define what db-cluster is and what it must not become.
+
+Core lock
+
+db-cluster is not:
+
+an AI SQL assistant
+a vector DB wrapper
+a governance layer over arbitrary databases
+a metadata catalog
+an MCP demo
+a document-ingestion app
+one database pretending to be many
+
+It is:
+
+A specialized database cluster for AI-facing truth, where multiple truth stores behave as one governed substrate.
+
+Required outputs
+docs/phase-0-doctrine.md
+product identity lock
+“cluster is the product” statement
+index/kernel subordinate-role statement
+list of anti-products
+smallest honest proof definition
+Phase 1 mandate
+Drift gate
+
+Phase 0 passes only if a reader understands that the database cluster itself is the product.
+
+Phase 1 — Cluster Spine
+
+Purpose: Prove the product exists as a real cluster, not a diagram.
+
+Goal
+
+Build the smallest working db-cluster that demonstrates multiple truth stores operating as one coherent substrate.
+
+Required stores
+
+Minimum four logical stores:
+
+Canonical store
+Entities, IDs, durable state, permissions, stable records.
+Artifact/source store
+Raw documents, files, evidence, generated artifacts.
+Index store
+Discoverability, search, metadata lookup, embedding-ready records.
+Event/provenance ledger
+Actions, mutations, receipts, lineage, audit trail.
+Required kernel verbs
+init_cluster
+ingest_artifact
+create_entity
+link_evidence
+find_sources
+inspect_entity
+trace_provenance
+propose_mutation
+commit_mutation
+list_receipts
+Required CLI golden path
+db-cluster init
+db-cluster ingest examples/source.md
+db-cluster entity create ...
+db-cluster link ...
+db-cluster find "..."
+db-cluster inspect <id>
+db-cluster trace <id>
+db-cluster propose ...
+db-cluster commit ...
+db-cluster receipts
+Acceptance gate
+
+A user can ingest truth, link it to canonical state, retrieve it through the index, mutate through a command, and inspect the provenance trail.
+
+Drift traps
+
+Do not let Phase 1 become:
+
+a SQLite app
+a search prototype
+an MCP wrapper
+a generic document RAG system
+a kernel with fake stores
+Phase 1 must prove
+
+Specialized truth stores can behave as one cluster without flattening their responsibilities.
+
+Phase 2 — Store Contracts and Ownership Law
+
+Purpose: Make store boundaries enforceable.
+
+Phase 1 proves the cluster can move. Phase 2 proves each store owns a different kind of truth.
+
+Goal
+
+Define hard contracts for each store so truth ownership cannot drift.
+
+Required contracts
+CanonicalStore
+ArtifactStore
+IndexStore
+LedgerStore
+ClusterKernel
+CommandRuntime
+ReceiptStore
+Ownership laws
+Canonical facts live in the canonical store.
+Raw artifacts live in the artifact store.
+Index records are derivative and rebuildable.
+Events and receipts are append-only.
+Generated answers are not source truth.
+No fact exists only in model output.
+No mutation happens without a command.
+Required tests
+index can be deleted and rebuilt
+artifact cannot be silently overwritten
+ledger event cannot be edited in place
+entity cannot be created only in index
+receipt required for committed mutation
+trace fails honestly when provenance is missing
+Acceptance gate
+
+Every persisted object has a clear owner store, and no support system becomes the source of truth by accident.
+
+Drift trap
+
+This phase must not become abstract interface work detached from behavior. Every contract needs at least one concrete test proving why it exists.
+
+Phase 3 — Cross-Store Identity and Shared Index
+
+Purpose: Make the cluster discoverable without making the index the product.
+
+Goal
+
+Build the shared identity and index layer that lets the cluster behave as one searchable system.
+
+Required capabilities
+global cluster IDs
+store-local IDs
+cross-store references
+artifact-to-entity links
+entity-to-event links
+index records derived from owned stores
+freshness/version metadata
+index rebuild command
+stale-index detection
+Example objects
+cluster://entity/customer/123
+cluster://artifact/source/abc
+cluster://event/mutation/789
+cluster://index/record/456
+Required commands
+db-cluster index rebuild
+db-cluster index status
+db-cluster index explain <record-id>
+db-cluster resolve <cluster-id>
+Acceptance gate
+
+The index can answer “what exists and where is it?” without pretending to own the thing itself.
+
+Drift traps
+
+Avoid:
+
+treating vector similarity as truth
+storing canonical facts only in the index
+making index metadata richer than source ownership
+returning search results without owner-store references
+Phase 3 must prove
+
+The index is the cluster’s memory map, not the cluster’s brain and not its source of truth.
+
+Phase 4 — Retrieval Planner and Evidence Bundles
+
+Purpose: Make retrieval cluster-native, not search-only.
+
+Goal
+
+The kernel should plan retrieval across stores and return evidence bundles with explicit ownership and traceability.
+
+Required retrieval flow
+Parse user/task intent.
+Ask index what may be relevant.
+Resolve candidate objects to owner stores.
+Fetch source truth from owner stores.
+Attach provenance.
+Return evidence bundle.
+Mark gaps and uncertainty.
+Evidence bundle shape
+EvidenceBundle
+- query
+- resolved_entities[]
+- artifacts[]
+- index_records[]
+- provenance_events[]
+- freshness
+- missing_context[]
+- confidence_boundaries[]
+Required commands
+db-cluster find "topic"
+db-cluster retrieve "topic" --bundle
+db-cluster explain-retrieval <bundle-id>
+Acceptance gate
+
+The system can explain not only what it found, but why those stores were queried, what truth came from where, and what is missing.
+
+Drift traps
+
+Avoid:
+
+RAG-only answers
+search result summaries without source ownership
+confidence language without evidence structure
+query planning hidden inside model prose
+Phase 4 must prove
+
+Retrieval is a cluster operation, not a search operation.
+
+Phase 5 — Provenance Graph and Trace Surface
+
+Purpose: Make traceability a first-class product surface.
+
+Goal
+
+Every answer, mutation, derived artifact, and indexed record should be traceable back through the cluster.
+
+Required provenance edges
+artifact_ingested_from
+entity_created_by
+evidence_linked_to
+index_record_derived_from
+answer_supported_by
+mutation_proposed_from
+mutation_committed_by
+receipt_emitted_for
+Required commands
+db-cluster trace <id>
+db-cluster lineage <id>
+db-cluster why <answer-or-mutation-id>
+db-cluster receipts --for <id>
+Required views
+entity trace
+artifact trace
+answer trace
+mutation trace
+index trace
+receipt trace
+Acceptance gate
+
+Given any surfaced answer or committed change, the operator can walk backward to source artifacts, canonical entities, command input, and receipt.
+
+Drift traps
+
+Avoid:
+
+citations as decoration
+answer text that cannot be mechanically traced
+provenance stored only in logs
+trace surfaces that require reading raw JSON by hand
+Phase 5 must prove
+
+Provenance is not metadata; it is part of the database cluster’s truth model.
+
+Phase 6 — Mutation Law and Command Runtime
+
+Purpose: Make safe writes possible without giving AI raw write access.
+
+Goal
+
+All changes to cluster-owned state must pass through typed commands.
+
+Required command lifecycle
+proposed
+validated
+rejected
+approved
+committed
+compensated
+Required command types
+CreateEntity
+UpdateEntity
+LinkEvidence
+VersionArtifact
+CorrectMetadata
+PromoteDerivedArtifact
+DeprecateEntity
+CompensateMutation
+Required mutation rules
+No raw SQL writes from AI-facing surfaces.
+No artifact overwrite without version event.
+No canonical change without command receipt.
+No command commit without validation.
+No irreversible command without explicit approval mode.
+Failed commands produce receipts too.
+Corrections are compensating events, not silent edits.
+Required commands
+db-cluster propose <command>
+db-cluster validate <command-id>
+db-cluster commit <command-id>
+db-cluster reject <command-id>
+db-cluster compensate <receipt-id>
+Acceptance gate
+
+The cluster supports mutation, but only through auditable command boundaries.
+
+Drift traps
+
+Avoid:
+
+“agent action” as a generic write primitive
+direct adapter writes
+mutation hidden inside ingestion
+receipts that only exist for successful changes
+rollback without provenance
+Phase 6 must prove
+
+AI can participate in database mutation without owning raw mutation authority.
+
+Phase 7 — AI-Facing Interface: MCP and SDK
+
+Purpose: Expose the cluster to AI systems without weakening the cluster law.
+
+Goal
+
+Add AI-facing access after the CLI and command runtime are real.
+
+Required MCP tools
+cluster_find_sources
+cluster_inspect_entity
+cluster_retrieve_bundle
+cluster_trace
+cluster_propose_mutation
+cluster_commit_mutation
+cluster_list_receipts
+Required constraints
+MCP cannot bypass CLI/kernel laws
+MCP tools use the same command runtime
+tools return structured provenance
+dangerous commands require approval mode
+tool descriptions make mutation boundaries explicit
+no “run arbitrary SQL” tool
+no “search everything and answer freely” tool
+SDK surface
+cluster.findSources()
+cluster.inspectEntity()
+cluster.retrieveBundle()
+cluster.trace()
+cluster.proposeMutation()
+cluster.commitMutation()
+cluster.listReceipts()
+Acceptance gate
+
+An AI agent can use db-cluster as a truth substrate, but cannot confuse retrieved content with instructions or mutate raw state directly.
+
+Drift traps
+
+Avoid:
+
+building MCP first
+tool-demo theater
+broad overpowered tools
+one tool that does retrieval and mutation
+natural-language mutation without typed command preview
+Phase 7 must prove
+
+The AI interface is a controlled access layer over the cluster, not the product itself.
+
+Phase 8 — Policy, Permissions, and Trust Boundaries
+
+Purpose: Add serious access control without turning the product into generic governance middleware.
+
+Goal
+
+Make the cluster safe for multiple users, agents, tools, and trust zones.
+
+Required concepts
+Principal
+Role
+Scope
+Capability
+Policy
+ApprovalMode
+TrustZone
+RedactionRule
+VisibilityRule
+Required policy controls
+read scopes
+write scopes
+store-specific permissions
+command-specific permissions
+approval thresholds
+artifact trust labels
+index visibility filtering
+provenance redaction
+dangerous-operation gates
+Required commands
+db-cluster policy list
+db-cluster policy explain <principal> <action>
+db-cluster policy test <scenario>
+db-cluster approve <command-id>
+Acceptance gate
+
+The cluster can explain why a principal can or cannot see a source, retrieve an artifact, propose a command, or commit a mutation.
+
+Drift traps
+
+Avoid:
+
+making policy the product center
+generic RBAC disconnected from cluster truth
+hiding unauthorized records only at the UI layer
+letting index search leak restricted existence
+treating all AI agents as the same principal
+Phase 8 must prove
+
+The cluster can be governed without becoming only governance software.
+
+Phase 9 — Physical Store Expansion
+
+Purpose: Add real specialized backends while preserving logical contracts.
+
+Goal
+
+Move from logical stores to serious backing implementations.
+
+Candidate backends
+Store domain	Possible backend
+Canonical	Postgres
+Artifact	filesystem, S3-compatible object store
+Index	Postgres FTS, SQLite FTS, Meilisearch, OpenSearch, vector index
+Graph/provenance	Postgres graph tables, Neo4j, RDF store
+Ledger	append-only Postgres table, event store
+Time-series	TimescaleDB, Prometheus-compatible sink
+Required rule
+
+Backends are replaceable. Store contracts are not.
+
+Required commands
+db-cluster stores list
+db-cluster stores verify
+db-cluster stores migrate
+db-cluster stores rebuild-index
+db-cluster stores check-ownership
+Acceptance gate
+
+At least one store can be swapped or upgraded without changing the product thesis or breaking provenance.
+
+Drift traps
+
+Avoid:
+
+premature polyglot sprawl
+adding a database because it is fashionable
+one backend absorbing another store’s responsibility
+backend-specific behavior leaking into cluster law
+vendor integration becoming the product
+Phase 9 must prove
+
+The cluster architecture can support specialized databases without becoming a pile of integrations.
+
+Phase 10 — Operations, Rebuild, and Recovery
+
+Purpose: Make the cluster durable.
+
+Goal
+
+Add operational guarantees: backup, restore, rebuild, migration, health, and recovery.
+
+Required capabilities
+cluster health check
+store health check
+index rebuild
+provenance consistency check
+receipt verification
+artifact integrity check
+migration runner
+backup/restore
+corruption detection
+orphan detection
+stale index detection
+Required commands
+db-cluster doctor
+db-cluster verify
+db-cluster backup
+db-cluster restore
+db-cluster migrate
+db-cluster rebuild
+db-cluster check-orphans
+Acceptance gate
+
+The cluster can be broken, diagnosed, and restored without losing the ownership model.
+
+Drift traps
+
+Avoid:
+
+operational commands that bypass mutation law
+backup without provenance
+rebuilds that silently change IDs
+restore without receipt continuity
+health checks that only verify process liveness
+Phase 10 must prove
+
+db-cluster is not a demo; it is a recoverable database substrate.
+
+Phase 11 — Developer Product Surface
+
+Purpose: Make the product usable without weakening the architecture.
+
+Goal
+
+Turn the cluster spine into something developers can adopt.
+
+Required surfaces
+README quickstart
+CLI reference
+SDK docs
+MCP tool docs
+architecture docs
+examples
+recipes
+migration notes
+troubleshooting guide
+Required examples
+Research evidence cluster
+artifacts as papers/reports
+entities as claims/topics
+provenance as citation trace
+Project memory cluster
+artifacts as docs/logs/files
+entities as repos/issues/tasks
+ledger as decisions/actions
+Agent-safe app database
+canonical app records
+source artifacts
+AI command proposals
+audited commits
+Acceptance gate
+
+A developer can understand what to build with db-cluster and why it is not just RAG, SQL, or governance middleware.
+
+Drift traps
+
+Avoid:
+
+docs that oversell magic
+examples that use only one store
+examples with fake provenance
+quickstarts that skip command mutation
+positioning as “memory for agents”
+Phase 11 must prove
+
+The developer experience explains the cluster thesis instead of flattening it.
+
+Phase 12 — Dogfood Gate
+
+Purpose: Prove db-cluster on a real AI-facing workflow.
+
+Goal
+
+Use db-cluster inside an actual project where truth, provenance, and mutation matter.
+
+Best dogfood candidates
+
+Given your ecosystem, the strongest dogfood targets would be:
+
+research-os memory/evidence substrate
+source artifacts
+claims/entities
+provenance
+receipts
+gated mutation
+repo-knowledge / project-memory cluster
+repos as entities
+docs/logs as artifacts
+facts as canonical records
+syncs as ledger events
+dogfood-labs evidence ledger
+scenarios
+records
+policy verdicts
+receipts
+cross-repo provenance
+Required dogfood proof
+real ingestion
+real retrieval
+real provenance trace
+real mutation proposal
+real command commit
+real receipt
+real failure caught by cluster law
+Acceptance gate
+
+A real project becomes safer or more inspectable because it stands on db-cluster.
+
+Drift traps
+
+Avoid:
+
+synthetic-only examples
+demo docs without operational pressure
+dogfood that only tests ingestion
+receipts that do not change operator behavior
+“it works” without a caught failure
+Phase 12 must prove
+
+db-cluster improves a real AI workflow because it is a database cluster, not because it is another tool wrapper.
+
+Phase 13 — Distributed Cluster Behavior
+
+Purpose: Earn the word “cluster” operationally, not just logically.
+
+Goal
+
+Add multi-node, multi-process, or multi-store coordination behavior where needed.
+
+This phase should not come too early. The product should first prove truth-store specialization. Then it can prove distributed behavior.
+
+Candidate capabilities
+remote store registration
+store capability discovery
+cluster manifest
+node identity
+sync protocol
+store heartbeat
+read/write routing
+degraded-mode behavior
+consistency mode declaration
+store-level replication hooks
+Required commands
+db-cluster node register
+db-cluster node status
+db-cluster cluster manifest
+db-cluster cluster sync
+db-cluster cluster route explain
+Acceptance gate
+
+The system can coordinate across physically separate stores/nodes while preserving ownership, provenance, and mutation law.
+
+Drift traps
+
+Avoid:
+
+distributed systems complexity before product proof
+replicas mistaken for specialized truth stores
+consensus work that does not improve AI truth handling
+“cluster” reduced to availability/failover semantics only
+Phase 13 must prove
+
+db-cluster can become physically clustered without losing the more important logical cluster thesis.
+
+Phase 14 — Advanced Truth Stores
+
+Purpose: Expand the cluster only when new stores preserve new truth shapes.
+
+Goal
+
+Add specialized stores when they unlock materially different truth fidelity.
+
+Candidate store domains
+Store	Adds
+Graph store	dependency paths, claim lineage, impact analysis
+Time-series store	telemetry, traces, behavioral metrics
+Spatial store	location truth, geo queries
+Model-output store	generated artifacts, drafts, summaries, answer versions
+Evaluation store	benchmark results, checks, scores
+Policy store	explicit policy history and enforcement decisions
+Store admission rule
+
+A new store is allowed only if it satisfies:
+
+This store preserves a kind of truth that would be degraded in existing stores.
+Required admission doc
+
+For every new store:
+
+truth shape
+owner responsibility
+why existing stores are insufficient
+index projection
+provenance edges
+mutation rules
+rebuild behavior
+failure modes
+Acceptance gate
+
+Every new store makes the cluster more faithful, not just more complex.
+
+Drift traps
+
+Avoid:
+
+database collecting
+architecture astronautics
+adding graph/vector/time-series because they sound advanced
+stores with no product-visible effect
+stores whose only purpose is performance optimization
+Phase 14 must prove
+
+The cluster grows by truth fidelity, not by stack fashion.
+
+Phase 15 — Release Discipline and Public Product Shape
+
+Purpose: Package without diluting.
+
+Goal
+
+Prepare a real release while preserving the doctrine.
+
+Required release artifacts
+versioned README
+doctrine doc
+architecture doc
+quickstart
+CLI reference
+MCP reference
+SDK reference
+examples
+changelog
+security model
+mutation model
+provenance model
+store contract docs
+Required release gates
+all golden paths pass
+index rebuild passes
+provenance trace passes
+mutation command gate passes
+dogfood scenario passes
+install smoke passes
+docs match implementation
+no “generic AI database” language drift
+no “kernel as product” language drift
+no “vector DB” positioning drift
+Acceptance gate
+
+The public release makes the category legible:
+
+db-cluster is the database cluster for AI truth.
+
+Drift traps
+
+Avoid:
+
+launch page that markets generic AI infrastructure
+tagline that hides the database cluster
+examples that look like RAG
+docs that lead with MCP instead of cluster
+“AI-safe data control plane” as the product name rather than supporting architecture
+Cross-Phase Drift Laws
+
+These apply to every phase.
+
+Law 1 — The cluster is the product
+
+No phase may re-center the product around the kernel, index, MCP, or governance layer.
+
+Law 2 — Every store must own truth
+
+A store that does not own a distinct truth shape should not exist.
+
+Law 3 — The index is derivative
+
+The index may accelerate discovery. It must never become the source of truth.
+
+Law 4 — The kernel coordinates
+
+The kernel routes, validates, authorizes, and records. It does not replace the cluster.
+
+Law 5 — AI never gets raw mutation authority
+
+AI can propose. The command runtime disposes.
+
+Law 6 — Provenance is mandatory
+
+Answers, mutations, and derived artifacts must trace back to source truth.
+
+Law 7 — Rebuildability proves honesty
+
+Any derivative layer must be rebuildable from owned truth stores.
+
+Law 8 — Examples must use the cluster
+
+Any demo using only one store is not a db-cluster demo.
+
+Law 9 — No generic CRUD drift
+
+CRUD alone does not prove the product. Cluster behavior does.
+
+Law 10 — No RAG drift
+
+Retrieval without owned stores, provenance, and mutation law is not the product.
+
+Phase Ladder Summary
+Phase 0  — Doctrine Freeze
+Phase 1  — Cluster Spine
+Phase 2  — Store Contracts and Ownership Law
+Phase 3  — Cross-Store Identity and Shared Index
+Phase 4  — Retrieval Planner and Evidence Bundles
+Phase 5  — Provenance Graph and Trace Surface
+Phase 6  — Mutation Law and Command Runtime
+Phase 7  — AI-Facing Interface: MCP and SDK
+Phase 8  — Policy, Permissions, and Trust Boundaries
+Phase 9  — Physical Store Expansion
+Phase 10 — Operations, Rebuild, and Recovery
+Phase 11 — Developer Product Surface
+Phase 12 — Dogfood Gate
+Phase 13 — Distributed Cluster Behavior
+Phase 14 — Advanced Truth Stores
+Phase 15 — Release Discipline and Public Product Shape
+Recommended immediate next step
+
+Start Phase 1 — Cluster Spine with a docs/phase-roadmap.md containing this outline.
+
+Then implement only enough to make this true:
+
+db-cluster can ingest an artifact, create a canonical entity, link evidence, index the link, retrieve the relevant truth, propose a mutation, commit it through a command, emit a receipt, and trace the whole path back through the cluster.
+
+That is the first real proof.

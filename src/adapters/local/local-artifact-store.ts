@@ -1,0 +1,114 @@
+import { randomUUID, createHash } from 'node:crypto';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Artifact } from '../../types/artifact.js';
+import type {
+    ArtifactStore,
+    ArtifactFilter,
+    ArtifactIngestInput,
+} from '../../contracts/artifact-store.js';
+
+/**
+ * Local artifact store — filesystem-backed immutable artifact persistence.
+ * Content is stored as individual files addressed by hash.
+ * Metadata is stored in artifacts.json.
+ * Proves: immutable write, content addressing, version identity.
+ * NO update method. Re-ingesting the same filename creates a new version.
+ */
+export class LocalArtifactStore implements ArtifactStore {
+    private readonly metaPath: string;
+    private readonly contentDir: string;
+    private artifacts: Map<string, Artifact>;
+
+    constructor(dataDir: string) {
+        mkdirSync(dataDir, { recursive: true });
+        this.metaPath = join(dataDir, 'artifacts.json');
+        this.contentDir = join(dataDir, 'content');
+        mkdirSync(this.contentDir, { recursive: true });
+        this.artifacts = this.load();
+    }
+
+    async get(id: string): Promise<Artifact | null> {
+        return this.artifacts.get(id) ?? null;
+    }
+
+    async getContent(id: string): Promise<Buffer | null> {
+        const artifact = this.artifacts.get(id);
+        if (!artifact) return null;
+        const contentPath = join(this.contentDir, artifact.contentHash);
+        if (!existsSync(contentPath)) return null;
+        return readFileSync(contentPath);
+    }
+
+    async list(filter?: ArtifactFilter): Promise<Artifact[]> {
+        let results = Array.from(this.artifacts.values());
+
+        if (filter?.mimeType) {
+            results = results.filter((a) => a.mimeType === filter.mimeType);
+        }
+        if (filter?.filenameContains) {
+            const q = filter.filenameContains.toLowerCase();
+            results = results.filter((a) => a.filename.toLowerCase().includes(q));
+        }
+        if (filter?.limit) {
+            results = results.slice(0, filter.limit);
+        }
+        return results;
+    }
+
+    async exists(id: string): Promise<boolean> {
+        return this.artifacts.has(id);
+    }
+
+    async ingest(input: ArtifactIngestInput): Promise<Artifact> {
+        const contentHash = createHash('sha256').update(input.content).digest('hex');
+
+        // Determine version — count existing artifacts with the same filename
+        const existing = Array.from(this.artifacts.values()).filter(
+            (a) => a.filename === input.filename,
+        );
+        const version = existing.length + 1;
+
+        const artifact: Artifact = {
+            id: randomUUID(),
+            filename: input.filename,
+            contentHash,
+            mimeType: input.mimeType,
+            sizeBytes: input.content.length,
+            version,
+            storagePath: join(this.contentDir, contentHash),
+            ingestedAt: new Date().toISOString(),
+            owner: 'artifact',
+        };
+
+        // Write content by hash — content-addressed, deduplicates identical content
+        const contentPath = join(this.contentDir, contentHash);
+        if (!existsSync(contentPath)) {
+            writeFileSync(contentPath, input.content);
+        }
+
+        this.artifacts.set(artifact.id, artifact);
+        this.persist();
+        return artifact;
+    }
+
+    async versions(filename: string): Promise<Artifact[]> {
+        return Array.from(this.artifacts.values())
+            .filter((a) => a.filename === filename)
+            .sort((a, b) => a.version - b.version);
+    }
+
+    private load(): Map<string, Artifact> {
+        if (!existsSync(this.metaPath)) {
+            return new Map();
+        }
+        const raw = readFileSync(this.metaPath, 'utf-8');
+        const arr: Artifact[] = JSON.parse(raw);
+        return new Map(arr.map((a) => [a.id, a]));
+    }
+
+    private persist(): void {
+        const arr = Array.from(this.artifacts.values());
+        writeFileSync(this.metaPath, JSON.stringify(arr, null, 2));
+    }
+}
