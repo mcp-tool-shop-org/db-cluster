@@ -405,6 +405,75 @@ program
         console.log(explanation.summary);
     });
 
+// --- trace ---
+program
+    .command('trace <uri>')
+    .description('Trace provenance for any cluster URI — navigable graph')
+    .option('--direction <dir>', 'backward | forward | bidirectional', 'backward')
+    .option('--depth <n>', 'Max traversal depth', '10')
+    .option('--graph', 'Output full graph JSON', false)
+    .action(async (uri: string, opts: { direction: string; depth: string; graph: boolean }) => {
+        const kernel = getKernel();
+        const graph = await kernel.traceObject(uri, {
+            direction: opts.direction as 'backward' | 'forward' | 'bidirectional',
+            depth: parseInt(opts.depth),
+        });
+
+        if (opts.graph) {
+            console.log(JSON.stringify(graph, null, 2));
+        } else {
+            console.log(kernel.explainTrace(graph));
+        }
+    });
+
+// --- why ---
+program
+    .command('why <uri>')
+    .description('Why does this object exist? Compact provenance explanation.')
+    .action(async (uri: string) => {
+        const kernel = getKernel();
+        const explanation = await kernel.why(uri);
+        console.log(explanation);
+    });
+
+// --- lineage ---
+program
+    .command('lineage <uri>')
+    .description('Full lineage — bidirectional trace with all edges')
+    .option('--depth <n>', 'Max traversal depth', '10')
+    .action(async (uri: string, opts: { depth: string }) => {
+        const kernel = getKernel();
+        const graph = await kernel.traceObject(uri, {
+            direction: 'bidirectional',
+            depth: parseInt(opts.depth),
+            includeIndex: true,
+            includeReceipts: true,
+            includeGaps: true,
+        });
+        console.log(kernel.explainTrace(graph));
+    });
+
+// --- trace-bundle ---
+program
+    .command('trace-bundle <query>')
+    .description('Retrieve a bundle and trace its full provenance graph')
+    .option('--limit <n>', 'Max index candidates', '20')
+    .option('--direction <dir>', 'backward | forward | bidirectional', 'backward')
+    .option('--graph', 'Output full graph JSON', false)
+    .action(async (query: string, opts: { limit: string; direction: string; graph: boolean }) => {
+        const kernel = getKernel();
+        const bundle = await kernel.retrieveBundle(query, { limit: parseInt(opts.limit) });
+        const graph = await kernel.traceBundle(bundle, {
+            direction: opts.direction as 'backward' | 'forward' | 'bidirectional',
+        });
+
+        if (opts.graph) {
+            console.log(JSON.stringify(graph, null, 2));
+        } else {
+            console.log(kernel.explainTrace(graph));
+        }
+    });
+
 program.parse();
 
 function guessMime(filename: string): string {

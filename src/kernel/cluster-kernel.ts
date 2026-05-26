@@ -6,12 +6,14 @@ import type { ProvenanceEvent } from '../types/provenance-event.js';
 import type { Command } from '../types/command.js';
 import type { Receipt } from '../types/receipt.js';
 import type { EvidenceBundle } from '../types/evidence-bundle.js';
+import type { ProvenanceGraph, TraceOptions, TraceSummary } from '../types/provenance-graph.js';
 import { proposeCommand, validateCommand, markCommitted, markRejected } from './commands.js';
 import { recordProvenance, traceSubjectProvenance } from './provenance.js';
 import { emitReceipt } from './receipts.js';
 import { NotFoundError, CommandNotValidatedError, CommandRejectedError } from './errors.js';
 import { CommandQueue } from './command-queue.js';
 import { RetrievalPlanner } from '../retrieval/retrieval-planner.js';
+import { TraceBuilder } from '../provenance/trace-builder.js';
 
 export interface KernelOptions {
     /** Directory for kernel working state (command queue). If omitted, commands live in-memory only. */
@@ -684,6 +686,175 @@ export class ClusterKernel {
             allFresh: bundle.freshness.allFresh,
             boundaries: bundle.confidenceBoundaries,
         };
+    }
+
+    // ─── Phase 4: Provenance Graph Verbs ────────────────────────────────
+
+    /**
+     * Trace any cluster object — build a navigable provenance graph from a URI.
+     */
+    async traceObject(uri: string, options?: Partial<TraceOptions>): Promise<ProvenanceGraph> {
+        const builder = new TraceBuilder(this.stores, uri, options);
+        return builder.build();
+    }
+
+    /**
+     * Trace all objects in a retrieval bundle — combined provenance graph.
+     */
+    async traceBundle(bundle: EvidenceBundle, options?: Partial<TraceOptions>): Promise<ProvenanceGraph> {
+        // Build individual traces for each resolved evidence item
+        const allNodes = new Map<string, ProvenanceGraph['nodes'][0]>();
+        const allEdges: ProvenanceGraph['edges'] = [];
+        const allGaps: ProvenanceGraph['gaps'] = [];
+        const allWarnings: ProvenanceGraph['warnings'] = [];
+
+        const uris: string[] = [];
+        for (const e of bundle.resolvedEntities) {
+            uris.push(e.uri);
+        }
+        for (const a of bundle.resolvedArtifacts) {
+            uris.push(a.uri);
+        }
+
+        for (const uri of uris) {
+            const graph = await this.traceObject(uri, options);
+            for (const node of graph.nodes) allNodes.set(node.uri, node);
+            allEdges.push(...graph.edges);
+            allGaps.push(...graph.gaps);
+            allWarnings.push(...graph.warnings);
+        }
+
+        // Dedup edges
+        const edgeSet = new Set<string>();
+        const dedupedEdges = allEdges.filter((e) => {
+            const key = `${e.from}|${e.to}|${e.type}`;
+            if (edgeSet.has(key)) return false;
+            edgeSet.add(key);
+            return true;
+        });
+
+        const nodesArr = [...allNodes.values()];
+        const focalUri = `bundle://${bundle.id}`;
+
+        const summary: TraceSummary = {
+            focalUri,
+            direction: options?.direction ?? 'backward',
+            nodeCount: nodesArr.length,
+            edgeCount: dedupedEdges.length,
+            sourceTruthNodes: nodesArr.filter((n) => n.isSourceTruth && !n.isGap).length,
+            derivativeNodes: nodesArr.filter((n) => !n.isSourceTruth && !n.isGap).length,
+            receiptCount: nodesArr.filter((n) => n.type === 'receipt').length,
+            gapCount: allGaps.length,
+            warningCount: allWarnings.length,
+            oneLiner: `Bundle trace: ${nodesArr.length} nodes, ${dedupedEdges.length} edges, ${allGaps.length} gaps`,
+        };
+
+        return {
+            focalUri,
+            direction: options?.direction ?? 'backward',
+            nodes: nodesArr,
+            edges: dedupedEdges,
+            gaps: allGaps,
+            warnings: allWarnings,
+            summary,
+            assembledAt: new Date().toISOString(),
+        };
+    }
+
+    /**
+     * Explain a provenance graph as human-readable text.
+     */
+    explainTrace(graph: ProvenanceGraph): string {
+        const lines: string[] = [];
+        lines.push(`Provenance trace from: ${graph.focalUri}`);
+        lines.push(`Direction: ${graph.direction}`);
+        lines.push(`Assembled: ${graph.assembledAt}`);
+        lines.push('');
+        lines.push(`Nodes: ${graph.summary.nodeCount} (${graph.summary.sourceTruthNodes} source truth, ${graph.summary.derivativeNodes} derivative, ${graph.summary.receiptCount} receipts)`);
+        lines.push(`Edges: ${graph.summary.edgeCount}`);
+
+        if (graph.nodes.length > 0) {
+            lines.push('');
+            lines.push('Objects:');
+            for (const node of graph.nodes) {
+                const gap = node.isGap ? ' [GAP]' : '';
+                const truth = node.isSourceTruth ? 'truth' : 'derivative';
+                lines.push(`  ${node.uri} — ${node.label} (${truth})${gap}`);
+            }
+        }
+
+        if (graph.gaps.length > 0) {
+            lines.push('');
+            lines.push(`Gaps (${graph.gaps.length}):`);
+            for (const gap of graph.gaps) {
+                lines.push(`  [${gap.impact}] ${gap.description}`);
+            }
+        }
+
+        if (graph.warnings.length > 0) {
+            lines.push('');
+            lines.push(`Warnings (${graph.warnings.length}):`);
+            for (const w of graph.warnings) {
+                lines.push(`  [${w.type}] ${w.message}`);
+            }
+        }
+
+        if (graph.edges.length > 0) {
+            lines.push('');
+            lines.push('Edges:');
+            for (const edge of graph.edges) {
+                const warn = edge.isWarning ? ' ⚠' : '';
+                lines.push(`  ${edge.from} → ${edge.to} [${edge.type}]${warn}`);
+                lines.push(`    ${edge.reason}`);
+            }
+        }
+
+        return lines.join('\n');
+    }
+
+    /**
+     * Why does this object exist? Compact operator-facing explanation.
+     */
+    async why(uri: string): Promise<string> {
+        const graph = await this.traceObject(uri, { direction: 'backward', depth: 5, includeReceipts: true, includeIndex: false, includeGaps: true, includeCommands: false });
+
+        if (graph.nodes.length === 0) {
+            return `${uri}: object not found in any store.`;
+        }
+
+        const focal = graph.nodes.find((n) => n.uri === uri);
+        if (!focal) {
+            return `${uri}: object not found.`;
+        }
+
+        const parts: string[] = [];
+        parts.push(`${focal.label} (${focal.type} in ${focal.ownerStore})`);
+
+        // Find creation edges
+        const incomingEdges = graph.edges.filter((e) => e.to === uri);
+        if (incomingEdges.length > 0) {
+            const creationEdge = incomingEdges.find((e) => e.type === 'entity_created_by' || e.type === 'artifact_ingested_from');
+            if (creationEdge) {
+                parts.push(`Created by: ${creationEdge.reason}`);
+            }
+            const linkEdges = incomingEdges.filter((e) => e.type === 'evidence_linked_to');
+            if (linkEdges.length > 0) {
+                parts.push(`Evidence links: ${linkEdges.length}`);
+            }
+        }
+
+        // Receipts
+        const receiptNodes = graph.nodes.filter((n) => n.type === 'receipt');
+        if (receiptNodes.length > 0) {
+            parts.push(`Receipts: ${receiptNodes.length}`);
+        }
+
+        // Gaps/warnings
+        if (graph.gaps.length > 0) {
+            parts.push(`⚠ ${graph.gaps.length} gap(s) in provenance`);
+        }
+
+        return parts.join('\n');
     }
 }
 

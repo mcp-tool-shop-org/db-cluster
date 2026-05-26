@@ -11,3 +11,15 @@ export type {
     MissingContext,
     ConfidenceBoundary,
 } from './evidence-bundle.js';
+export type {
+    ProvenanceGraph,
+    ProvenanceNode,
+    ProvenanceEdge,
+    TraceDirection,
+    TraceOptions,
+    TraceGap,
+    TraceWarning,
+    TraceSummary,
+    NodeType,
+    EdgeType,
+} from './provenance-graph.js';

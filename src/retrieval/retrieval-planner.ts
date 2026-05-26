@@ -31,7 +31,7 @@ export interface RetrievalPlannerOptions {
  * The output is a structured EvidenceBundle, not a list of hits.
  */
 export class RetrievalPlanner {
-    constructor(private readonly stores: ClusterStores) {}
+    constructor(private readonly stores: ClusterStores) { }
 
     async plan(query: string, options?: RetrievalPlannerOptions): Promise<EvidenceBundle> {
         const limit = options?.limit ?? 20;
