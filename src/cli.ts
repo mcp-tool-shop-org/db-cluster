@@ -168,27 +168,6 @@ program
         }
     });
 
-// --- trace ---
-program
-    .command('trace <id>')
-    .description('Trace provenance for a subject')
-    .action(async (id: string) => {
-        const kernel = getKernel();
-
-        try {
-            const events = await kernel.traceProvenance(id);
-            console.log(`Provenance trace for ${id} (${events.length} event(s)):`);
-            for (const e of events) {
-                console.log(`  [${e.timestamp}] ${e.action} by ${e.actorId}`);
-                console.log(`    subject: ${e.subjectStore}/${e.subjectId}`);
-                if (e.parentEventId) console.log(`    parent:  ${e.parentEventId}`);
-            }
-        } catch (err: any) {
-            console.error(err.message);
-            process.exit(1);
-        }
-    });
-
 // --- propose ---
 program
     .command('propose <command-json>')

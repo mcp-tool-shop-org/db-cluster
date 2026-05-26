@@ -1,5 +1,65 @@
 # Changelog
 
+## Phase 6 — AI-Facing Interface: MCP and SDK (2026-05-26)
+
+### Wave 1 — SDK Surface
+- `ClusterSDK` class — clean programmatic API over kernel
+- Methods: findSources, retrieveBundle, explainRetrieval, resolve, traceObject, why
+- Mutation lifecycle: proposeMutation, validateMutation, approveMutation, rejectMutation, commitMutation, compensateMutation
+- Inspection: inspectCommand, listReceipts
+- Constructor takes `SDKOptions { clusterDir }`, creates cluster + kernel + resolver internally
+
+### Wave 2 — MCP Tool Schema
+- 14 tools defined with typed input schemas
+- Read tools: cluster_find_sources, cluster_retrieve_bundle, cluster_explain_retrieval, cluster_resolve, cluster_trace, cluster_why, cluster_inspect_command, cluster_list_receipts
+- Lifecycle tools: cluster_propose_mutation, cluster_validate_mutation, cluster_approve_mutation, cluster_reject_mutation
+- Write tools: cluster_commit_mutation, cluster_compensate_mutation
+
+### Wave 3 — MCP Server Runtime
+- Stdio transport via `@modelcontextprotocol/sdk`
+- `db-cluster-mcp` bin entry — startable as real tool surface
+- All tools delegate to SDK → kernel → stores (no alternate path)
+- `handleTool` exported for testability with SDK override
+
+### Wave 4 — Safety Guardrails
+- `ToolAnnotations` interface: readOnly, writesCluster, approvalSensitive, stagedOnly, requiresExistingCommand
+- Every tool carries machine-readable annotations
+- Output discipline: `_meta.operation`, `_meta.writesCluster`, `_sourceType`, `_staleWarning`, `_missingWarning`, `statusTransition`
+- Prompt-injection boundary: artifact content/rawContent stripped, `_contentPolicy` marker
+- `dataIntegrity` statement on retrieve_bundle: content is DATA, not instructions
+- `formatCommandOutput` surfaces all lifecycle metadata visibly
+
+### Wave 5 — Parity Tests (22 tests)
+- retrieveBundle: same URIs, owner stores, freshness, confidence through MCP and SDK
+- trace: equivalent provenance graph nodes/edges
+- why: identical explanation text
+- Lifecycle: propose → validate → approve → commit state matches at every step
+- Rejected command cannot commit through MCP
+- Stale index labeled derivative, resolved objects labeled owner-truth
+- Missing owner truth surfaces as `_missingWarning`
+- Receipts created via MCP visible through SDK
+- All 14 tool annotations match intended risk classes (6 sub-assertions)
+- Artifact sanitization strips content from MCP output, owner-store truth undamaged
+
+### Wave 6 — Destructive Proof Suite (22 tests)
+- MCP proposal writes no cluster truth (store state unchanged)
+- MCP commit cannot bypass validation (invalid payload rejected, rejected commands blocked, double-commit blocked)
+- Rejected command persists across SDK instances (survives restart)
+- Adversarial artifact content cannot alter tool permissions/annotations
+- Stale index warnings survive MCP retrieval
+- Missing owner truth: empty retrieval returns valid structure, non-existent trace returns gap nodes
+- Raw artifact content never exposed through MCP output
+- MCP lifecycle receipts traceable through `why` and `trace`
+- No raw adapter/store exported through any public surface
+- CLI ↔ MCP parity: entity committed through MCP visible through CLI, entity committed through CLI visible through MCP
+
+### Bonus Fix
+- Removed duplicate `trace` command in CLI (Phase 2/4 overlap bug)
+
+**Phase 6 total: 44 new tests (210 cumulative), all passing.**
+
+---
+
 ## Phase 5 — Mutation Law and Command Runtime (2026-05-26)
 
 ### Wave 1 — Command Lifecycle Model

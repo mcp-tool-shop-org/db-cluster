@@ -60,10 +60,10 @@ describe('Wave 4 — Golden-Path CLI', () => {
         expect(inspectOut).toContain('concept/Federated Truth');
         expect(inspectOut).toContain('owner:      canonical');
 
-        // 8. Trace provenance
-        const traceOut = run(`trace ${entityId}`);
-        expect(traceOut).toContain('Provenance trace');
-        expect(traceOut).toContain('entity_created');
+        // 8. Trace provenance (requires cluster URI)
+        const traceOut = run(`trace cluster://canonical/${entityId}`);
+        expect(traceOut).toContain('Provenance trace from:');
+        expect(traceOut).toContain(entityId!);
 
         // 9. Propose mutation (zero writes)
         const proposeJson = JSON.stringify({
