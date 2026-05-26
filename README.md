@@ -1,4 +1,6 @@
-# db-cluster
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/brand/main/logos/db-cluster/readme.png" alt="db-cluster" width="800" />
+</p>
 
 **AI-native federated database cluster.**
 
