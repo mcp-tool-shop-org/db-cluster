@@ -422,4 +422,242 @@ export class ClusterKernel {
     async listReceipts(filter?: { commandId?: string; since?: string; limit?: number }): Promise<Receipt[]> {
         return this.stores.ledger.listReceipts(filter);
     }
+
+    /**
+     * Rebuild the index from owner stores (canonical, artifact, ledger).
+     * Clears the entire index, then re-derives from source truth.
+     * Returns the count of records rebuilt.
+     */
+    async rebuildIndex(actorId: string): Promise<{ rebuilt: number; provenance: ProvenanceEvent; receipt: Receipt }> {
+        // Clear
+        await this.stores.index.clear();
+
+        let rebuilt = 0;
+
+        // Re-index all entities
+        const entities = await this.stores.canonical.list();
+        for (const entity of entities) {
+            await this.stores.index.index({
+                sourceId: entity.id,
+                sourceStore: 'canonical',
+                text: `${entity.kind}: ${entity.name}`,
+                metadata: { kind: entity.kind, ...entity.attributes },
+            });
+            rebuilt++;
+        }
+
+        // Re-index all artifacts
+        const artifacts = await this.stores.artifact.list();
+        for (const artifact of artifacts) {
+            await this.stores.index.index({
+                sourceId: artifact.id,
+                sourceStore: 'artifact',
+                text: `${artifact.filename} [${artifact.mimeType}]`,
+                metadata: {
+                    filename: artifact.filename,
+                    mimeType: artifact.mimeType,
+                    contentHash: artifact.contentHash,
+                    version: artifact.version,
+                },
+            });
+            rebuilt++;
+        }
+
+        // Record provenance
+        const provenance = await recordProvenance(
+            this.stores.ledger,
+            'index_rebuilt',
+            actorId,
+            'index',
+            'index',
+            { rebuilt, clearedFirst: true },
+        );
+
+        // Emit receipt
+        const cmd = markCommitted(
+            validateCommand(
+                proposeCommand('reindex', 'index', { rebuilt }, actorId),
+            ),
+        );
+        const receipt = await emitReceipt(
+            this.stores.ledger,
+            cmd,
+            `Index rebuilt: ${rebuilt} records from owner stores`,
+            [],
+            provenance.id,
+        );
+
+        return { rebuilt, provenance, receipt };
+    }
+
+    /**
+     * Returns the current index status: total count, and per-store breakdown.
+     */
+    async indexStatus(): Promise<IndexStatusResult> {
+        const total = await this.stores.index.count();
+        const allRecords = await this.stores.index.search({ limit: 100000 });
+
+        const byStore: Record<string, number> = {};
+        for (const rec of allRecords) {
+            byStore[rec.sourceStore] = (byStore[rec.sourceStore] ?? 0) + 1;
+        }
+
+        // Count source truth objects
+        const canonicalCount = (await this.stores.canonical.list()).length;
+        const artifactCount = (await this.stores.artifact.list()).length;
+        const expectedTotal = canonicalCount + artifactCount;
+
+        return {
+            total,
+            byStore,
+            expectedTotal,
+            possiblyStale: total !== expectedTotal,
+        };
+    }
+
+    /**
+     * Explain why an index record exists: what owned truth it derives from,
+     * whether that truth still exists, and whether the record appears stale.
+     */
+    async explainIndex(recordId: string): Promise<IndexExplanation> {
+        const record = await this.stores.index.get(recordId);
+        if (!record) {
+            throw new NotFoundError('index', recordId);
+        }
+
+        let sourceExists = false;
+        let sourceObject: Entity | Artifact | ProvenanceEvent | null = null;
+        let stale = false;
+        let staleCause: string | undefined;
+
+        switch (record.sourceStore) {
+            case 'canonical': {
+                const entity = await this.stores.canonical.get(record.sourceId);
+                sourceExists = !!entity;
+                sourceObject = entity;
+                if (entity) {
+                    // Check if index text matches current state
+                    const expectedText = `${entity.kind}: ${entity.name}`;
+                    if (record.text !== expectedText) {
+                        stale = true;
+                        staleCause = `Index text "${record.text}" does not match current entity "${expectedText}"`;
+                    }
+                } else {
+                    stale = true;
+                    staleCause = `Source entity ${record.sourceId} no longer exists`;
+                }
+                break;
+            }
+            case 'artifact': {
+                const artifact = await this.stores.artifact.get(record.sourceId);
+                sourceExists = !!artifact;
+                sourceObject = artifact;
+                if (!artifact) {
+                    stale = true;
+                    staleCause = `Source artifact ${record.sourceId} no longer exists`;
+                }
+                break;
+            }
+            case 'ledger': {
+                const event = await this.stores.ledger.getEvent(record.sourceId);
+                sourceExists = !!event;
+                sourceObject = event;
+                if (!event) {
+                    stale = true;
+                    staleCause = `Source event ${record.sourceId} no longer exists`;
+                }
+                break;
+            }
+        }
+
+        return {
+            indexRecordId: record.id,
+            sourceId: record.sourceId,
+            sourceStore: record.sourceStore,
+            indexedAt: record.indexedAt,
+            text: record.text,
+            sourceExists,
+            sourceObject,
+            stale,
+            staleCause,
+        };
+    }
+
+    /**
+     * List all index records that are stale (source truth missing or changed).
+     */
+    async listStaleRecords(): Promise<StaleRecord[]> {
+        const allRecords = await this.stores.index.search({ limit: 100000 });
+        const stale: StaleRecord[] = [];
+
+        for (const record of allRecords) {
+            let cause: string | undefined;
+
+            switch (record.sourceStore) {
+                case 'canonical': {
+                    const entity = await this.stores.canonical.get(record.sourceId);
+                    if (!entity) {
+                        cause = 'Source entity deleted';
+                    } else {
+                        const expectedText = `${entity.kind}: ${entity.name}`;
+                        if (record.text !== expectedText) {
+                            cause = 'Index text does not match current entity state';
+                        }
+                    }
+                    break;
+                }
+                case 'artifact': {
+                    const artifact = await this.stores.artifact.get(record.sourceId);
+                    if (!artifact) {
+                        cause = 'Source artifact deleted';
+                    }
+                    break;
+                }
+                case 'ledger': {
+                    const event = await this.stores.ledger.getEvent(record.sourceId);
+                    if (!event) {
+                        cause = 'Source event deleted';
+                    }
+                    break;
+                }
+            }
+
+            if (cause) {
+                stale.push({
+                    indexRecordId: record.id,
+                    sourceId: record.sourceId,
+                    sourceStore: record.sourceStore,
+                    cause,
+                });
+            }
+        }
+
+        return stale;
+    }
+}
+
+export interface IndexStatusResult {
+    total: number;
+    byStore: Record<string, number>;
+    expectedTotal: number;
+    possiblyStale: boolean;
+}
+
+export interface IndexExplanation {
+    indexRecordId: string;
+    sourceId: string;
+    sourceStore: string;
+    indexedAt: string;
+    text: string;
+    sourceExists: boolean;
+    sourceObject: Entity | Artifact | ProvenanceEvent | null;
+    stale: boolean;
+    staleCause?: string;
+}
+
+export interface StaleRecord {
+    indexRecordId: string;
+    sourceId: string;
+    sourceStore: string;
+    cause: string;
 }

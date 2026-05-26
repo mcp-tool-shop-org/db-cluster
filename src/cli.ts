@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { createLocalCluster } from './adapters/local/index.js';
 import { ClusterKernel } from './kernel/cluster-kernel.js';
+import { ClusterResolver } from './resolver/index.js';
+import { formatClusterUri, parseClusterUri, isClusterUri } from './uri/index.js';
 
 const CLUSTER_DIR = resolve(process.cwd(), '.db-cluster');
 
@@ -248,6 +250,100 @@ program
             console.log(`  [${r.committedAt}] ${r.resultSummary}`);
             console.log(`    id:      ${r.id}`);
             console.log(`    command: ${r.commandId}`);
+        }
+    });
+
+// --- index ---
+const index = program.command('index').description('Manage the cluster index');
+
+index
+    .command('rebuild')
+    .description('Clear and rebuild the index from owner stores')
+    .action(async () => {
+        const kernel = getKernel();
+        const result = await kernel.rebuildIndex('cli-user');
+        console.log(`Index rebuilt: ${result.rebuilt} record(s) from owner stores.`);
+        console.log(`  provenance: ${result.provenance.id}`);
+        console.log(`  receipt:    ${result.receipt.id}`);
+    });
+
+index
+    .command('status')
+    .description('Show index status and staleness estimate')
+    .action(async () => {
+        const kernel = getKernel();
+        const status = await kernel.indexStatus();
+        console.log(`Index status:`);
+        console.log(`  total records: ${status.total}`);
+        console.log(`  expected:      ${status.expectedTotal}`);
+        console.log(`  stale:         ${status.possiblyStale ? 'POSSIBLY STALE' : 'ok'}`);
+        console.log(`  by store:`);
+        for (const [store, count] of Object.entries(status.byStore)) {
+            console.log(`    ${store}: ${count}`);
+        }
+    });
+
+index
+    .command('explain <record-id>')
+    .description('Explain why an index record exists and whether it is stale')
+    .action(async (recordId: string) => {
+        const kernel = getKernel();
+        try {
+            const explanation = await kernel.explainIndex(recordId);
+            console.log(`Index record: ${explanation.indexRecordId}`);
+            console.log(`  source:       ${explanation.sourceStore}/${explanation.sourceId}`);
+            console.log(`  text:         ${explanation.text}`);
+            console.log(`  indexedAt:    ${explanation.indexedAt}`);
+            console.log(`  sourceExists: ${explanation.sourceExists}`);
+            console.log(`  stale:        ${explanation.stale}`);
+            if (explanation.staleCause) {
+                console.log(`  staleCause:   ${explanation.staleCause}`);
+            }
+        } catch (err: any) {
+            console.error(err.message);
+            process.exit(1);
+        }
+    });
+
+index
+    .command('stale')
+    .description('List index records that do not match source truth')
+    .action(async () => {
+        const kernel = getKernel();
+        const stale = await kernel.listStaleRecords();
+        if (stale.length === 0) {
+            console.log('No stale index records.');
+            return;
+        }
+        console.log(`Stale records (${stale.length}):`);
+        for (const s of stale) {
+            console.log(`  ${s.indexRecordId}`);
+            console.log(`    source: ${s.sourceStore}/${s.sourceId}`);
+            console.log(`    cause:  ${s.cause}`);
+        }
+    });
+
+// --- resolve ---
+program
+    .command('resolve <uri>')
+    .description('Resolve a cluster URI to its owner-store object')
+    .action(async (uri: string) => {
+        if (!existsSync(CLUSTER_DIR)) {
+            console.error('No cluster found. Run `db-cluster init` first.');
+            process.exit(1);
+        }
+        const stores = createLocalCluster(CLUSTER_DIR);
+        const resolver = new ClusterResolver(stores);
+
+        try {
+            const resolved = await resolver.resolve(uri);
+            console.log(`Resolved: ${resolved.uri}`);
+            console.log(`  kind:  ${resolved.kind}`);
+            console.log(`  store: ${resolved.store}`);
+            console.log(`  object: ${JSON.stringify(resolved.object, null, 2)}`);
+        } catch (err: any) {
+            console.error(`Resolve failed: ${err.message}`);
+            process.exit(1);
         }
     });
 
