@@ -9,6 +9,12 @@ import { proposeCommand, validateCommand, markCommitted, markRejected } from './
 import { recordProvenance, traceSubjectProvenance } from './provenance.js';
 import { emitReceipt } from './receipts.js';
 import { NotFoundError, CommandNotValidatedError, CommandRejectedError } from './errors.js';
+import { CommandQueue } from './command-queue.js';
+
+export interface KernelOptions {
+    /** Directory for kernel working state (command queue). If omitted, commands live in-memory only. */
+    dataDir?: string;
+}
 
 export interface IngestArtifactInput {
     filename: string;
@@ -61,9 +67,30 @@ export interface CommitMutationResult {
  * Every write produces provenance. Every committed command produces a receipt.
  */
 export class ClusterKernel {
-    private pendingCommands = new Map<string, Command>();
+    private commandQueue: CommandQueue | null;
+    private memoryCommands = new Map<string, Command>();
 
-    constructor(private readonly stores: ClusterStores) {}
+    constructor(
+        private readonly stores: ClusterStores,
+        options?: KernelOptions,
+    ) {
+        this.commandQueue = options?.dataDir
+            ? new CommandQueue(options.dataDir)
+            : null;
+    }
+
+    private getCommand(id: string): Command | undefined {
+        if (this.commandQueue) return this.commandQueue.get(id);
+        return this.memoryCommands.get(id);
+    }
+
+    private saveCommand(command: Command): void {
+        if (this.commandQueue) {
+            this.commandQueue.save(command);
+        } else {
+            this.memoryCommands.set(command.id, command);
+        }
+    }
 
     /**
      * Ingest a source artifact into the cluster.
@@ -279,7 +306,7 @@ export class ClusterKernel {
             input.payload,
             input.proposedBy,
         );
-        this.pendingCommands.set(command.id, command);
+        this.saveCommand(command);
         return command;
     }
 
@@ -288,7 +315,7 @@ export class ClusterKernel {
      * Validates, executes against the target store, emits provenance and receipt.
      */
     async commitMutation(commandId: string, actorId: string): Promise<CommitMutationResult> {
-        const command = this.pendingCommands.get(commandId);
+        const command = this.getCommand(commandId);
         if (!command) {
             throw new CommandNotValidatedError(commandId);
         }
@@ -302,7 +329,7 @@ export class ClusterKernel {
             validated = validateCommand(command);
         } catch (err) {
             const rejected = markRejected(command);
-            this.pendingCommands.set(commandId, rejected);
+            this.saveCommand(rejected);
             throw new CommandRejectedError(commandId, (err as Error).message);
         }
 
@@ -358,14 +385,14 @@ export class ClusterKernel {
             }
             default: {
                 const rejected = markRejected(validated);
-                this.pendingCommands.set(commandId, rejected);
+                this.saveCommand(rejected);
                 throw new CommandRejectedError(commandId, `Unknown verb: ${validated.verb}`);
             }
         }
 
         // Mark committed
         const committed = markCommitted(validated);
-        this.pendingCommands.set(commandId, committed);
+        this.saveCommand(committed);
 
         // Record provenance
         const provenance = await recordProvenance(
