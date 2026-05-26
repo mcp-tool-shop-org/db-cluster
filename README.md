@@ -49,7 +49,11 @@ db-cluster receipts
 
 ## Status
 
-Phase 1 — Cluster Spine. Building the smallest real cluster that proves the thesis.
+**Phase 1 — Cluster Spine: COMPLETE.** 46 tests passing.
+
+The smallest real cluster that proves specialized truth stores can behave as one governed AI-native substrate — defended with destructive and cross-process proof tests.
+
+Next: Phase 2 — Cross-Store Identity and Rebuildable Index.
 
 ## License
 
