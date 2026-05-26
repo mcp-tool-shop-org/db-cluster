@@ -1,5 +1,52 @@
 # Changelog
 
+## Phase 5 — Mutation Law and Command Runtime (2026-05-26)
+
+### Wave 1 — Command Lifecycle Model
+- `CommandStatus`: proposed → validated → approved → committed → (compensated) / rejected
+- `ValidationResult`, `ValidationCheck` — named, inspectable validation output
+- Commands carry: rejection reason/actor, approval metadata/note, commit actor, compensation references
+- Added `compensate` verb
+
+### Wave 2 — Command Validator
+- 5 structural checks: verb_present, target_store_valid, payload_present, payload_shape, status_is_proposed
+- Verb-specific payload validation: create_entity (kind+name), update_entity (entityId+patch), link_evidence (artifactId+entityId), compensate (originalCommandId+reason)
+- Validation failures produce named check results, not opaque errors
+
+### Wave 3 — Approval/Rejection Runtime
+- `kernel.validateMutation(id)` — validate without committing
+- `kernel.approveMutation(id, actor, note)` — operator/policy gate
+- `kernel.rejectMutation(id, actor, reason)` — explicit rejection
+- `kernel.inspectCommand(id)` — full lifecycle state inspection
+- All transitions emit provenance events to ledger
+
+### Wave 4 — Compensation Path
+- `kernel.compensateMutation(id, actor, reason)` — correct without erasing
+- Creates compensating command with receipt; links back to original
+- Original receipt preserved; original command marked `compensated`
+- Cannot compensate non-committed commands
+
+### Wave 5 — CLI Surface
+- `db-cluster validate <id>` — validate with check output
+- `db-cluster approve <id> [--note]` — approve validated command
+- `db-cluster reject <id> --reason` — reject with reason
+- `db-cluster compensate <id> --reason` — compensate committed command
+- `db-cluster inspect-command <id>` — full lifecycle JSON
+
+### Wave 6 — Proof Tests
+- No commit without validation
+- Rejected commands cannot commit
+- Full approval lifecycle (proposed→validated→approved→committed)
+- Compensation preserves original receipt
+- Failed commands produce audit trail (rejection, approval, compensation events)
+- Cross-process command lifecycle survives restart
+- Validation produces detailed named checks
+- Invalid status transitions are rejected
+
+**Phase 5 total: 17 new tests (166 cumulative), all passing.**
+
+---
+
 ## Phase 4 — Provenance Graph and Trace Surface (2026-05-26)
 
 ### Wave 1 — Provenance Graph Type Model

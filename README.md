@@ -53,11 +53,11 @@ db-cluster receipts
 
 ## Status
 
-**Phase 4 — Provenance Graph and Trace Surface: COMPLETE.** 149 tests passing.
+**Phase 5 — Mutation Law and Command Runtime: COMPLETE.** 166 tests passing.
 
-The cluster can trace any surfaced object, answer, retrieval bundle, mutation, receipt, or index record back through the cluster as a navigable provenance graph. Traces cross all four stores, surface gaps and stale projections honestly, and render as both machine-readable graphs and human-readable explanations.
+The cluster enforces typed, validated, auditable command lifecycles. AI proposes; kernel validates with named checks; operators approve or reject; commits produce receipts; compensations correct without erasing history. Every lifecycle transition emits provenance.
 
-Next: Phase 5 — Mutation Law and Command Runtime.
+Next: Phase 6 — AI-Facing Interface: MCP and SDK.
 
 ## License
 
