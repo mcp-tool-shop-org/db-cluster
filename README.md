@@ -53,11 +53,11 @@ db-cluster receipts
 
 ## Status
 
-**Phase 11 — Dogfood Gate: COMPLETE.** 484 tests passing across 35 files.
+**Phase 12 — Dogfood Findings Repair: COMPLETE.** 485 tests passing across 37 files.
 
-The cluster is legible and runnable as a developer product. Documentation architecture covers all subsystems (quickstart, architecture, store contracts, cluster URIs, retrieval bundles, provenance graphs, mutation law, policy/redaction, MCP, SDK, CLI, operations). SDK and MCP examples compile and demonstrate the full cluster thesis. Installation smoke tests prove a fresh developer can install, build, and run without repo-local assumptions. The proof suite verifies product positioning never reduces to RAG, CRUD, MCP demo, or generic database middleware.
+Phase 12 converts Phase 11's PASS_WITH_CONDITIONS into a stronger product foundation. Four findings repaired: artifact restore now preserves content + IDs with integrity verification; command state is shared across kernel instances (disk-backed, no stale cache); `commitMutation(create_entity/update_entity)` auto-indexes consistently; rebuild produces content-aware index text (headings + key terms, not just filenames).
 
-Previous: Phase 9 — Operations, Rebuild, and Recovery.
+Previous: Phase 11 — Dogfood Gate.
 
 ## License
 

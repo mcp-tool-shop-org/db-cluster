@@ -106,14 +106,8 @@ describe('Retrieval Planner and Evidence Bundles', () => {
                 actorId: 'u',
             });
 
-            // Rename entity (makes index stale)
-            const cmd = await kernel.proposeMutation({
-                verb: 'update_entity',
-                targetStore: 'canonical',
-                payload: { entityId: entity.id, patch: { name: 'Renamed' } },
-                proposedBy: 'u',
-            });
-            await kernel.commitMutation(cmd.id, 'u');
+            // Rename directly on store (bypasses kernel auto-index) to create staleness
+            await cluster.canonical.update(entity.id, { name: 'Renamed' });
 
             // Retrieve using old name (still in index)
             const bundle = await kernel.retrieveBundle('Original');
@@ -277,13 +271,8 @@ describe('Retrieval Planner and Evidence Bundles', () => {
                 actorId: 'u',
             });
 
-            const cmd = await kernel.proposeMutation({
-                verb: 'update_entity',
-                targetStore: 'canonical',
-                payload: { entityId: entity.id, patch: { name: 'NowStale' } },
-                proposedBy: 'u',
-            });
-            await kernel.commitMutation(cmd.id, 'u');
+            // Rename directly on store (bypasses kernel auto-index)
+            await cluster.canonical.update(entity.id, { name: 'NowStale' });
 
             const bundle = await kernel.retrieveBundle('WillBeStale');
 

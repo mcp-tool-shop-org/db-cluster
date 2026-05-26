@@ -114,14 +114,8 @@ describe('Phase 4 — Provenance Graph Proof Tests', () => {
                 actorId: 'user',
             });
 
-            // Mutate entity to make index stale
-            const cmd = await kernel.proposeMutation({
-                verb: 'update_entity',
-                targetStore: 'canonical',
-                payload: { entityId: entity.id, patch: { name: 'LogoutButton' } },
-                proposedBy: 'user',
-            });
-            await kernel.commitMutation(cmd.id, 'user');
+            // Rename directly on store (bypasses kernel auto-index) to create staleness
+            await cluster.canonical.update(entity.id, { name: 'LogoutButton' });
 
             // Trace from index record (which is now stale)
             const records = await cluster.index.search({ limit: 10 });

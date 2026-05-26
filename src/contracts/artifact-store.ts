@@ -13,6 +13,8 @@ export interface ArtifactStore {
     ingest(input: ArtifactIngestInput): Promise<Artifact>;
     /** Returns all versions of an artifact by its original filename or lineage. */
     versions(filename: string): Promise<Artifact[]>;
+    /** Import a full artifact snapshot (metadata + content) preserving original ID. Used by restore. */
+    importSnapshot?(metadata: Artifact, content: Buffer): Promise<Artifact>;
 }
 
 export interface ArtifactFilter {

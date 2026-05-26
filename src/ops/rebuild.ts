@@ -4,6 +4,7 @@
  */
 
 import type { ClusterStores } from '../contracts/index.js';
+import { indexArtifactContent } from '../indexing/content-indexer.js';
 
 export interface RebuildResult {
     rebuilt: number;
@@ -21,6 +22,7 @@ export interface StaleRecord {
 
 /**
  * Rebuild the index from canonical + artifact owner truth.
+ * Uses content-aware indexing for artifacts.
  * Does NOT mutate canonical, artifact, or ledger.
  */
 export async function rebuildIndex(stores: ClusterStores, options?: { dryRun?: boolean }): Promise<RebuildResult> {
@@ -52,22 +54,14 @@ export async function rebuildIndex(stores: ClusterStores, options?: { dryRun?: b
         }
     }
 
-    // Re-index all artifacts
-    const artifacts = await stores.artifact.list({});
-    for (const artifact of artifacts) {
-        try {
-            if (!dryRun) {
-                await stores.index.index({
-                    sourceId: artifact.id,
-                    sourceStore: 'artifact',
-                    text: `${artifact.filename} v${artifact.version}`,
-                    metadata: { filename: artifact.filename, mimeType: artifact.mimeType, version: artifact.version },
-                });
-            }
-            rebuilt++;
-        } catch (err: any) {
-            errors.push(`Failed to index artifact ${artifact.id}: ${err.message}`);
-        }
+    // Re-index all artifacts with content-aware text
+    if (!dryRun) {
+        const contentResult = await indexArtifactContent(stores);
+        rebuilt += contentResult.indexed;
+        errors.push(...contentResult.errors);
+    } else {
+        const artifacts = await stores.artifact.list({});
+        rebuilt += artifacts.length;
     }
 
     return { rebuilt, removed, errors, dryRun };

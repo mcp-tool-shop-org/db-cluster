@@ -31,14 +31,8 @@ describe('Phase 3 — Proof Tests', () => {
                 actorId: 'u',
             });
 
-            // Make index stale by renaming entity
-            const cmd = await kernel.proposeMutation({
-                verb: 'update_entity',
-                targetStore: 'canonical',
-                payload: { entityId: entity.id, patch: { name: 'RenamedName' } },
-                proposedBy: 'u',
-            });
-            await kernel.commitMutation(cmd.id, 'u');
+            // Make index stale by renaming directly on store (bypasses kernel auto-index)
+            await cluster.canonical.update(entity.id, { name: 'RenamedName' });
 
             // Retrieve using OLD indexed text — still resolves the real entity
             const bundle = await kernel.retrieveBundle('OriginalName');
@@ -64,14 +58,8 @@ describe('Phase 3 — Proof Tests', () => {
                 actorId: 'u',
             });
 
-            // Rename second entity
-            const cmd = await kernel.proposeMutation({
-                verb: 'update_entity',
-                targetStore: 'canonical',
-                payload: { entityId: staleEntity.id, patch: { name: 'NowStale' } },
-                proposedBy: 'u',
-            });
-            await kernel.commitMutation(cmd.id, 'u');
+            // Rename directly on store (bypasses kernel auto-index)
+            await cluster.canonical.update(staleEntity.id, { name: 'NowStale' });
 
             // Retrieve all (both entities indexed)
             const bundle = await kernel.retrieveBundle('b:');

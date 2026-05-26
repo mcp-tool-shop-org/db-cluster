@@ -1,5 +1,32 @@
 # Changelog
 
+## Phase 12 — Dogfood Findings Repair (2026-05-27)
+
+Converts Phase 11's PASS_WITH_CONDITIONS into a stronger product foundation by fixing the four gaps discovered through self-dogfood.
+
+### Findings repaired
+1. **restore() doesn't restore artifacts** — Backup now captures base64 content + SHA-256 checksum; restore verifies integrity and uses `importSnapshot()` to preserve original artifact IDs.
+2. **Command state not shared across kernel instances** — CommandQueue rewritten to read from disk on every `get()` call; no stale in-memory cache.
+3. **commitMutation(create_entity) doesn't auto-index** — `create_entity` and `update_entity` now auto-index in `commitMutation()`, matching `createEntity()` behavior.
+4. **Index is name-based, not content-based** — New `src/indexing/` module (tokenizer + content-indexer) produces content-aware index text from artifact content (headings, key terms).
+
+### New files
+- `src/indexing/tokenizer.ts` — text tokenization, heading extraction, stop-word filtering
+- `src/indexing/content-indexer.ts` — content-aware artifact indexing
+- `test/restore-artifacts.test.ts` — 6 tests
+- `test/command-persistence.test.ts` — 7 tests
+- `test/command-index-consistency.test.ts` — 6 tests
+- `test/content-index.test.ts` — 10 tests
+- `test/dogfood-replay.test.ts` — 6 tests
+- `test/phase12-proof.test.ts` — 14 proofs
+- `scripts/dogfood-replay.ts` — end-to-end regression replay
+- `docs/phase-12-dogfood-repair.md` — doctrine doc
+- `docs/phase-12-repair-report.md` — value report (Verdict: PASS)
+
+### Stats
+- 485 tests passing (48 skipped), 0 failures
+- 41 test files
+
 ## Phase 11 — Dogfood Gate (2026-05-27)
 
 ### Wave 1 — Schema + Overview

@@ -360,6 +360,18 @@ export class ClusterKernel {
                 const updated = await this.stores.canonical.update(entityId, patch as any);
                 affectedIds.push(updated.id);
                 resultSummary = `Updated entity: ${updated.name}`;
+                // Refresh index: remove stale record, re-index with current truth
+                const staleRecords = await this.stores.index.search({ text: '', metadata: {} });
+                const matching = staleRecords.filter((r) => r.sourceId === entityId && r.sourceStore === 'canonical');
+                for (const old of matching) {
+                    await this.stores.index.remove(old.id);
+                }
+                await this.stores.index.index({
+                    sourceId: updated.id,
+                    sourceStore: 'canonical',
+                    text: `${updated.kind}: ${updated.name}`,
+                    metadata: { kind: updated.kind, ...updated.attributes },
+                });
                 break;
             }
             case 'create_entity': {
@@ -371,6 +383,13 @@ export class ClusterKernel {
                 const entity = await this.stores.canonical.create({ kind, name, attributes: attributes ?? {} });
                 affectedIds.push(entity.id);
                 resultSummary = `Created entity: ${kind}/${name}`;
+                // Auto-index: same behavior as createEntity()
+                await this.stores.index.index({
+                    sourceId: entity.id,
+                    sourceStore: 'canonical',
+                    text: `${entity.kind}: ${entity.name}`,
+                    metadata: { kind: entity.kind, ...entity.attributes },
+                });
                 break;
             }
             case 'ingest_artifact': {

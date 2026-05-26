@@ -98,6 +98,28 @@ export class LocalArtifactStore implements ArtifactStore {
             .sort((a, b) => a.version - b.version);
     }
 
+    /**
+     * Import a full artifact snapshot preserving original ID and metadata.
+     * Used by restore to recreate artifacts exactly as backed up.
+     */
+    async importSnapshot(metadata: Artifact, content: Buffer): Promise<Artifact> {
+        // Write content by hash
+        const contentPath = join(this.contentDir, metadata.contentHash);
+        if (!existsSync(contentPath)) {
+            writeFileSync(contentPath, content);
+        }
+
+        // Preserve original metadata including ID
+        const artifact: Artifact = {
+            ...metadata,
+            storagePath: join(this.contentDir, metadata.contentHash),
+        };
+
+        this.artifacts.set(artifact.id, artifact);
+        this.persist();
+        return artifact;
+    }
+
     private load(): Map<string, Artifact> {
         if (!existsSync(this.metaPath)) {
             return new Map();

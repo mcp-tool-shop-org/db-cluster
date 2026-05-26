@@ -170,14 +170,8 @@ describe('Phase 2 — Proof Tests', () => {
                 actorId: 'u',
             });
 
-            // Mutate
-            const cmd = await kernel.proposeMutation({
-                verb: 'update_entity',
-                targetStore: 'canonical',
-                payload: { entityId: entity.id, patch: { name: 'Mutated' } },
-                proposedBy: 'u',
-            });
-            await kernel.commitMutation(cmd.id, 'u');
+            // Direct store write bypasses kernel auto-index → creates staleness
+            await cluster.canonical.update(entity.id, { name: 'Mutated' });
 
             // Before rebuild: stale
             expect((await kernel.listStaleRecords()).length).toBeGreaterThan(0);
@@ -196,7 +190,7 @@ describe('Phase 2 — Proof Tests', () => {
     });
 
     describe('Stale detection catches edits that bypass index', () => {
-        it('entity renamed via command makes original index record stale', async () => {
+        it('entity renamed via direct store write makes original index record stale', async () => {
             const { entity, indexRecord } = await kernel.createEntity({
                 kind: 'test',
                 name: 'BeforeRename',
@@ -204,14 +198,8 @@ describe('Phase 2 — Proof Tests', () => {
                 actorId: 'u',
             });
 
-            // Rename
-            const cmd = await kernel.proposeMutation({
-                verb: 'update_entity',
-                targetStore: 'canonical',
-                payload: { entityId: entity.id, patch: { name: 'AfterRename' } },
-                proposedBy: 'u',
-            });
-            await kernel.commitMutation(cmd.id, 'u');
+            // Rename directly on store (bypasses kernel auto-index)
+            await cluster.canonical.update(entity.id, { name: 'AfterRename' });
 
             // Explain detects stale
             const explanation = await kernel.explainIndex(indexRecord.id);

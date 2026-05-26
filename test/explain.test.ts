@@ -56,7 +56,7 @@ describe('Index explain and stale detection', () => {
             expect(explanation.stale).toBe(false);
         });
 
-        it('detects stale when entity was renamed', async () => {
+        it('detects stale when entity was renamed outside command lifecycle', async () => {
             const { entity, indexRecord } = await kernel.createEntity({
                 kind: 'test',
                 name: 'Original',
@@ -64,16 +64,10 @@ describe('Index explain and stale detection', () => {
                 actorId: 'u',
             });
 
-            // Mutate the entity name through command
-            const cmd = await kernel.proposeMutation({
-                verb: 'update_entity',
-                targetStore: 'canonical',
-                payload: { entityId: entity.id, patch: { name: 'Renamed' } },
-                proposedBy: 'u',
-            });
-            await kernel.commitMutation(cmd.id, 'u');
+            // Directly update canonical store (bypasses kernel auto-index)
+            await cluster.canonical.update(entity.id, { name: 'Renamed' });
 
-            // Index record still has old text
+            // Index record still has old text — stale
             const explanation = await kernel.explainIndex(indexRecord.id);
             expect(explanation.stale).toBe(true);
             expect(explanation.staleCause).toContain('does not match');
@@ -99,7 +93,7 @@ describe('Index explain and stale detection', () => {
             expect(stale).toHaveLength(0);
         });
 
-        it('detects stale record after entity rename', async () => {
+        it('detects stale record after entity rename outside kernel', async () => {
             const { entity } = await kernel.createEntity({
                 kind: 'test',
                 name: 'Before',
@@ -107,14 +101,8 @@ describe('Index explain and stale detection', () => {
                 actorId: 'u',
             });
 
-            // Rename via command
-            const cmd = await kernel.proposeMutation({
-                verb: 'update_entity',
-                targetStore: 'canonical',
-                payload: { entityId: entity.id, patch: { name: 'After' } },
-                proposedBy: 'u',
-            });
-            await kernel.commitMutation(cmd.id, 'u');
+            // Rename directly on store (bypasses kernel auto-index)
+            await cluster.canonical.update(entity.id, { name: 'After' });
 
             const stale = await kernel.listStaleRecords();
             expect(stale.length).toBeGreaterThan(0);
@@ -129,14 +117,8 @@ describe('Index explain and stale detection', () => {
                 actorId: 'u',
             });
 
-            // Rename to create staleness
-            const cmd = await kernel.proposeMutation({
-                verb: 'update_entity',
-                targetStore: 'canonical',
-                payload: { entityId: entity.id, patch: { name: 'Changed' } },
-                proposedBy: 'u',
-            });
-            await kernel.commitMutation(cmd.id, 'u');
+            // Rename directly on store to create staleness
+            await cluster.canonical.update(entity.id, { name: 'Changed' });
 
             // Confirm stale
             expect((await kernel.listStaleRecords()).length).toBeGreaterThan(0);
