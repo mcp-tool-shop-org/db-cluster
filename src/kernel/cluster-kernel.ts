@@ -7,7 +7,7 @@ import type { Command } from '../types/command.js';
 import type { Receipt } from '../types/receipt.js';
 import type { EvidenceBundle } from '../types/evidence-bundle.js';
 import type { ProvenanceGraph, TraceOptions, TraceSummary } from '../types/provenance-graph.js';
-import { proposeCommand, validateCommand, markCommitted, markRejected } from './commands.js';
+import { proposeCommand, validateCommand, approveCommand, rejectCommand, markCommitted, markRejected, markCompensated, isValidTransition } from './commands.js';
 import { recordProvenance, traceSubjectProvenance } from './provenance.js';
 import { emitReceipt } from './receipts.js';
 import { NotFoundError, CommandNotValidatedError, CommandRejectedError } from './errors.js';
@@ -191,7 +191,7 @@ export class ClusterKernel {
         // 4. Emit receipt
         const cmd = markCommitted(
             validateCommand(
-                proposeCommand('create_entity', 'canonical', { entityId: entity.id }, input.actorId),
+                proposeCommand('create_entity', 'canonical', { entityId: entity.id, kind: input.kind, name: input.name }, input.actorId),
             ),
         );
         const receipt = await emitReceipt(
@@ -315,35 +315,45 @@ export class ClusterKernel {
     }
 
     /**
-     * Commit a previously proposed mutation.
-     * Validates, executes against the target store, emits provenance and receipt.
+     * Commit a previously proposed (or validated/approved) mutation.
+     * Validates if needed, executes against the target store, emits provenance and receipt.
      */
     async commitMutation(commandId: string, actorId: string): Promise<CommitMutationResult> {
         const command = this.getCommand(commandId);
         if (!command) {
             throw new CommandNotValidatedError(commandId);
         }
-        if (command.status !== 'proposed') {
+
+        // Accept proposed, validated, or approved
+        const committableStatuses = ['proposed', 'validated', 'approved'];
+        if (!committableStatuses.includes(command.status)) {
+            if (command.status === 'rejected') {
+                throw new CommandRejectedError(commandId, command.rejectionReason ?? 'Previously rejected');
+            }
             throw new CommandNotValidatedError(commandId);
         }
 
-        // Validate
-        let validated: Command;
-        try {
-            validated = validateCommand(command);
-        } catch (err) {
-            const rejected = markRejected(command);
-            this.saveCommand(rejected);
-            throw new CommandRejectedError(commandId, (err as Error).message);
+        // Validate if still proposed
+        let readyCommand: Command;
+        if (command.status === 'proposed') {
+            try {
+                readyCommand = validateCommand(command);
+            } catch (err) {
+                const rejected = markRejected(command);
+                this.saveCommand(rejected);
+                throw new CommandRejectedError(commandId, (err as Error).message);
+            }
+        } else {
+            readyCommand = command; // already validated or approved
         }
 
         // Execute the mutation against the target store
         const affectedIds: string[] = [];
         let resultSummary = '';
 
-        switch (validated.verb) {
+        switch (readyCommand.verb) {
             case 'update_entity': {
-                const { entityId, patch } = validated.payload as {
+                const { entityId, patch } = readyCommand.payload as {
                     entityId: string;
                     patch: Record<string, unknown>;
                 };
@@ -353,18 +363,18 @@ export class ClusterKernel {
                 break;
             }
             case 'create_entity': {
-                const { kind, name, attributes } = validated.payload as {
+                const { kind, name, attributes } = readyCommand.payload as {
                     kind: string;
                     name: string;
                     attributes: Record<string, unknown>;
                 };
-                const entity = await this.stores.canonical.create({ kind, name, attributes });
+                const entity = await this.stores.canonical.create({ kind, name, attributes: attributes ?? {} });
                 affectedIds.push(entity.id);
                 resultSummary = `Created entity: ${kind}/${name}`;
                 break;
             }
             case 'ingest_artifact': {
-                const { filename, content, mimeType } = validated.payload as {
+                const { filename, content, mimeType } = readyCommand.payload as {
                     filename: string;
                     content: Buffer;
                     mimeType: string;
@@ -375,7 +385,7 @@ export class ClusterKernel {
                 break;
             }
             case 'link_evidence': {
-                const { artifactId, entityId } = validated.payload as {
+                const { artifactId, entityId } = readyCommand.payload as {
                     artifactId: string;
                     entityId: string;
                 };
@@ -388,14 +398,14 @@ export class ClusterKernel {
                 break;
             }
             default: {
-                const rejected = markRejected(validated);
+                const rejected = markRejected(readyCommand);
                 this.saveCommand(rejected);
-                throw new CommandRejectedError(commandId, `Unknown verb: ${validated.verb}`);
+                throw new CommandRejectedError(commandId, `Unknown verb: ${readyCommand.verb}`);
             }
         }
 
         // Mark committed
-        const committed = markCommitted(validated);
+        const committed = markCommitted(readyCommand, actorId);
         this.saveCommand(committed);
 
         // Record provenance
@@ -404,8 +414,8 @@ export class ClusterKernel {
             'mutation_committed',
             actorId,
             affectedIds[0] ?? commandId,
-            validated.targetStore,
-            { commandId, verb: validated.verb, payload: validated.payload },
+            readyCommand.targetStore,
+            { commandId, verb: readyCommand.verb, payload: readyCommand.payload },
         );
 
         // Emit receipt
@@ -418,6 +428,145 @@ export class ClusterKernel {
         );
 
         return { command: committed, receipt };
+    }
+
+    /**
+     * Validate a proposed command without committing it.
+     * Returns the validated command with check results.
+     */
+    async validateMutation(commandId: string): Promise<Command> {
+        const command = this.getCommand(commandId);
+        if (!command) throw new NotFoundError('command', commandId);
+        if (command.status !== 'proposed') {
+            throw new CommandNotValidatedError(commandId);
+        }
+
+        try {
+            const validated = validateCommand(command);
+            this.saveCommand(validated);
+            return validated;
+        } catch (err) {
+            const rejected = markRejected(command);
+            this.saveCommand(rejected);
+            throw new CommandRejectedError(commandId, (err as Error).message);
+        }
+    }
+
+    /**
+     * Approve a validated command — operator/policy gate.
+     */
+    async approveMutation(commandId: string, approvedBy: string, note?: string): Promise<Command> {
+        const command = this.getCommand(commandId);
+        if (!command) throw new NotFoundError('command', commandId);
+
+        const approved = approveCommand(command, approvedBy, note);
+        this.saveCommand(approved);
+
+        // Record approval provenance
+        await recordProvenance(
+            this.stores.ledger,
+            'command_approved',
+            approvedBy,
+            commandId,
+            'ledger',
+            { note, commandVerb: command.verb },
+        );
+
+        return approved;
+    }
+
+    /**
+     * Reject a proposed or validated command.
+     */
+    async rejectMutation(commandId: string, rejectedBy: string, reason: string): Promise<Command> {
+        const command = this.getCommand(commandId);
+        if (!command) throw new NotFoundError('command', commandId);
+
+        const rejected = rejectCommand(command, rejectedBy, reason);
+        this.saveCommand(rejected);
+
+        // Record rejection provenance
+        await recordProvenance(
+            this.stores.ledger,
+            'command_rejected',
+            rejectedBy,
+            commandId,
+            'ledger',
+            { reason, commandVerb: command.verb },
+        );
+
+        return rejected;
+    }
+
+    /**
+     * Compensate a committed command — create a compensating command that corrects
+     * without erasing history. The original receipt is preserved.
+     */
+    async compensateMutation(
+        originalCommandId: string,
+        compensatedBy: string,
+        reason: string,
+        compensatingPayload?: Record<string, unknown>,
+    ): Promise<{ compensatingCommand: Command; originalCommand: Command; receipt: Receipt }> {
+        const original = this.getCommand(originalCommandId);
+        if (!original) throw new NotFoundError('command', originalCommandId);
+        if (original.status !== 'committed') {
+            throw new Error(`Cannot compensate command in status: ${original.status}. Must be 'committed'.`);
+        }
+
+        // Create compensating command
+        const compPayload = compensatingPayload ?? {
+            originalCommandId,
+            reason,
+            originalVerb: original.verb,
+            originalPayload: original.payload,
+        };
+
+        const compensatingCmd = proposeCommand(
+            'compensate',
+            original.targetStore,
+            { originalCommandId, reason, ...compPayload },
+            compensatedBy,
+        );
+
+        // Fast-track: validate + commit the compensating command
+        const validated = validateCommand(compensatingCmd);
+        const committed = markCommitted(validated, compensatedBy);
+        this.saveCommand(committed);
+
+        // Mark the original as compensated
+        const compensated = markCompensated(original, committed.id, compensatedBy);
+        this.saveCommand(compensated);
+
+        // Record provenance for compensation
+        const provenance = await recordProvenance(
+            this.stores.ledger,
+            'command_compensated',
+            compensatedBy,
+            originalCommandId,
+            'ledger',
+            { compensatingCommandId: committed.id, reason },
+        );
+
+        // Emit receipt for compensation
+        const receipt = await emitReceipt(
+            this.stores.ledger,
+            committed,
+            `Compensated command ${originalCommandId}: ${reason}`,
+            [originalCommandId],
+            provenance.id,
+        );
+
+        return { compensatingCommand: committed, originalCommand: compensated, receipt };
+    }
+
+    /**
+     * Inspect a command — full lifecycle state.
+     */
+    async inspectCommand(commandId: string): Promise<Command> {
+        const command = this.getCommand(commandId);
+        if (!command) throw new NotFoundError('command', commandId);
+        return command;
     }
 
     /**

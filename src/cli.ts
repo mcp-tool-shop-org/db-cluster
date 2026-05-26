@@ -231,6 +231,105 @@ program
         }
     });
 
+// --- validate ---
+program
+    .command('validate <command-id>')
+    .description('Validate a proposed command without committing')
+    .action(async (commandId: string) => {
+        const kernel = getKernel();
+        try {
+            const cmd = await kernel.validateMutation(commandId);
+            console.log(`Validated: ${cmd.id}`);
+            console.log(`  verb:   ${cmd.verb}`);
+            console.log(`  status: ${cmd.status}`);
+            if (cmd.validation) {
+                console.log(`  checks:`);
+                for (const check of cmd.validation.checks) {
+                    console.log(`    ${check.passed ? '✓' : '✗'} ${check.name}${check.message ? ': ' + check.message : ''}`);
+                }
+            }
+        } catch (err: any) {
+            console.error(`Validation failed: ${err.message}`);
+            process.exit(1);
+        }
+    });
+
+// --- approve ---
+program
+    .command('approve <command-id>')
+    .description('Approve a validated command (operator/policy gate)')
+    .option('--note <text>', 'Approval note')
+    .action(async (commandId: string, opts: { note?: string }) => {
+        const kernel = getKernel();
+        try {
+            const cmd = await kernel.approveMutation(commandId, 'cli-user', opts.note);
+            console.log(`Approved: ${cmd.id}`);
+            console.log(`  verb:       ${cmd.verb}`);
+            console.log(`  status:     ${cmd.status}`);
+            console.log(`  approvedBy: ${cmd.approvedBy}`);
+            if (cmd.approvalNote) {
+                console.log(`  note:       ${cmd.approvalNote}`);
+            }
+        } catch (err: any) {
+            console.error(`Approval failed: ${err.message}`);
+            process.exit(1);
+        }
+    });
+
+// --- reject ---
+program
+    .command('reject <command-id>')
+    .description('Reject a proposed or validated command')
+    .requiredOption('--reason <text>', 'Rejection reason')
+    .action(async (commandId: string, opts: { reason: string }) => {
+        const kernel = getKernel();
+        try {
+            const cmd = await kernel.rejectMutation(commandId, 'cli-user', opts.reason);
+            console.log(`Rejected: ${cmd.id}`);
+            console.log(`  verb:     ${cmd.verb}`);
+            console.log(`  status:   ${cmd.status}`);
+            console.log(`  reason:   ${cmd.rejectionReason}`);
+        } catch (err: any) {
+            console.error(`Rejection failed: ${err.message}`);
+            process.exit(1);
+        }
+    });
+
+// --- compensate ---
+program
+    .command('compensate <command-id>')
+    .description('Compensate a committed command (correct without erasing)')
+    .requiredOption('--reason <text>', 'Compensation reason')
+    .action(async (commandId: string, opts: { reason: string }) => {
+        const kernel = getKernel();
+        try {
+            const result = await kernel.compensateMutation(commandId, 'cli-user', opts.reason);
+            console.log(`Compensated: ${result.originalCommand.id}`);
+            console.log(`  original status: ${result.originalCommand.status}`);
+            console.log(`  compensating:    ${result.compensatingCommand.id}`);
+            console.log(`  receipt:         ${result.receipt.id}`);
+            console.log(`  reason:          ${opts.reason}`);
+        } catch (err: any) {
+            console.error(`Compensation failed: ${err.message}`);
+            process.exit(1);
+        }
+    });
+
+// --- inspect-command ---
+program
+    .command('inspect-command <command-id>')
+    .description('Inspect a command — full lifecycle state')
+    .action(async (commandId: string) => {
+        const kernel = getKernel();
+        try {
+            const cmd = await kernel.inspectCommand(commandId);
+            console.log(JSON.stringify(cmd, null, 2));
+        } catch (err: any) {
+            console.error(`Not found: ${err.message}`);
+            process.exit(1);
+        }
+    });
+
 // --- receipts ---
 program
     .command('receipts')
