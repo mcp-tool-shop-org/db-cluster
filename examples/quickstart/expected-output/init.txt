@@ -1,0 +1,5 @@
+Initialized db-cluster at .db-cluster/
+  canonical/
+  artifact/
+  index/
+  ledger/

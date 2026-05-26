@@ -1,0 +1,8 @@
+Cluster: healthy
+Checks: 6 total, 6 healthy, 0 errors, 0 warnings
+  ✓ [canonical] canonical_reachable: Canonical store is reachable.
+  ✓ [artifact] artifact_reachable: Artifact store is reachable.
+  ✓ [index] index_reachable: Index store is reachable.
+  ✓ [ledger] ledger_reachable: Ledger store is reachable.
+  ✓ [index] index_populated: Index contains 2 records.
+  ✓ [policy] policy_defaults: Policy engine loaded default policies.

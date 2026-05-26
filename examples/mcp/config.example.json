@@ -1,0 +1,10 @@
+{
+    "mcpServers": {
+        "db-cluster": {
+            "command": "db-cluster-mcp",
+            "env": {
+                "DB_CLUSTER_DIR": ".db-cluster"
+            }
+        }
+    }
+}

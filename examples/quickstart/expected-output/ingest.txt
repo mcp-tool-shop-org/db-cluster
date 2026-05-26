@@ -1,0 +1,5 @@
+Ingested artifact: evidence.md
+  ID: <uuid>
+  Store: artifact
+  Hash: <sha256>
+  Size: <bytes>

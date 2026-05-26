@@ -1,5 +1,42 @@
 # Changelog
 
+## Phase 10 — Developer Product Surface (2026-05-27)
+
+### Wave 1 — Documentation Architecture
+- 12 docs in `docs/`: quickstart, architecture, store-contracts, cluster-uris, retrieval-bundles, provenance-graphs, mutation-law, policy-and-redaction, mcp, sdk, cli, operations
+- All lead with cluster thesis and name store ownership law
+- No framing as RAG, vector DB, AI memory, or middleware
+
+### Wave 2 — Quickstart Golden Path
+- `examples/quickstart/` — evidence.md, commands.md, README.md
+- Expected output for init, ingest, doctor commands
+- Developer can follow the golden path without reading source
+
+### Wave 3 — CLI Reference Test
+- `test/cli-docs.test.ts` — 14 tests verifying docs/cli.md stays in sync with CLI
+
+### Wave 4 — SDK Reference Examples
+- 5 SDK examples: local-cluster, postgres-canonical, retrieval-bundle, mutation-lifecycle, policy-redaction
+- All compile and demonstrate cluster thesis
+
+### Wave 5 — MCP Integration Guide
+- `examples/mcp/` — config.example.json, tool-catalog.md (16 tools), safety-model.md
+- Artifact content boundary, lifecycle enforcement, trust zones documented
+
+### Wave 6 — Example Applications
+- `examples/research-evidence-cluster/` — papers + claims
+- `examples/project-memory-cluster/` — docs + decisions
+- `examples/agent-safe-app-db/` — uploaded records + app records, policy enforcement
+
+### Wave 7 — Installation + Smoke Tests
+- `test/install-smoke.test.ts` — 9 tests: build, dist, CLI, SDK imports, MCP module, Postgres error path
+
+### Wave 8 — Phase 10 Proof Suite
+- `test/phase10-proof.test.ts` — 12 proofs: README accuracy, CLI parity, compilation, MCP tool parity, quickstart, 4-store usage, no single-store examples, no middleware framing, mutation lifecycle, policy non-leakage, operations docs, install cleanliness
+
+### Summary
+434 tests passing across 29 files. The cluster is legible and runnable as a developer product.
+
 ## Phase 9 — Operations, Rebuild, and Recovery (2026-05-26)
 
 ### Wave 1 — Operations Doctrine + Health Model
