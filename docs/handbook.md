@@ -418,10 +418,19 @@ A `Principal` is any actor in the system:
 ```typescript
 interface Principal {
     id: string;
+    name: string;
+    roles: string[];
     trustZone: string;
-    capabilities: Capability[];
+    metadata?: Record<string, unknown>;
 }
 ```
+
+Capabilities are granted via `roles`, not held directly on the principal. The
+`Capability` union has 13 specific verbs (`discover_existence`,
+`read_owner_truth`, `read_derivative`, `trace_provenance`, `propose_mutation`,
+`validate_command`, `approve_command`, `reject_command`, `commit_command`,
+`compensate_command`, `read_receipts`, `read_command`, `explain_retrieval`).
+See `docs/policy-and-redaction.md` for the canonical list.
 
 Trust zones:
 
@@ -465,10 +474,10 @@ Denying access is not enough. The system must also control whether an object's *
 
 ```bash
 # Explain effective policy for a principal + resource
-db-cluster policy explain --principal '{"id":"agent","trustZone":"agent","capabilities":["read","propose"]}'
+db-cluster policy explain --principal '{"id":"agent","name":"Agent","roles":["reader","proposer"],"trustZone":"agent"}' --resource 'cluster://canonical/entity-id'
 
 # Test multiple policy actions without executing
-db-cluster policy test --principal '{"id":"external","trustZone":"external","capabilities":["read"]}' --verb read --store canonical
+db-cluster policy test --principal '{"id":"external","name":"External","roles":["reader"],"trustZone":"external"}' --capability read_owner_truth --store canonical
 ```
 
 ---
@@ -1047,7 +1056,7 @@ Recovery, diagnosis, and verification are first-class features, not afterthought
 
 | Import | Contents |
 |--------|----------|
-| `db-cluster` | ClusterKernel, types, store factory, ops, URI |
+| `db-cluster` | Store contracts, domain types, factory, ops, URI utilities |
 | `db-cluster/sdk` | ClusterSDK high-level client |
 | `db-cluster/mcp` | MCP tool catalog + handler |
 | `db-cluster/policy` | PolicyEnforcedKernel, redaction, defaults |

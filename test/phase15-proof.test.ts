@@ -191,7 +191,10 @@ describe('Phase 15 — Release Readiness & Package Boundary (10 Proofs)', () => 
     try {
       const sdk = new ClusterSDK({ clusterDir: testDir });
 
-      // Ingest via propose → commit (SDK auto-walks the validate/approve gate).
+      // Ingest via the full lifecycle. Wave A2 (KERNEL-R002) removed the
+      // SDK auto-walk — callers must propose → validate → approve → commit
+      // explicitly. Tests that need separation of duties supply distinct
+      // actors; this proof self-approves for brevity.
       const ingestPropose = await sdk.proposeMutation({
         verb: 'ingest_artifact',
         targetStore: 'artifact',
@@ -202,6 +205,8 @@ describe('Phase 15 — Release Readiness & Package Boundary (10 Proofs)', () => 
         },
         proposedBy: 'proof-actor',
       });
+      await sdk.validateMutation(ingestPropose.id);
+      await sdk.approveMutation(ingestPropose.id, 'proof-actor');
       const ingestCommit = await sdk.commitMutation(ingestPropose.id, 'proof-actor');
       expect(ingestCommit.receipt.affectedIds.length).toBeGreaterThan(0);
       const artifactId = ingestCommit.receipt.affectedIds[0];
@@ -213,6 +218,8 @@ describe('Phase 15 — Release Readiness & Package Boundary (10 Proofs)', () => 
         payload: { kind: 'fact', name: 'Package boundary is deliberate', attributes: {} },
         proposedBy: 'proof-actor',
       });
+      await sdk.validateMutation(createPropose.id);
+      await sdk.approveMutation(createPropose.id, 'proof-actor');
       const createCommit = await sdk.commitMutation(createPropose.id, 'proof-actor');
       expect(createCommit.receipt.affectedIds.length).toBeGreaterThan(0);
       const entityId = createCommit.receipt.affectedIds[0];
@@ -224,6 +231,8 @@ describe('Phase 15 — Release Readiness & Package Boundary (10 Proofs)', () => 
         payload: { entityId, artifactId, relationship: 'supports' },
         proposedBy: 'proof-actor',
       });
+      await sdk.validateMutation(linkPropose.id);
+      await sdk.approveMutation(linkPropose.id, 'proof-actor');
       await sdk.commitMutation(linkPropose.id, 'proof-actor');
 
       // Retrieve through the public bundle API.
@@ -239,15 +248,23 @@ describe('Phase 15 — Release Readiness & Package Boundary (10 Proofs)', () => 
       const health = await doctor(stores);
       expect(health.status).toBe('healthy');
 
-      // Verify — `verify()` currently flags provenance events whose
-      // subjectStore is 'ledger' (command lifecycle) as orphans because it
-      // only scans canonical+artifact. The SDK's auto-walk (validate/approve)
-      // emits exactly those events. This is a known verify() gap — tracked
-      // separately. For Proof 9 we accept healthy or degraded; what we are
-      // proving here is that the public-export-only lifecycle reaches doctor,
-      // verify, backup, and restore without throwing.
+      // Verify — TESTS-R006: pin the expected outcome. `verify()` currently
+      // flags provenance events whose subjectStore is 'ledger' (command
+      // lifecycle: command_validated / command_approved emitted by the SDK
+      // lifecycle calls) as orphans because the orphan probe only scans
+      // canonical+artifact. So `provenance_references_valid` is EXPECTED to
+      // be 'stale' (overall status='degraded'). When a future Stage B fix
+      // extends verify() to also check the ledger subject store, status
+      // will return 'healthy' and this assertion will fail — forcing the
+      // follow-up update rather than silently passing.
       const verification = await verify(stores);
-      expect(['healthy', 'degraded']).toContain(verification.status);
+      expect(verification.status).toBe('degraded');
+      const provenanceCheck = verification.checks.find((c) => c.name === 'provenance_references_valid');
+      expect(provenanceCheck?.status).toBe('stale');
+      // No unreachable / corrupt stores — the cluster IS healthy in every
+      // dimension verify() actually probes correctly.
+      const unreachable = verification.checks.filter((c) => c.status === 'unreachable' || c.status === 'corrupt');
+      expect(unreachable.length).toBe(0);
 
       // Backup
       const bk = await backup(stores);

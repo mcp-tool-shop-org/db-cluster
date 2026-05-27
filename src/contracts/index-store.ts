@@ -13,6 +13,16 @@ export interface IndexStore {
     /** Drop all index records. Used to prove rebuildability. */
     clear(): Promise<void>;
     count(): Promise<number>;
+    /**
+     * Atomically replace the entire record set. Used by `rebuildIndex` to swap
+     * a freshly-built index over the live one without an empty window between
+     * clear() and the first index() call (STORES-008 / STORES-R003).
+     *
+     * Adapters that cannot guarantee atomic replacement may implement this as
+     * clear() + index()-loop, but they MUST implement it — `rebuildIndex` no
+     * longer falls back to a duck-typed `replaceAll?` check.
+     */
+    replaceAll(records: Omit<IndexRecord, 'id' | 'indexedAt' | 'owner'>[]): Promise<void>;
 }
 
 export interface IndexQuery {

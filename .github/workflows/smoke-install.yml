@@ -2,6 +2,11 @@ name: Smoke Install
 on:
   push:
     tags: ['v*']
+  pull_request:
+    paths: ['package.json']
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   smoke:
     runs-on: ubuntu-latest

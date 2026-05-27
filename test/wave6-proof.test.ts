@@ -27,17 +27,20 @@ describe('Wave 6 — Phase 6 Proof: MCP Cannot Bypass Cluster Law', () => {
         mkdirSync(TEST_DIR, { recursive: true });
         sdk = new ClusterSDK({ clusterDir: join(TEST_DIR, '.db-cluster') });
 
-        // Seed cluster with baseline data
-        await sdk.proposeMutation({
+        // Seed cluster with baseline data — full lifecycle since Wave A2
+        // removed the SDK auto-walk (KERNEL-R002 fix). Callers must
+        // explicitly validate+approve before committing.
+        const cmd1 = await sdk.proposeMutation({
             verb: 'create_entity',
             targetStore: 'canonical',
             payload: { kind: 'document', name: 'Proof Doc', attributes: { topic: 'phase6' } },
             proposedBy: 'setup',
-        }).then(async (cmd) => {
-            await sdk.commitMutation(cmd.id, 'setup');
         });
+        await sdk.validateMutation(cmd1.id);
+        await sdk.approveMutation(cmd1.id, 'setup-approver');
+        await sdk.commitMutation(cmd1.id, 'setup');
 
-        await sdk.proposeMutation({
+        const cmd2 = await sdk.proposeMutation({
             verb: 'ingest_artifact',
             targetStore: 'artifact',
             payload: {
@@ -46,9 +49,10 @@ describe('Wave 6 — Phase 6 Proof: MCP Cannot Bypass Cluster Law', () => {
                 mediaType: 'text/markdown',
             },
             proposedBy: 'setup',
-        }).then(async (cmd) => {
-            await sdk.commitMutation(cmd.id, 'setup');
         });
+        await sdk.validateMutation(cmd2.id);
+        await sdk.approveMutation(cmd2.id, 'setup-approver');
+        await sdk.commitMutation(cmd2.id, 'setup');
     });
 
     afterEach(() => {
@@ -121,6 +125,8 @@ describe('Wave 6 — Phase 6 Proof: MCP Cannot Bypass Cluster Law', () => {
                 payload: { kind: 'note', name: 'Double Commit', attributes: {} },
                 proposedBy: 'ai',
             });
+            await sdk.validateMutation(cmd.id);
+            await sdk.approveMutation(cmd.id, 'approver');
             await sdk.commitMutation(cmd.id, 'ai');
 
             await expect(handleTool('cluster_commit_mutation', { commandId: cmd.id, actorId: 'ai' }, sdk))
@@ -166,6 +172,8 @@ describe('Wave 6 — Phase 6 Proof: MCP Cannot Bypass Cluster Law', () => {
                 },
                 proposedBy: 'adversary',
             });
+            await sdk.validateMutation(cmd.id);
+            await sdk.approveMutation(cmd.id, 'adversary');
             await sdk.commitMutation(cmd.id, 'adversary');
 
             // Tool annotations remain unchanged
@@ -275,13 +283,15 @@ describe('Wave 6 — Phase 6 Proof: MCP Cannot Bypass Cluster Law', () => {
 
     describe('Proof 8: MCP lifecycle receipts traceable through provenance', () => {
         it('committed entity is traceable via why after MCP commit', async () => {
-            // Propose and commit via MCP
+            // Propose, validate, approve, commit — Wave A2 removed SDK auto-walk.
             const proposeResult = await handleTool('cluster_propose_mutation', {
                 verb: 'create_entity',
                 targetStore: 'canonical',
                 payload: { kind: 'event', name: 'Traceable Event', attributes: { topic: 'traceable' } },
                 proposedBy: 'ai-agent',
             }, sdk) as any;
+            await sdk.validateMutation(proposeResult.command.id);
+            await sdk.approveMutation(proposeResult.command.id, 'approver');
 
             const commitResult = await handleTool('cluster_commit_mutation', {
                 commandId: proposeResult.command.id,
@@ -315,6 +325,8 @@ describe('Wave 6 — Phase 6 Proof: MCP Cannot Bypass Cluster Law', () => {
                 payload: { kind: 'log', name: 'Receipt Link', attributes: {} },
                 proposedBy: 'ai',
             });
+            await sdk.validateMutation(cmd.id);
+            await sdk.approveMutation(cmd.id, 'approver');
 
             const commitResult = await handleTool('cluster_commit_mutation', {
                 commandId: cmd.id,
@@ -334,22 +346,29 @@ describe('Wave 6 — Phase 6 Proof: MCP Cannot Bypass Cluster Law', () => {
 
     describe('Proof 9: no raw adapter or store exported through public surface', () => {
         it('main package index exports only deliberate public API', async () => {
-            const indexContent = readFileSync(join(import.meta.dirname, '..', 'src', 'index.ts'), 'utf-8');
+            // TESTS-R001: replaced source-text substring assertions with runtime
+            // export checks against the actual module. The previous source-text
+            // probe passed via JSDoc comment matches even after KERNEL-013
+            // removed ClusterKernel from public exports — that's test theatre.
+            // This now matches phase15-proof.test.ts:49 (the canonical pattern).
+            const pkg = await import('../src/index.js');
+            const keys = Object.keys(pkg);
 
-            // Phase 15: main index now exports the deliberate public API surface.
             // It must NOT export raw adapter implementations.
-            expect(indexContent).not.toContain('LocalCanonicalStore');
-            expect(indexContent).not.toContain('LocalArtifactStore');
-            expect(indexContent).not.toContain('LocalIndexStore');
-            expect(indexContent).not.toContain('LocalLedgerStore');
-            expect(indexContent).not.toContain('PostgresCanonicalStore');
-            expect(indexContent).not.toContain('CommandQueue');
-            expect(indexContent).not.toContain('ingestRepoKnowledge');
+            expect(keys).not.toContain('LocalCanonicalStore');
+            expect(keys).not.toContain('LocalArtifactStore');
+            expect(keys).not.toContain('LocalIndexStore');
+            expect(keys).not.toContain('LocalLedgerStore');
+            expect(keys).not.toContain('PostgresCanonicalStore');
+            expect(keys).not.toContain('CommandQueue');
+            expect(keys).not.toContain('ingestRepoKnowledge');
 
-            // It MUST export the kernel and factory
-            expect(indexContent).toContain('ClusterKernel');
-            expect(indexContent).toContain('createLocalCluster');
-            expect(indexContent).toContain('createCluster');
+            // It must NOT export the raw kernel class (KERNEL-013).
+            expect(keys).not.toContain('ClusterKernel');
+
+            // It MUST export the cluster factory + URI utilities.
+            expect(keys).toContain('createLocalCluster');
+            expect(keys).toContain('createCluster');
         });
 
         it('MCP index does not export store adapters or kernel', async () => {
@@ -406,13 +425,16 @@ describe('Wave 6 — Phase 6 Proof: MCP Cannot Bypass Cluster Law', () => {
             // Create a fresh SDK pointing at the CLI-initialized cluster
             const cliSdk = new ClusterSDK({ clusterDir: join(TEST_DIR, '.db-cluster') });
 
-            // Propose and commit through MCP (backed by same cluster dir)
+            // Propose + validate + approve + commit through MCP (backed by same cluster dir).
+            // Wave A2 removed the SDK auto-walk; explicit lifecycle required.
             const proposeResult = await handleTool('cluster_propose_mutation', {
                 verb: 'create_entity',
                 targetStore: 'canonical',
                 payload: { kind: 'concept', name: 'CLI-MCP Bridge', attributes: { origin: 'mcp' } },
                 proposedBy: 'ai-via-mcp',
             }, cliSdk) as any;
+            await cliSdk.validateMutation(proposeResult.command.id);
+            await cliSdk.approveMutation(proposeResult.command.id, 'approver');
 
             await handleTool('cluster_commit_mutation', {
                 commandId: proposeResult.command.id,

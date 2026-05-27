@@ -143,7 +143,7 @@ test('import db-cluster/types', () => {
 
 // --- Quickstart ---
 console.log('\n5. Quickstart smoke:');
-test('create cluster + propose + commit + retrieve', () => {
+test('create cluster + propose + validate + approve + commit + retrieve', () => {
     const script = `
         import { ClusterSDK } from 'db-cluster/sdk';
         import { mkdtempSync } from 'node:fs';
@@ -164,6 +164,10 @@ test('create cluster + propose + commit + retrieve', () => {
             proposedBy: 'smoke-test',
         });
 
+        // Wave A2: SDK auto-walk removed — explicitly validate + approve
+        // before commit to satisfy KERNEL-006 separation-of-duties.
+        await sdk.validateMutation(command.id);
+        await sdk.approveMutation(command.id, 'smoke-test');
         await sdk.commitMutation(command.id, 'smoke-test');
 
         const results = await sdk.findSources('hello');

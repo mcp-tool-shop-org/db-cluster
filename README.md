@@ -55,7 +55,7 @@ db-cluster receipts
 
 ## Status
 
-**Phase 15 — Release Readiness & Package Boundary: PASS.** 614 tests passing across 51 files.
+**Phase 15 — Release Readiness & Package Boundary: PASS.** 623+ tests passing across 58 files (post-Wave-A2 count finalized in the amend report).
 
 Phase 15 establishes a deliberate public API surface, package boundary, fresh install smoke tests, and release gate automation. The package is ready for versioned release as v0.1.0.
 

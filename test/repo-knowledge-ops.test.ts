@@ -53,18 +53,26 @@ describe('Repo-knowledge operations and recovery', () => {
 
     it('verify confirms index integrity', async () => {
         const result = await verify(stores);
-        // verify() currently flags provenance events with subjectStore='ledger'
-        // (command_validated / command_approved) as orphans because it only
-        // scans canonical+artifact. SURFACE-003's propose-commit refactor of
-        // ingestRepoKnowledge emits those events through the lifecycle, so
-        // verify reports 'degraded' here for an otherwise healthy cluster.
-        // The load-bearing check below is "no MISSING (unreachable) refs",
-        // i.e. index integrity holds; the provenance subjectStore=ledger
-        // gap is tracked separately and tightens to 'healthy' once verify()
-        // also checks the ledger subject store.
-        expect(['healthy', 'degraded']).toContain(result.status);
+        // TESTS-R006: pin the expected outcome rather than `['healthy',
+        // 'degraded']`. The repo-knowledge ingest emits provenance events
+        // with subjectStore='ledger' (command_validated / command_approved)
+        // that verify() flags as orphans because the orphan probe only
+        // scans canonical+artifact. So `provenance_references_valid` is
+        // EXPECTED to be 'stale' (causing overall status='degraded') as
+        // long as the SURFACE-003-partial ledger-store provenance gap
+        // remains. When a future Stage B fix extends verify() to also
+        // check the ledger subject store, status will return 'healthy'
+        // and this assertion will fail — forcing a follow-up update
+        // rather than silently passing.
+        expect(result.status).toBe('degraded');
+        const provenanceCheck = result.checks.find((c) => c.name === 'provenance_references_valid');
+        expect(provenanceCheck?.status).toBe('stale');
+
+        // Load-bearing invariants still hold:
+        // - No unreachable / corrupt stores.
         const unreachable = result.checks.filter((c) => c.status === 'unreachable' || c.status === 'corrupt');
         expect(unreachable.length).toBe(0);
+        // - Index integrity is healthy (the actual property we're asserting).
         const indexCheck = result.checks.find((c) => c.name === 'index_references_valid');
         expect(indexCheck?.status).toBe('healthy');
     });

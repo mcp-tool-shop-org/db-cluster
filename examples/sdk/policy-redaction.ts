@@ -41,6 +41,7 @@ async function main() {
             proposedBy: 'admin-seed',
         });
         await adminSdk.validateMutation(cmd.id);
+        await adminSdk.approveMutation(cmd.id, 'admin-approver', 'auto-approved in admin seed');
         await adminSdk.commitMutation(cmd.id, 'admin-seed');
     }
 

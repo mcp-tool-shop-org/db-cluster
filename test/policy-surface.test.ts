@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { ClusterSDK } from '../src/sdk/cluster-sdk.js';
 import { handleTool, TOOLS } from '../src/mcp/server.js';
 import { DEFAULT_POLICIES, DEFAULT_TRUST_ZONES, DEFAULT_VISIBILITY_RULES } from '../src/policy/default-policies.js';
-import type { Principal, Capability } from '../src/types/policy.js';
+import { PolicyDeniedError } from '../src/kernel/policy-enforced-kernel.js';
+import type { Principal, Capability, Policy } from '../src/types/policy.js';
 
 // ─── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -315,6 +316,181 @@ describe('Wave 4 — Policy Surface (CLI/SDK/MCP)', () => {
             expect(explain!.annotations.writesCluster).toBe(false);
             expect(test!.annotations.readOnly).toBe(true);
             expect(test!.annotations.writesCluster).toBe(false);
+        });
+    });
+
+    // ─── Proof 8: SURFACE-002 SDK end-to-end policy wiring ──────────
+    //
+    // TESTS-R002: re-audit found that the SURFACE-002 SDK opt-in policy wrap
+    // had ZERO end-to-end coverage. The pre-existing proofs only exercise
+    // sdk.policyExplain() / sdk.policyTest() (dry-run surfaces). If the SDK
+    // regressed to ignoring `policies` and silently falling back to the raw
+    // ClusterKernel, no test caught it. These tests construct the SDK with
+    // policies, then exercise actual read/write surfaces and assert the policy
+    // engine fires (filters, denies, or allows as expected).
+
+    describe('Proof 8: SDK end-to-end policy wiring (SURFACE-002)', () => {
+        // Restrictive policies for these tests — explicit per-test to avoid
+        // depending on DEFAULT_POLICIES drift. The restricted principal can
+        // discover_existence + read_derivative (so findSources fires at all)
+        // but is denied read_owner_truth (so per-entity policy filtering
+        // strips the actual entity payload out of the result).
+        const restrictedReaderPolicies: Policy[] = [
+            {
+                id: 'allow-discover',
+                name: 'Allow discovery',
+                priority: 20,
+                match: { principals: ['restricted-reader'], capabilities: ['discover_existence', 'read_derivative'] },
+                decision: 'allow',
+                reason: 'Restricted reader can discover.',
+            },
+            {
+                id: 'deny-owner-truth',
+                name: 'Deny owner-truth',
+                priority: 10,
+                match: { principals: ['restricted-reader'], capabilities: ['read_owner_truth'] },
+                decision: 'deny',
+                reason: 'Restricted reader cannot read owner truth.',
+            },
+        ];
+
+        const restricted: Principal = {
+            id: 'restricted-1',
+            name: 'Restricted',
+            roles: ['restricted-reader'],
+            trustZone: 'ai-facing',
+        };
+
+        const proposerOnly: Principal = {
+            id: 'proposer-only-1',
+            name: 'Proposer Only',
+            roles: ['proposer'],
+            trustZone: 'ai-facing',
+        };
+
+        it('restricted-principal SDK filters reads (findSources returns empty resolvedEntities)', async () => {
+            // SETUP: build a cluster with admin-trusted principal so we can
+            // seed entities, then connect a RESTRICTED SDK to the same dir.
+            const dir = mkdtempSync(join(tmpdir(), 'policy-sdk-e2e-1-'));
+            execSync(`${CLI} init`, { cwd: dir, encoding: 'utf-8' });
+            const clusterDir = join(dir, '.db-cluster');
+
+            // Admin SDK seeds an entity (no policies, so it's the raw kernel path).
+            const adminSdk = new ClusterSDK({ clusterDir });
+            const proposal = await adminSdk.proposeMutation({
+                verb: 'create_entity',
+                targetStore: 'canonical',
+                payload: { kind: 'document', name: 'Restricted Doc', attributes: { secret: 'top-secret' } },
+                proposedBy: 'setup',
+            });
+            await adminSdk.validateMutation(proposal.id);
+            await adminSdk.approveMutation(proposal.id, 'approver');
+            await adminSdk.commitMutation(proposal.id, 'committer');
+
+            // Restricted SDK with discover-but-no-owner-truth policy.
+            const restrictedSdk = new ClusterSDK({
+                clusterDir,
+                policies: restrictedReaderPolicies,
+                trustZones: DEFAULT_TRUST_ZONES,
+                principal: restricted,
+            });
+            expect(restrictedSdk.policyEnforced).toBe(true);
+
+            // findSources MUST go through the policy layer. The entity exists
+            // in canonical, but read_owner_truth is denied, so resolvedEntities
+            // and indexRecords (canonical-backed) MUST be filtered out.
+            const result = await restrictedSdk.findSources('Restricted');
+            expect(result.resolvedEntities).toHaveLength(0);
+            // Index records backed by canonical sources also filtered (KERNEL-003).
+            for (const record of result.indexRecords) {
+                expect(record.sourceStore).not.toBe('canonical');
+            }
+        });
+
+        it('proposer-only principal SDK can propose but cannot commit (throws PolicyDeniedError)', async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'policy-sdk-e2e-2-'));
+            execSync(`${CLI} init`, { cwd: dir, encoding: 'utf-8' });
+            const clusterDir = join(dir, '.db-cluster');
+
+            // Proposer-only policies: can propose + validate, NOT approve + commit.
+            const proposerOnlyPolicies: Policy[] = [
+                {
+                    id: 'proposer-read-write',
+                    name: 'Proposer Read+Propose',
+                    priority: 20,
+                    match: {
+                        principals: ['proposer'],
+                        capabilities: ['discover_existence', 'read_owner_truth', 'read_derivative', 'propose_mutation', 'validate_command', 'read_command'],
+                    },
+                    decision: 'allow',
+                    reason: 'Proposer.',
+                },
+                {
+                    id: 'proposer-deny-commit',
+                    name: 'Proposer Deny Commit',
+                    priority: 15,
+                    match: {
+                        principals: ['proposer'],
+                        capabilities: ['commit_command', 'approve_command'],
+                    },
+                    decision: 'deny',
+                    reason: 'Proposers cannot commit or approve.',
+                },
+            ];
+
+            const proposerSdk = new ClusterSDK({
+                clusterDir,
+                policies: proposerOnlyPolicies,
+                trustZones: DEFAULT_TRUST_ZONES,
+                principal: proposerOnly,
+            });
+            expect(proposerSdk.policyEnforced).toBe(true);
+
+            // Propose succeeds (proposer allowed).
+            const cmd = await proposerSdk.proposeMutation({
+                verb: 'create_entity',
+                targetStore: 'canonical',
+                payload: { kind: 'document', name: 'ProposerDoc', attributes: {} },
+                proposedBy: 'proposer-only-1',
+            });
+            expect(cmd.status).toBe('proposed');
+
+            // Validate succeeds (proposer allowed).
+            await proposerSdk.validateMutation(cmd.id);
+
+            // Approve MUST throw — proposer is denied approve_command.
+            await expect(proposerSdk.approveMutation(cmd.id, 'proposer-only-1')).rejects.toThrow(PolicyDeniedError);
+
+            // Commit also throws — proposer is denied commit_command. Note the
+            // SDK no longer auto-walks (KERNEL-R002 fix), so even calling
+            // commitMutation without an explicit approve hits the policy check
+            // for commit_command and rejects there.
+            await expect(proposerSdk.commitMutation(cmd.id, 'proposer-only-1')).rejects.toThrow(PolicyDeniedError);
+        });
+
+        it('SDK without policies uses raw kernel (commitMutation succeeds with no policy gating)', async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'policy-sdk-e2e-3-'));
+            execSync(`${CLI} init`, { cwd: dir, encoding: 'utf-8' });
+            const clusterDir = join(dir, '.db-cluster');
+
+            // No policies, no trustZones, no visibilityRules → raw kernel path.
+            const rawSdk = new ClusterSDK({ clusterDir });
+            expect(rawSdk.policyEnforced).toBe(false);
+
+            // Propose + validate + approve + commit succeeds end-to-end with
+            // no policy enforcement. (Validates that the no-policy path is
+            // genuinely raw, not silently wrapping.)
+            const cmd = await rawSdk.proposeMutation({
+                verb: 'create_entity',
+                targetStore: 'canonical',
+                payload: { kind: 'document', name: 'RawDoc', attributes: {} },
+                proposedBy: 'raw-user',
+            });
+            await rawSdk.validateMutation(cmd.id);
+            await rawSdk.approveMutation(cmd.id, 'raw-approver');
+            const result = await rawSdk.commitMutation(cmd.id, 'raw-committer');
+            expect(result.command.status).toBe('committed');
+            expect(result.receipt.commandId).toBe(cmd.id);
         });
     });
 });

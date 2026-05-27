@@ -9,7 +9,7 @@ Assessment of whether db-cluster is ready for a versioned release.
 | Package exports are intentional | ✓ | `exports` field in package.json, documented in package-boundary.md |
 | CLI bin works from installed package | ✓ | smoke-install.mjs: `db-cluster --help`, `init`, `doctor` pass |
 | MCP bin exists and is runnable | ✓ | smoke-install.mjs: bin found in node_modules/.bin |
-| SDK import works | ✓ | smoke-install.mjs: `import { ClusterKernel }` succeeds |
+| SDK import works | ✓ | smoke-install.mjs: `import { ClusterSDK } from 'db-cluster/sdk'` succeeds |
 | Subpath exports work | ✓ | smoke-install.mjs: sdk, policy, types imports succeed |
 | Quickstart runs from package | ✓ | smoke-install.mjs: ingest + create + retrieve cycle works |
 | Docs match runtime CLI/SDK/MCP | ✓ | docs/cli.md, docs/sdk.md, docs/mcp.md updated post-Wave-A1 |
@@ -50,6 +50,29 @@ explain what db-cluster is (and is not) honestly.
 1. GitHub release with tag
 2. Decision: npm publish or GitHub Packages only
 3. Optional: provenance attestation for npm
+
+## Recommended release flow (post-Wave-A2)
+
+The smoke-install workflow now triggers on three events:
+`push: tags: ['v*']`, `pull_request: paths: ['package.json']`, and
+`workflow_dispatch`. Use them in this order so a failing smoke can stop
+the tag from going out:
+
+1. **Bump version in a PR** (e.g., `0.1.0` → `0.1.1`). The
+   `pull_request: paths: ['package.json']` trigger runs smoke-install
+   against the version-bumping PR, proving the to-be-tagged commit
+   installs cleanly. CI also runs on the PR.
+2. **Merge the PR to main.** `release-gate.yml` runs on push-to-main.
+3. **Before tagging:** if you want a defense-in-depth check on the exact
+   SHA you are about to tag, trigger `smoke-install` via the
+   `workflow_dispatch` button against that SHA.
+4. **Create the tag** (`v0.1.1`). `release-gate.yml` runs on tag push
+   AND `smoke-install.yml` runs on tag push as a final defense.
+5. **If smoke fails on tag push:** the tag is already published but the
+   release is broken. Roll back by publishing a fixed patch (e.g.,
+   `0.1.2`) with the smoke-install fix; leave the broken tag in place
+   for audit traceability and mark the GitHub release as a draft or
+   pre-release.
 
 ## What is NOT blocking release
 

@@ -11,6 +11,12 @@ import type { Receipt } from '../types/receipt.js';
 import type { FindSourcesResult } from '../kernel/cluster-kernel.js';
 import { PolicyEnforcedKernel } from '../kernel/policy-enforced-kernel.js';
 import { INTERNAL_TRUSTED_PRINCIPAL } from '../policy/index.js';
+import type { Artifact } from '../types/artifact.js';
+import type { Entity } from '../types/entity.js';
+import {
+    sanitizeArtifactForOutput,
+    sanitizeEntityForOutput,
+} from '../mcp/sanitize.js';
 
 export interface SDKOptions {
     clusterDir: string;
@@ -172,8 +178,29 @@ export class ClusterSDK {
 
     // ─── Resolution ────────────────────────────────────────────────
 
+    /**
+     * Resolve a cluster URI to its owner-store object.
+     *
+     * SURFACE-R003 fix: when the SDK is policy-enforced, the returned object
+     * is sanitized inline before it leaves the SDK boundary. Without this,
+     * SDK consumers (which is everything except the MCP server, whose
+     * boundary sanitizes a second time) would receive `storagePath` and
+     * other internal fields. The MCP boundary still sanitizes — these layers
+     * are independent and intentionally redundant.
+     *
+     * When policies are NOT configured the SDK returns raw owner truth,
+     * preserving the historical behavior for the ~614 baseline tests.
+     */
     async resolve(uri: string): Promise<{ store: string; object: unknown }> {
         const resolved = await this.resolver.resolve(uri);
+        if (this.policyEnforced) {
+            if (resolved.store === 'artifact') {
+                return { store: resolved.store, object: sanitizeArtifactForOutput(resolved.object as Artifact) };
+            }
+            if (resolved.store === 'canonical') {
+                return { store: resolved.store, object: sanitizeEntityForOutput(resolved.object as Entity) };
+            }
+        }
         return { store: resolved.store, object: resolved.object };
     }
 
@@ -211,26 +238,18 @@ export class ClusterSDK {
     }
 
     /**
-     * Commit a mutation. The kernel now requires `validated` or `approved`
-     * before commit (KERNEL-006 fix). The SDK auto-walks proposed → validated
-     * → approved → committed to preserve backward compat for callers that
-     * treat propose+commit as one step. Callers who want explicit visibility
-     * of the intermediate states can call `validateMutation` and
-     * `approveMutation` directly before this.
+     * Commit a validated/approved command. Callers must `validateMutation`
+     * and `approveMutation` first; the kernel throws `CommandNotValidatedError`
+     * otherwise (KERNEL-006).
      *
-     * The walk inspects the command first; only states behind 'approved' are
-     * advanced. The actor for the auto-walk is the supplied `actorId`.
+     * KERNEL-R002 fix: the previous SDK auto-walked `proposed → validated →
+     * approved → committed` using the same actorId for both approve and
+     * commit. That preserved backward compat but defeated separation of duties
+     * — every caller of `commitMutation` could trivially self-approve. The
+     * walk is gone; the SDK is a thin pass-through. Surfaces above the SDK
+     * (CLI, MCP, programmatic SDK consumers) sequence the lifecycle.
      */
     async commitMutation(commandId: string, actorId: string): Promise<{ command: Command; receipt: Receipt }> {
-        const cmd = await this.kernel.inspectCommand(commandId).catch(() => null);
-        if (cmd) {
-            if (cmd.status === 'proposed') {
-                await this.kernel.validateMutation(commandId);
-                await this.kernel.approveMutation(commandId, actorId);
-            } else if (cmd.status === 'validated') {
-                await this.kernel.approveMutation(commandId, actorId);
-            }
-        }
         return this.kernel.commitMutation(commandId, actorId);
     }
 

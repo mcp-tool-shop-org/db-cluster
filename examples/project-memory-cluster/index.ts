@@ -29,6 +29,7 @@ async function main() {
             proposedBy: 'developer',
         });
         await sdk.validateMutation(cmd.id);
+        await sdk.approveMutation(cmd.id, 'developer-approver', 'auto-approved in example');
         const { receipt } = await sdk.commitMutation(cmd.id, 'developer');
         return receipt.affectedIds[0];
     }
@@ -41,6 +42,7 @@ async function main() {
             proposedBy: 'developer',
         });
         await sdk.validateMutation(cmd.id);
+        await sdk.approveMutation(cmd.id, 'developer-approver', 'auto-approved in example');
         const { receipt } = await sdk.commitMutation(cmd.id, 'developer');
         return receipt.affectedIds[0];
     }
@@ -90,6 +92,8 @@ async function main() {
     });
     console.log('Proposed:', cmd.id, '→', cmd.status);
 
+    await sdk.validateMutation(cmd.id);
+    await sdk.approveMutation(cmd.id, 'developer-approver', 'auto-approved in example');
     const { command, receipt } = await sdk.commitMutation(cmd.id, 'developer');
     console.log('Committed:', command.status);
     console.log('Receipt:', receipt.id, '→ affected:', receipt.affectedIds);

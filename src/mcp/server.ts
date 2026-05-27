@@ -5,12 +5,16 @@ import {
     CallToolRequestSchema,
     ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { resolve } from 'node:path';
+import { resolve, sep } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { ClusterSDK } from '../sdk/cluster-sdk.js';
 import type { SDKOptions } from '../sdk/cluster-sdk.js';
 import type { Principal, Policy, TrustZone, VisibilityRule } from '../types/policy.js';
-import { sanitizeArtifactForOutput } from './sanitize.js';
+import {
+    sanitizeArtifactForOutput,
+    sanitizeEntityForOutput,
+    sanitizeReceiptForOutput,
+} from './sanitize.js';
 
 const CLUSTER_DIR = resolve(process.env.DB_CLUSTER_DIR ?? process.cwd(), '.db-cluster');
 
@@ -27,24 +31,75 @@ const CLUSTER_DIR = resolve(process.env.DB_CLUSTER_DIR ?? process.cwd(), '.db-cl
  * If neither env var is set, the SDK falls back to raw `ClusterKernel`
  * (preserves existing MCP behavior for the ~614 baseline tests).
  */
+/**
+ * Structural validation for a Principal parsed from JSON.
+ *
+ * SURFACE-R005 fix: `JSON.parse(process.env.DB_CLUSTER_PRINCIPAL)` was cast to
+ * `Principal` with no runtime check. A malformed value (missing `roles`, wrong
+ * type on `trustZone`, etc.) would slip into PolicyEnforcedKernel and silently
+ * bypass policy via the trust-zone-not-found branch. The MCP server now
+ * fails closed — invalid principal → log to stderr → exit(1).
+ */
+function validatePrincipal(obj: unknown): obj is Principal {
+    if (typeof obj !== 'object' || obj === null) return false;
+    const o = obj as Record<string, unknown>;
+    if (typeof o.id !== 'string' || o.id.length === 0) return false;
+    if (typeof o.name !== 'string') return false;
+    if (!Array.isArray(o.roles)) return false;
+    if (!o.roles.every((r) => typeof r === 'string')) return false;
+    if (typeof o.trustZone !== 'string' || o.trustZone.length === 0) return false;
+    return true;
+}
+
+/**
+ * Fail closed when the principal env var is malformed. Writing to stderr and
+ * exiting prevents PolicyEnforcedKernel from being constructed against a
+ * principal shape it can't enforce against. Tests use a different code path
+ * (sdkOverride) so this only runs at server startup.
+ */
+function failClosedOnInvalidPrincipal(reason: string, source: string): never {
+    console.error(
+        `[db-cluster MCP] ${source} is structurally invalid: ${reason}. ` +
+        'Refusing to start MCP server — fix the principal JSON ' +
+        '(required fields: id, name, roles[], trustZone) and retry.',
+    );
+    process.exit(1);
+}
+
 function buildSDKOptions(): SDKOptions {
     const base: SDKOptions = { clusterDir: CLUSTER_DIR };
 
     let principal: Principal | undefined;
     const principalJson = process.env.DB_CLUSTER_PRINCIPAL;
     if (principalJson && principalJson.trim() !== '') {
+        let parsedPrincipal: unknown;
         try {
-            principal = JSON.parse(principalJson) as Principal;
+            parsedPrincipal = JSON.parse(principalJson);
         } catch (err: any) {
-            throw new Error(`DB_CLUSTER_PRINCIPAL is not valid JSON: ${err.message}`);
+            failClosedOnInvalidPrincipal(`not valid JSON: ${err.message}`, 'DB_CLUSTER_PRINCIPAL');
         }
+        if (!validatePrincipal(parsedPrincipal)) {
+            failClosedOnInvalidPrincipal(
+                'missing or wrong-typed field(s); required: id (non-empty string), name (string), roles (string[]), trustZone (non-empty string)',
+                'DB_CLUSTER_PRINCIPAL',
+            );
+        }
+        principal = parsedPrincipal as Principal;
     }
 
     const policiesFile = process.env.DB_CLUSTER_POLICIES_FILE;
     if (policiesFile && policiesFile.trim() !== '') {
-        const path = resolve(policiesFile);
-        if (!existsSync(path)) {
-            throw new Error(`DB_CLUSTER_POLICIES_FILE not found: ${path}`);
+        // SURFACE-R006 fix: sandbox the policies-file path so an attacker who
+        // controls the env var cannot read arbitrary files outside cwd.
+        const allowedRoot = process.cwd();
+        const resolvedPath = resolve(allowedRoot, policiesFile);
+        if (resolvedPath !== allowedRoot && !resolvedPath.startsWith(allowedRoot + sep)) {
+            throw new Error(
+                `DB_CLUSTER_POLICIES_FILE path escapes the working directory: ${policiesFile}`,
+            );
+        }
+        if (!existsSync(resolvedPath)) {
+            throw new Error(`DB_CLUSTER_POLICIES_FILE not found: ${resolvedPath}`);
         }
         let parsed: {
             policies?: Policy[];
@@ -53,16 +108,28 @@ function buildSDKOptions(): SDKOptions {
             principal?: Principal;
         };
         try {
-            parsed = JSON.parse(readFileSync(path, 'utf-8'));
+            parsed = JSON.parse(readFileSync(resolvedPath, 'utf-8'));
         } catch (err: any) {
-            throw new Error(`Failed to read ${path}: ${err.message}`);
+            throw new Error(`Failed to read ${resolvedPath}: ${err.message}`);
+        }
+        // Same fail-closed validation applies to the file's principal field if
+        // we end up using it (only when DB_CLUSTER_PRINCIPAL wasn't supplied).
+        let resolvedPrincipal: Principal | undefined = principal;
+        if (!resolvedPrincipal && parsed.principal !== undefined) {
+            if (!validatePrincipal(parsed.principal)) {
+                failClosedOnInvalidPrincipal(
+                    'missing or wrong-typed field(s); required: id (non-empty string), name (string), roles (string[]), trustZone (non-empty string)',
+                    `DB_CLUSTER_POLICIES_FILE principal (${resolvedPath})`,
+                );
+            }
+            resolvedPrincipal = parsed.principal;
         }
         return {
             ...base,
             policies: parsed.policies ?? [],
             trustZones: parsed.trustZones,
             visibilityRules: parsed.visibilityRules,
-            principal: principal ?? parsed.principal,
+            principal: resolvedPrincipal,
         };
     }
 
@@ -383,8 +450,7 @@ export async function handleTool(name: string, args: Record<string, unknown>, sd
                     _note: 'Index records are derived from owner-store truth. They may be stale.',
                 })),
                 resolvedEntities: result.resolvedEntities.map((e: any) => ({
-                    ...e,
-                    _sourceType: 'owner-truth',
+                    ...sanitizeEntityForOutput(e),
                     _sourceStore: 'canonical',
                 })),
                 resolvedArtifacts: result.resolvedArtifacts.map((a: any) => ({
@@ -410,7 +476,7 @@ export async function handleTool(name: string, args: Record<string, unknown>, sd
                     uri: e.uri,
                     ownerStore: e.ownerStore,
                     _sourceType: 'owner-truth',
-                    object: e.object,
+                    object: sanitizeEntityForOutput(e.object),
                     indexStale: e.indexStale,
                     _staleWarning: e.indexStale ? 'Index is stale relative to owner truth. The object shown is authoritative; the index record that found it may be outdated.' : undefined,
                     provenanceEventIds: e.provenanceEventIds,
@@ -443,10 +509,19 @@ export async function handleTool(name: string, args: Record<string, unknown>, sd
         case 'cluster_resolve': {
             const resolved = await sdk.resolve(args.uri as string);
             // Artifact-store URIs MUST be sanitized — never expose `storagePath`.
-            // Other stores (canonical/index/ledger/receipt) do not carry filesystem paths.
-            const object = resolved.store === 'artifact'
-                ? sanitizeArtifactForOutput(resolved.object as any)
-                : resolved.object;
+            // Canonical (entity) results get `_sourceType: 'owner-truth'` via
+            // sanitizeEntityForOutput. Other stores (index/ledger/receipt) do
+            // not carry filesystem paths but get a `_sourceType` marker.
+            //
+            // The SDK already sanitizes when policy-enforced (SURFACE-R003),
+            // so this is a second pass to harden the MCP boundary for callers
+            // that constructed the SDK without policies.
+            let object: unknown = resolved.object;
+            if (resolved.store === 'artifact') {
+                object = sanitizeArtifactForOutput(resolved.object as any);
+            } else if (resolved.store === 'canonical') {
+                object = sanitizeEntityForOutput(resolved.object as any);
+            }
             return {
                 _meta: { operation: 'read', writesCluster: false, ownerStore: resolved.store, uri: args.uri },
                 store: resolved.store,
@@ -583,7 +658,7 @@ export async function handleTool(name: string, args: Record<string, unknown>, sd
             });
             return {
                 _meta: { operation: 'read', writesCluster: false },
-                receipts,
+                receipts: receipts.map((r) => sanitizeReceiptForOutput(r)),
             };
         }
 

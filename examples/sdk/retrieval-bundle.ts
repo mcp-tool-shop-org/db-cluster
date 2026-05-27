@@ -21,6 +21,7 @@ async function main() {
             proposedBy: 'example',
         });
         await sdk.validateMutation(cmd.id);
+        await sdk.approveMutation(cmd.id, 'example-approver', 'auto-approved in example');
         await sdk.commitMutation(cmd.id, 'example');
     }
 
@@ -32,6 +33,7 @@ async function main() {
             proposedBy: 'example',
         });
         await sdk.validateMutation(cmd.id);
+        await sdk.approveMutation(cmd.id, 'example-approver', 'auto-approved in example');
         await sdk.commitMutation(cmd.id, 'example');
     }
 

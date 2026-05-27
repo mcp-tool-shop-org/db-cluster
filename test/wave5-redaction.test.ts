@@ -253,9 +253,10 @@ describe('Wave 5 — Redaction and Existence Leakage', () => {
         it('restricted reader gets artifact with storagePath stripped', async () => {
             const { stores } = makeStores();
             const adminK = makeKernel(stores, admin);
-            // Seed an artifact through the raw kernel
-            const rawKernel = adminK._kernel;
-            const ingested = await rawKernel.ingestArtifact({
+            // Seed an artifact through the admin kernel (admin has full
+            // access, same result as the previous raw-kernel bypass — and
+            // the _kernel getter is gone since Wave A2 / KERNEL-R003).
+            const ingested = await adminK.ingestArtifact({
                 filename: 'secret.pdf',
                 content: Buffer.from('top secret content'),
                 mimeType: 'application/pdf',
@@ -309,8 +310,9 @@ describe('Wave 5 — Redaction and Existence Leakage', () => {
         it('restricted reader sees masked attributes', async () => {
             const { stores } = makeStores();
             const adminK = makeKernel(stores, admin);
-            const rawKernel = adminK._kernel;
-            const result = await rawKernel.createEntity({
+            // Seed via the admin-wrapped kernel directly — admin has full access,
+            // and the _kernel getter is gone since Wave A2 (KERNEL-R003).
+            const result = await adminK.createEntity({
                 kind: 'concept',
                 name: 'Sensitive Concept',
                 attributes: { ssn: '123-45-6789', clearance: 'top-secret', notes: 'classified info' },
@@ -364,16 +366,17 @@ describe('Wave 5 — Redaction and Existence Leakage', () => {
         it('hidden entity (kind=secret) does not appear in findSources for external reader', async () => {
             const { stores } = makeStores();
             const adminK = makeKernel(stores, admin);
-            const rawKernel = adminK._kernel;
+            // Seed via the admin-wrapped kernel directly — admin has full access,
+            // and the _kernel getter is gone since Wave A2 (KERNEL-R003).
 
             // Create a normal entity and a secret entity
-            await rawKernel.createEntity({
+            await adminK.createEntity({
                 kind: 'concept',
                 name: 'Public Concept',
                 attributes: { visible: true },
                 actorId: 'admin-1',
             });
-            await rawKernel.createEntity({
+            await adminK.createEntity({
                 kind: 'secret',
                 name: 'Hidden Secret',
                 attributes: { classified: true },
@@ -392,9 +395,10 @@ describe('Wave 5 — Redaction and Existence Leakage', () => {
         it('admin can still see hidden entities', async () => {
             const { stores } = makeStores();
             const adminK = makeKernel(stores, admin);
-            const rawKernel = adminK._kernel;
+            // Seed via the admin-wrapped kernel directly — admin has full access,
+            // and the _kernel getter is gone since Wave A2 (KERNEL-R003).
 
-            const { entity: secretEntity } = await rawKernel.createEntity({
+            const { entity: secretEntity } = await adminK.createEntity({
                 kind: 'secret',
                 name: 'Admin Secret',
                 attributes: { classified: true },
@@ -414,9 +418,10 @@ describe('Wave 5 — Redaction and Existence Leakage', () => {
         it('index-only reader gets index records but no resolved entities', async () => {
             const { stores } = makeStores();
             const adminK = makeKernel(stores, admin);
-            const rawKernel = adminK._kernel;
+            // Seed via the admin-wrapped kernel directly — admin has full access,
+            // and the _kernel getter is gone since Wave A2 (KERNEL-R003).
 
-            await rawKernel.createEntity({
+            await adminK.createEntity({
                 kind: 'concept',
                 name: 'Indexed Concept',
                 attributes: { domain: 'science' },
@@ -509,10 +514,11 @@ describe('Wave 5 — Redaction and Existence Leakage', () => {
         it('restricted reader gets receipts with stripped details', async () => {
             const { stores } = makeStores();
             const adminK = makeKernel(stores, admin);
-            const rawKernel = adminK._kernel;
+            // Seed via the admin-wrapped kernel directly — admin has full access,
+            // and the _kernel getter is gone since Wave A2 (KERNEL-R003).
 
             // Create, propose, approve, commit an entity to generate a receipt
-            const { entity } = await rawKernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'concept',
                 name: 'Receipt Test',
                 attributes: { sensitive: 'data' },
@@ -570,9 +576,10 @@ describe('Wave 5 — Redaction and Existence Leakage', () => {
         it('denied principal gets PolicyDeniedError without source data', async () => {
             const { stores } = makeStores();
             const adminK = makeKernel(stores, admin);
-            const rawKernel = adminK._kernel;
+            // Seed via the admin-wrapped kernel directly — admin has full access,
+            // and the _kernel getter is gone since Wave A2 (KERNEL-R003).
 
-            const { entity } = await rawKernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'secret',
                 name: 'Top Secret Thing',
                 attributes: { classified: true },
@@ -596,9 +603,10 @@ describe('Wave 5 — Redaction and Existence Leakage', () => {
         it('authorized trace returns explanation without leaking other restricted data', async () => {
             const { stores } = makeStores();
             const adminK = makeKernel(stores, admin);
-            const rawKernel = adminK._kernel;
+            // Seed via the admin-wrapped kernel directly — admin has full access,
+            // and the _kernel getter is gone since Wave A2 (KERNEL-R003).
 
-            const { entity } = await rawKernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'concept',
                 name: 'Normal Thing',
                 attributes: { public: true },
@@ -645,10 +653,11 @@ describe('Wave 5 — Redaction and Existence Leakage', () => {
         it('stale records list does not expose hidden source URIs', async () => {
             const { stores } = makeStores();
             const adminK = makeKernel(stores, admin);
-            const rawKernel = adminK._kernel;
+            // Seed via the admin-wrapped kernel directly — admin has full access,
+            // and the _kernel getter is gone since Wave A2 (KERNEL-R003).
 
             // Create a secret entity (hidden by visibility rules for kind=secret)
-            const { entity: secretEntity } = await rawKernel.createEntity({
+            const { entity: secretEntity } = await adminK.createEntity({
                 kind: 'secret',
                 name: 'Secret Stale',
                 attributes: { data: 'classified' },
@@ -656,7 +665,7 @@ describe('Wave 5 — Redaction and Existence Leakage', () => {
             });
 
             // Create a normal entity
-            const { entity: normalEntity } = await rawKernel.createEntity({
+            const { entity: normalEntity } = await adminK.createEntity({
                 kind: 'concept',
                 name: 'Normal Concept',
                 attributes: { data: 'public' },

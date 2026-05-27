@@ -31,7 +31,7 @@ Prepare db-cluster for a real versioned release without weakening the product th
 
 ## Key decisions
 
-1. **Main entry exports runtime values** — ClusterKernel, factory functions, ops, URI utilities. This is intentional: consumers need to import and use these.
+1. **Main entry exports runtime values** — store factory functions (`createCluster`, `createClusterFromEnv`, `createLocalCluster`), ops (`doctor`, `verify`, `backup`, `restore`), and URI utilities. The raw `ClusterKernel` class is intentionally NOT exported (KERNEL-013, Wave A1) — drive the kernel via `ClusterSDK` (`db-cluster/sdk`) or `PolicyEnforcedKernel` (`db-cluster/policy`) instead.
 2. **Subpath exports for separation** — SDK, MCP, Policy, Types each get their own entry point.
 3. **Internal details NOT exported** — Raw adapters, CommandQueue, repo-knowledge integration, provenance recording helpers stay internal.
 4. **Postgres is optional** — Ships with `pg` in dependencies but Postgres functionality is opt-in.
@@ -41,7 +41,7 @@ Prepare db-cluster for a real versioned release without weakening the product th
 ## Test evidence
 
 - 10/10 Phase 15 proofs pass
-- 612+ tests pass across full suite
+- 623+ tests pass across full suite (post-Wave-A2)
 - Fresh install smoke: 9/9 from tarball
 - `npx tsc --noEmit` clean
 - `npm pack --dry-run` shows no test/scripts/src leakage
@@ -55,6 +55,9 @@ Prepare db-cluster for a real versioned release without weakening the product th
 ## Next phase candidates
 
 - npm publish or GitHub Packages
-- CI pipeline (GitHub Actions)
 - Provenance attestation
 - v0.2.0 feature planning
+
+Already landed (Wave A1):
+- CI pipeline (GitHub Actions) — `.github/workflows/{ci,release-gate,smoke-install}.yml`
+- Node-native release-gate drift scan — `scripts/release-gate.mjs`

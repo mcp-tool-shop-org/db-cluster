@@ -46,6 +46,7 @@ async function main() {
             proposedBy: 'operator',
         });
         await sdk.validateMutation(cmd.id);
+        await sdk.approveMutation(cmd.id, 'operator-approver', 'auto-approved in operator seed');
         const { receipt } = await sdk.commitMutation(cmd.id, 'operator');
         return receipt.affectedIds[0];
     }
@@ -58,6 +59,7 @@ async function main() {
             proposedBy: 'operator',
         });
         await sdk.validateMutation(cmd.id);
+        await sdk.approveMutation(cmd.id, 'operator-approver', 'auto-approved in operator seed');
         const { receipt } = await sdk.commitMutation(cmd.id, 'operator');
         return receipt.affectedIds[0];
     }

@@ -29,6 +29,7 @@ async function main() {
             proposedBy: 'researcher',
         });
         await sdk.validateMutation(cmd.id);
+        await sdk.approveMutation(cmd.id, 'researcher-approver', 'auto-approved in example');
         const { receipt } = await sdk.commitMutation(cmd.id, 'researcher');
         return receipt.affectedIds[0];
     }
@@ -41,6 +42,7 @@ async function main() {
             proposedBy: 'researcher',
         });
         await sdk.validateMutation(cmd.id);
+        await sdk.approveMutation(cmd.id, 'researcher-approver', 'auto-approved in example');
         const { receipt } = await sdk.commitMutation(cmd.id, 'researcher');
         return receipt.affectedIds[0];
     }
@@ -86,6 +88,7 @@ async function main() {
         proposedBy: 'researcher',
     });
     await sdk.validateMutation(topicCmd.id);
+    await sdk.approveMutation(topicCmd.id, 'researcher-approver', 'auto-approved in example');
     const { receipt: topicReceipt } = await sdk.commitMutation(topicCmd.id, 'researcher');
     const topicId = topicReceipt.affectedIds[0];
 

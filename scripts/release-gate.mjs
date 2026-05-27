@@ -58,15 +58,16 @@ try {
   rmSync(smokeDir, { recursive: true, force: true });
 }
 
-// 5. Docs drift check — examples don't import from src/
+// 5. Docs drift check — shipped directories don't import from src/
 console.log('\n[5/6] Docs drift');
-process.stdout.write('  No src/ imports in examples... ');
+process.stdout.write('  No src/ imports in shipped dirs... ');
 function scanForDrift(dir) {
   const offenders = [];
-  // Match both static `from '../../src/...'` and dynamic `import('../../src/...')`
+  // Match both static `from '../../src/...'` and dynamic `import('../../src/...')`.
+  // The `.d.ts` ambient module syntax `import('../../src/...').T` is also caught.
   const driftPattern = /(?:from|import)\s*\(?\s*['"]\.\.\/\.\.\/src\//;
   for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true })) {
-    if (entry.isFile() && /\.(ts|js|mjs)$/.test(entry.name)) {
+    if (entry.isFile() && /\.(ts|tsx|js|jsx|mjs|d\.ts)$/.test(entry.name)) {
       const p = join(entry.parentPath ?? dir, entry.name);
       const text = readFileSync(p, 'utf8');
       if (driftPattern.test(text)) offenders.push(p);
@@ -74,8 +75,20 @@ function scanForDrift(dir) {
   }
   return offenders;
 }
-const examplesDir = join(ROOT, 'examples');
-const offenders = existsSync(examplesDir) ? scanForDrift(examplesDir) : [];
+function scanAllShippedDirs() {
+  // CIDOCS-R008: examples/ + dashboard/lib/ both ship in the npm package
+  // and must not reference src/ paths (which do not ship).
+  const dirs = ['examples', 'dashboard/lib'];
+  let allOffenders = [];
+  for (const dir of dirs) {
+    const abs = join(ROOT, dir);
+    if (existsSync(abs)) {
+      allOffenders = allOffenders.concat(scanForDrift(abs));
+    }
+  }
+  return allOffenders;
+}
+const offenders = scanAllShippedDirs();
 if (offenders.length > 0) {
   console.log('FAIL — found src/ imports');
   for (const o of offenders) console.error(`    ${o}`);

@@ -6,7 +6,7 @@ This document defines what is public API and what is internal implementation.
 
 | Import path | Surface | Stability |
 |-------------|---------|-----------|
-| `db-cluster` | ClusterKernel, store contracts, domain types, factory, ops, URI | Stable |
+| `db-cluster` | Store contracts, domain types, factory, ops, URI utilities | Stable |
 | `db-cluster/sdk` | ClusterSDK high-level client | Stable |
 | `db-cluster/mcp` | MCP tool catalog + handler | Stable |
 | `db-cluster/policy` | PolicyEnforcedKernel, redaction, default policies | Stable |

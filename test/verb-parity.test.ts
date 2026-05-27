@@ -26,43 +26,90 @@ import { PolicyEnforcedKernel } from '../src/kernel/policy-enforced-kernel.js';
  * public verb surface PolicyEnforcedKernel must wrap. These exist for the
  * kernel's own bookkeeping (queue persistence, orphan-mutation accounting)
  * and are not exposed to product surfaces.
+ *
+ * TESTS-R007 — explicit allowlist rather than `!name.startsWith('_')`. An
+ * `internalFoo`-style helper that needs to stay internal (no policy wrapper)
+ * would otherwise silently pass the parity check. Adding a method here is a
+ * deliberate decision; the next reviewer can see the intent.
  */
 const KERNEL_INTERNAL_METHODS = new Set<string>([
     'constructor',
     'getCommand',
     'saveCommand',
     'recordOrphanMutation',
+    // Private method used by the kernel's own commitMutation('reindex') path
+    // and by rebuildIndex(). Marked `private` in TypeScript; mechanically on
+    // the prototype since TS private is compile-time only. No reason to
+    // expose this through the policy wrapper.
+    'performIndexRebuild',
 ]);
 
 /**
  * Methods on PolicyEnforcedKernel that are intentional additions (not present
  * on ClusterKernel) — exposed for callers that need policy-layer state
- * (visibility checks) or backdoor access (the `_kernel` getter used by tests).
+ * (visibility checks).
+ *
+ * TESTS-R007: the `_kernel` getter was removed in Wave A2 (KERNEL-R003 /
+ * SURFACE-R001 fix — the surface CLI was using it to bypass policy at 10+
+ * call sites). It is no longer in this allowlist; if anyone re-introduces it
+ * the inverse-drift test will flag it.
  */
 const POLICY_KERNEL_EXTRAS = new Set<string>([
     'constructor',
     'enforce',
     'collectRedactionRules',
     'checkVisibility',
-    '_kernel',
 ]);
 
-function publicMethodsOf(klass: { prototype: object }, internalNames: Set<string>): string[] {
-    return Object.getOwnPropertyNames(klass.prototype)
-        .filter((name) => !name.startsWith('_') && !internalNames.has(name))
-        .sort();
+/**
+ * TESTS-R007: iterate both string AND symbol-keyed own properties on the
+ * prototype. `Object.getOwnPropertyNames` alone skips Symbol-keyed methods,
+ * so anyone defining `[Symbol.for('write')]() { ... }` would slip past the
+ * parity check.
+ */
+function allOwnKeys(klass: { prototype: object }): Array<string | symbol> {
+    return [
+        ...Object.getOwnPropertyNames(klass.prototype),
+        ...Object.getOwnPropertySymbols(klass.prototype),
+    ];
+}
+
+function publicMethodsOf(klass: { prototype: object }, internalNames: Set<string>): Array<string | symbol> {
+    return allOwnKeys(klass)
+        .filter((name) => {
+            // Skip the explicit internal list. For string-keyed names also
+            // skip those whose name matches the allowlist exactly; do NOT
+            // use `startsWith('_')` (TESTS-R007).
+            if (typeof name === 'string' && internalNames.has(name)) return false;
+            // Symbol-keyed methods on the kernel are by definition extras —
+            // we keep them in the result so the parity tests can flag them
+            // until they're explicitly added to one of the allowlists.
+            return true;
+        })
+        .sort((a, b) => {
+            const sa = typeof a === 'string' ? a : a.toString();
+            const sb = typeof b === 'string' ? b : b.toString();
+            return sa.localeCompare(sb);
+        });
+}
+
+function describeKey(key: string | symbol): string {
+    return typeof key === 'string' ? key : key.toString();
 }
 
 describe('Verb parity between ClusterKernel and PolicyEnforcedKernel (KERNEL-014)', () => {
     it('every public verb on ClusterKernel has a wrapper on PolicyEnforcedKernel', () => {
         const ckVerbs = publicMethodsOf(ClusterKernel, KERNEL_INTERNAL_METHODS);
-        const pekVerbs = new Set(Object.getOwnPropertyNames(PolicyEnforcedKernel.prototype));
+        const pekKeys = new Set<string | symbol>(allOwnKeys(PolicyEnforcedKernel));
 
-        const missing = ckVerbs.filter((v) => !pekVerbs.has(v));
+        const missing = ckVerbs.filter((v) => !pekKeys.has(v));
 
         // The error message is load-bearing for the regression net — when this
         // ever fails again, the list of missing verbs IS the bug.
-        expect(missing, `PolicyEnforcedKernel is missing wrappers for: ${missing.join(', ')}`).toEqual([]);
+        expect(
+            missing,
+            `PolicyEnforcedKernel is missing wrappers for: ${missing.map(describeKey).join(', ')}`,
+        ).toEqual([]);
     });
 
     it('PolicyEnforcedKernel does not introduce undocumented extras', () => {
@@ -71,15 +118,25 @@ describe('Verb parity between ClusterKernel and PolicyEnforcedKernel (KERNEL-014
         // Any genuine new policy-only API should be added to
         // POLICY_KERNEL_EXTRAS in this test (with a comment explaining why).
         const pekVerbs = publicMethodsOf(PolicyEnforcedKernel, POLICY_KERNEL_EXTRAS);
-        const ckVerbs = new Set(publicMethodsOf(ClusterKernel, KERNEL_INTERNAL_METHODS));
+        const ckKeys = new Set<string | symbol>(publicMethodsOf(ClusterKernel, KERNEL_INTERNAL_METHODS));
 
-        const undocumented = pekVerbs.filter((v) => !ckVerbs.has(v));
+        const undocumented = pekVerbs.filter((v) => !ckKeys.has(v));
         expect(
             undocumented,
             `PolicyEnforcedKernel has public methods not on ClusterKernel — ` +
                 `either add them to POLICY_KERNEL_EXTRAS (with a comment) or ` +
-                `mirror them on ClusterKernel: ${undocumented.join(', ')}`,
+                `mirror them on ClusterKernel: ${undocumented.map(describeKey).join(', ')}`,
         ).toEqual([]);
+    });
+
+    it('_kernel getter is gone (KERNEL-R003 / SURFACE-R001)', () => {
+        // The `_kernel` getter was the bypass primitive: the CLI and
+        // repo-knowledge ingest used it to unwrap PolicyEnforcedKernel and
+        // call the raw ClusterKernel directly, defeating the policy layer.
+        // It was deleted in Wave A2. This test pins the deletion so the
+        // bypass can't quietly come back.
+        const pekKeys = new Set(allOwnKeys(PolicyEnforcedKernel).map(describeKey));
+        expect(pekKeys.has('_kernel')).toBe(false);
     });
 
     it('the seven KERNEL-001 verbs are concretely wrapped', () => {

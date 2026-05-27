@@ -39,6 +39,14 @@ export class LocalArtifactStore implements ArtifactStore {
     async getContent(id: string): Promise<Buffer | null> {
         const artifact = this.artifacts.get(id);
         if (!artifact) return null;
+        // Defense-in-depth (STORES-R005): re-validate contentHash before using
+        // it as a path component. The in-memory map mirrors artifacts.json; if
+        // that file is tampered after load, the hash here could carry a path
+        // traversal payload. importSnapshot validates on write; getContent
+        // validates on read. Both gates are required.
+        if (!isValidContentHash(artifact.contentHash)) {
+            throw new InvalidContentHashError(String(artifact.contentHash));
+        }
         const contentPath = join(this.contentDir, artifact.contentHash);
         if (!existsSync(contentPath)) return null;
         return readFileSync(contentPath);

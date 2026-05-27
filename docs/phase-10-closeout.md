@@ -16,7 +16,7 @@ db-cluster can be understood, installed, run, and integrated by a developer with
 `test/cli-docs.test.ts` — 14 tests verifying docs/cli.md stays in sync with actual CLI commands.
 
 ### Wave 4: SDK Reference Examples
-`examples/sdk/` — 5 examples: local-cluster, postgres-canonical, retrieval-bundle, mutation-lifecycle, policy-redaction. All compile.
+`examples/sdk/` — 4 examples: local-cluster, retrieval-bundle, mutation-lifecycle, policy-redaction. All compile. (The `postgres-canonical` example was removed in Wave A2 — the SDK does not support a Postgres-via-SDK path today; use `createClusterFromEnv()` with the raw kernel if you need Postgres canonical.)
 
 ### Wave 5: MCP Integration Guide
 `examples/mcp/` — config.example.json, tool-catalog.md (16 tools), safety-model.md (artifact content boundary, lifecycle enforcement, trust zones).

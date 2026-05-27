@@ -62,3 +62,32 @@ export class ReceiptFailedError extends ClusterError {
         this.name = 'ReceiptFailedError';
     }
 }
+
+/**
+ * Raised by {@link CommandQueue} when its persistence file is unreadable or
+ * fails JSON.parse. Mirrors the shape of the adapter-local CorruptStoreError
+ * (intentionally — kernel must not import from adapters/, so we declare a
+ * sibling type here that callers can `instanceof`-check uniformly with the
+ * rest of the kernel error hierarchy).
+ *
+ * Recovery: restore the cluster from a backup, delete the pending-commands
+ * file to start fresh (commands not yet committed will be lost), or inspect
+ * the file by hand.
+ */
+export class CommandQueueCorruptError extends ClusterError {
+    public readonly filePath: string;
+    public readonly innerCause?: unknown;
+    constructor(filePath: string, cause?: unknown) {
+        const causeMsg = cause instanceof Error ? cause.message : String(cause ?? 'unknown');
+        super(
+            `Command queue file is unreadable or corrupt: ${filePath} (${causeMsg}). ` +
+                `Pending commands cannot be loaded safely. Recovery: restore from a backup, ` +
+                `delete the file to start fresh (pending commands will be lost), ` +
+                `or inspect the file by hand.`,
+            'COMMAND_QUEUE_CORRUPT',
+        );
+        this.name = 'CommandQueueCorruptError';
+        this.filePath = filePath;
+        this.innerCause = cause;
+    }
+}

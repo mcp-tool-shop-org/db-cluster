@@ -20,5 +20,6 @@ export {
     CommandNotValidatedError,
     CommandRejectedError,
     ReceiptFailedError,
+    CommandQueueCorruptError,
 } from './errors.js';
 export type { ClusterKernelInterface } from './cluster-kernel-interface.js';

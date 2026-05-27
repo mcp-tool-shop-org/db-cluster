@@ -213,7 +213,7 @@ db-cluster receipts --since 2026-05-01
 Explain effective policy for a principal.
 
 ```bash
-db-cluster policy explain --principal '{"id":"agent","trustZone":"agent","capabilities":["read","propose"]}'
+db-cluster policy explain --principal '{"id":"agent","name":"Agent","roles":["reader","proposer"],"trustZone":"agent"}' --resource 'cluster://canonical/entity-id'
 ```
 
 ### `db-cluster policy test`
@@ -221,7 +221,7 @@ db-cluster policy explain --principal '{"id":"agent","trustZone":"agent","capabi
 Test policy actions.
 
 ```bash
-db-cluster policy test --principal '{"id":"external","trustZone":"external","capabilities":["read"]}' --verb read --store canonical
+db-cluster policy test --principal '{"id":"external","name":"External","roles":["reader"],"trustZone":"external"}' --capability read_owner_truth --store canonical
 ```
 
 ## Store management

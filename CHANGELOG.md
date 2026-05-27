@@ -1,5 +1,101 @@
 # Changelog
 
+## Wave A2 — Dogfood-swarm Stage A re-audit amend (2026-05-27)
+
+Second amend wave after the Stage A re-audit
+(`swarm-stage-a-reaudit-20260527-013038Z.md`). Wave A2 closes the regressions
+and partial-of-known findings surfaced by the re-audit, plus the policy-layer
+per-object scoping cluster that Wave A1's "fix the type-and-wrapper layer"
+pattern left to the call sites.
+
+### Kernel
+- `CommandQueue` now uses atomic `tmp+rename` writes + try/catch around
+  `JSON.parse` on load with a typed `CorruptStoreError` (closes KERNEL-R001 —
+  the relative outlier after the four Stores got atomic writes in Wave A1).
+- Policy-layer per-object scoping extended to `retrieveBundle`
+  provenanceEvents (ledger/index subjects), `explainIndex` ledger source
+  store, `inspectCommand`, `listReceipts` resultSummary, plus a non-NOP
+  `'reindex'` arm and an `ops/` consumer of `mutation_orphaned` events.
+
+### Stores
+- Deleted duplicate `ImportSnapshotNotSupportedError` in
+  `src/adapters/local/errors.ts` (kept only the `src/ops/errors.ts` copy that
+  `backup.ts` actually imports).
+- `replaceAll` declared on the `IndexStore` contract (no longer duck-typed in
+  `rebuild.ts`).
+- `LocalArtifactStore.getContent()` now validates `contentHash` regex on the
+  load path too (defense-in-depth parity with `importSnapshot`).
+- `PostgresCanonicalStore.importSnapshot` uses `INSERT ... ON CONFLICT` to
+  close the TOCTOU window on concurrent restores.
+
+### Surface
+- Deleted every `kernel._kernel` unwrap from `src/cli.ts` (10 sites) and
+  `src/integrations/repo-knowledge/ingest.ts` (1 site) — the CLI and ingest
+  now call `PolicyEnforcedKernel` wrappers directly, restoring the policy
+  layer that Wave A1's KERNEL-001 wrappers were designed to enforce.
+- Removed the SDK + CLI auto-walk; callers explicitly chain
+  `validateMutation` → `approveMutation` → `commitMutation`, preserving the
+  separation of duties tightening from KERNEL-006.
+- `SDK.resolve()` now goes through the policy-enforced path (no more direct
+  `ClusterResolver`); `sanitizeEntityForOutput` + `sanitizeReceiptForOutput`
+  wired into every MCP boundary.
+- `DB_CLUSTER_PRINCIPAL` JSON now schema-validated with fail-closed on
+  malformed input; `DB_CLUSTER_POLICIES_FILE` path-sandboxed against cwd.
+- `dashboard/components/PolicyViewToggle.jsx` now imports `applyRedaction`
+  from the shared lib (no more divergent inline copy).
+
+### Tests
+- Rewrote `wave6-proof.test.ts:350` to assert
+  `Object.keys(import('db-cluster')).not.toContain('ClusterKernel')` (was
+  test theatre that passed via a JSDoc comment substring).
+- Removed every `npx tsx` invocation from `phase10-proof.test.ts` (finishes
+  the TESTS-006 sweep that missed sibling patterns in Wave A1).
+- Added regression nets for the 5 typed errors / write mechanisms Wave A1
+  shipped without tests: `ReceiptFailedError` + `mutation_orphaned`,
+  `CorruptStoreError`, `ImportSnapshotNotSupportedError`,
+  `LocalCanonicalStore.importSnapshot` entity-ID preservation,
+  `LedgerStore.importEvent`/`importReceipt` idempotency.
+- Added SDK end-to-end policy wiring tests (3+ integration tests asserting
+  `findSources` filtering, `commitMutation` denial, and policy-less
+  bypass behavior).
+- Pinned the verify status either-OK assertions (`'healthy'|'degraded'`)
+  back to specific expected outcomes — the 2 new instances Wave A1
+  introduced are gone.
+- Phase 12 Proof 12 now uses `verify()` (not `doctor()`) and asserts
+  entity-ID round-trip preservation.
+
+### CI/Docs
+- Added `permissions: contents: read` to all three workflows
+  (`ci.yml`, `release-gate.yml`, `smoke-install.yml`) for defense-in-depth.
+- Added `concurrency:` block to `ci.yml` so pushes to a branch/PR cancel
+  prior in-flight runs.
+- `smoke-install.yml` now also triggers on `workflow_dispatch` and on PRs
+  that touch `package.json`, so smoke runs against the to-be-tagged commit
+  pre-tag (not only post-tag).
+- `scripts/release-gate.mjs` `scanForDrift` widened to walk both
+  `examples/` and `dashboard/lib/` (closes CIDOCS-R008).
+- `docs/release-notes-v0.1.md`, `docs/package-boundary.md`,
+  `docs/handbook.md`, `docs/phase-15-closeout.md`,
+  `docs/release-readiness.md` swept clean of the false claim that
+  `ClusterKernel` is exported from `'db-cluster'`.
+- `docs/policy-and-redaction.md`, `docs/handbook.md`, `docs/cli.md`,
+  `examples/mcp/safety-model.md` corrected to show the real `Principal`
+  shape (`{ id, name, roles, trustZone, metadata? }`) and the real
+  13-verb `Capability` union.
+- Deleted `examples/sdk/postgres-canonical.ts` — the SDK does not support
+  a Postgres-via-SDK path today (env var has no effect; SDK
+  unconditionally calls `createLocalCluster`). Use
+  `createClusterFromEnv()` with the raw kernel if Postgres canonical
+  is required.
+- `README.md`, `docs/release-notes-v0.1.md`, `docs/phase-15-closeout.md`
+  updated to 623+ tests / 58 files (post-Wave-A2 count finalized in
+  the amend report).
+- `docs/phase-15-closeout.md` "Next phase candidates" no longer lists
+  CI pipeline as future work (it landed in Wave A1).
+- Documented the recommended release flow in `docs/release-readiness.md`
+  (smoke pre-tag via `workflow_dispatch` + PR-on-version-bump, defense
+  in depth via tag-push smoke).
+
 ## Wave A1 — Dogfood-swarm Stage A amend (2026-05-26)
 
 Health-pass amend after the Stage A audit (`swarm-stage-a-audit-20260526-225638Z.md`).

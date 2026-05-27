@@ -5,7 +5,7 @@
  * The JS implementation is the source of truth (also loaded by the browser
  * dashboard); this only describes its shape.
  */
-import type { DashboardObject } from '../../src/dashboard/dashboard-model.js';
+import type { DashboardObject } from '../../dist/dashboard/dashboard-model.js';
 
 export interface PolicyView {
     principal: string;

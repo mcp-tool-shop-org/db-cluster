@@ -19,7 +19,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { execSync } from 'node:child_process';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const readDoc = (path: string) => readFileSync(resolve(ROOT, path), 'utf-8');
@@ -27,6 +26,25 @@ const readDocs = (dir: string) =>
     readdirSync(resolve(ROOT, dir))
         .filter((f) => f.endsWith('.md'))
         .map((f) => ({ name: f, content: readFileSync(resolve(ROOT, dir, f), 'utf-8') }));
+
+/**
+ * TESTS-R003: Extract top-level command names from src/cli.ts source rather
+ * than shelling out to `npx tsx src/cli.ts --help`. tsx spins up a full TS
+ * compile + binary launch for every test; source parsing is ~1000× faster
+ * and the dependency direction is correct (test reads source, not the
+ * other way around). Pattern copied from test/cli-docs.test.ts.
+ */
+function extractCliCommands(): string[] {
+    const cliSource = readFileSync(resolve(ROOT, 'src/cli.ts'), 'utf-8');
+    const names = new Set<string>();
+    const re = /\.command\(['"]([a-z][a-z0-9-]*)\b/gi;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(cliSource)) !== null) {
+        const name = match[1].toLowerCase();
+        if (name !== 'help') names.add(name);
+    }
+    return Array.from(names);
+}
 
 describe('Phase 10 proof suite', () => {
     it('Proof 1: README status matches package/test reality', () => {
@@ -39,25 +57,21 @@ describe('Phase 10 proof suite', () => {
         // README has a status section
         expect(readme).toMatch(/## Status/);
 
-        // README mentions test count
-        expect(readme).toMatch(/\d+ tests? passing/i);
+        // README mentions test count (allowing optional `+` after the
+        // number, e.g. "623+ tests passing" — the README intentionally
+        // uses this shape to avoid weekly maintenance for small deltas).
+        expect(readme).toMatch(/\d+\+? tests? passing/i);
     });
 
     it('Proof 2: CLI docs mention every public command group', () => {
+        // TESTS-R003: was `execSync('npx tsx src/cli.ts --help')`. Now reads
+        // command declarations from src/cli.ts source directly (same pattern
+        // as test/cli-docs.test.ts) — no sub-process compilation.
         const cliDoc = readDoc('docs/cli.md');
-        const helpOutput = execSync('npx tsx src/cli.ts --help', {
-            cwd: ROOT,
-            encoding: 'utf-8',
-            timeout: 15000,
-        });
+        const commands = extractCliCommands();
+        expect(commands.length).toBeGreaterThan(5);
 
-        const commandLines = helpOutput
-            .split('\n')
-            .filter((line) => /^\s{2}\w/.test(line))
-            .map((line) => line.trim().split(/\s+/)[0])
-            .filter((cmd) => cmd !== 'help');
-
-        for (const cmd of commandLines) {
+        for (const cmd of commands) {
             expect(cliDoc.toLowerCase()).toContain(cmd.toLowerCase());
         }
     });
@@ -98,9 +112,10 @@ describe('Phase 10 proof suite', () => {
         expect(existsSync(resolve(ROOT, 'examples/quickstart/expected-output/ingest.txt'))).toBe(true);
         expect(existsSync(resolve(ROOT, 'examples/quickstart/expected-output/doctor.txt'))).toBe(true);
 
-        // Verify init actually works
-        const helpOut = execSync('npx tsx src/cli.ts --help', { cwd: ROOT, encoding: 'utf-8', timeout: 15000 });
-        expect(helpOut).toContain('init');
+        // TESTS-R003: was `execSync('npx tsx src/cli.ts --help')`. Now asserts
+        // `init` is declared in src/cli.ts source — no sub-process required.
+        const cliCommands = extractCliCommands();
+        expect(cliCommands).toContain('init');
     });
 
     it('Proof 6: At least one example uses artifact + canonical + index + ledger', () => {

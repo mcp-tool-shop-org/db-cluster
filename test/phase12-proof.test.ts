@@ -30,6 +30,7 @@ import { DEFAULT_POLICIES, DEFAULT_TRUST_ZONES, DEFAULT_VISIBILITY_RULES } from 
 import { backup, restore } from '../src/ops/backup.js';
 import { rebuildIndex } from '../src/ops/rebuild.js';
 import { doctor } from '../src/ops/doctor.js';
+import { verify } from '../src/ops/verify.js';
 import { runDogfoodReplay } from '../scripts/dogfood-replay.js';
 import { ClusterSDK } from '../src/sdk/cluster-sdk.js';
 import type { Principal } from '../src/types/policy.js';
@@ -276,12 +277,31 @@ describe('Phase 12 proof suite', () => {
         const stores = createLocalCluster(dataDir);
         const data = await backup(stores);
 
+        // STORES-R001: capture original IDs BEFORE restoring into a fresh
+        // target so we can assert entity-ID preservation across restore.
+        const originalEntities = await stores.canonical.list();
+        const originalIds = originalEntities.map((e) => e.id).sort();
+        expect(originalIds.length).toBeGreaterThan(0); // sanity
+
         const freshDir = mkdtempSync(join(tmpdir(), 'p12-p12-'));
         const freshStores = createLocalCluster(freshDir);
         await restore(freshStores, data);
 
-        const health = await doctor(freshStores);
-        expect(health.status).toBe('healthy');
+        // STORES-R001: was `await doctor(freshStores)`. doctor() only checks
+        // reachability; if STORES-001 (entity-ID preservation in
+        // importSnapshot) ever regresses, doctor() still returns healthy and
+        // the regression is invisible. verify() checks data consistency
+        // (orphan subjects, index→source linkage) and would fail.
+        const v = await verify(freshStores);
+        expect(v.status).toBe('healthy');
+
+        // STORES-R001 + TESTS-R004 item 4: positive entity-ID preservation
+        // assertion — the IDs from the original cluster MUST match the IDs
+        // in the restored cluster. If a future regression re-randomizes IDs
+        // on restore, this test catches it.
+        const restoredEntities = await freshStores.canonical.list();
+        const restoredIds = restoredEntities.map((e) => e.id).sort();
+        expect(restoredIds).toEqual(originalIds);
 
         rmSync(freshDir, { recursive: true, force: true });
     });
@@ -320,15 +340,19 @@ describe('Phase 12 proof suite', () => {
         const freshDir = mkdtempSync(join(tmpdir(), 'p12-p14-'));
         const sdk = new ClusterSDK({ clusterDir: freshDir });
 
-        // Create via mutation. The SDK auto-walks proposed → validated →
-        // approved → committed (see ClusterSDK.commitMutation), so callers
-        // that don't care about intermediate states still get a one-call commit.
+        // Create via the full mutation lifecycle. Wave A2 (KERNEL-R002)
+        // removed the SDK auto-walk: callers must propose → validate →
+        // approve → commit explicitly. Self-approve below mirrors the
+        // previous backward-compat shape; surfaces that need genuine
+        // separation of duties supply distinct actors.
         const proposal = await sdk.proposeMutation({
             verb: 'create_entity',
             targetStore: 'canonical',
             payload: { kind: 'finding', name: 'SDK Proof Entity', attributes: {} },
             proposedBy: 'operator',
         });
+        await sdk.validateMutation(proposal.id);
+        await sdk.approveMutation(proposal.id, 'operator');
         const { receipt } = await sdk.commitMutation(proposal.id, 'operator');
         const entityId = receipt.affectedIds[0];
 

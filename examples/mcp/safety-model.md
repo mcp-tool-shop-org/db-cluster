@@ -95,11 +95,16 @@ For AI agents connecting via MCP:
 {
   "principal": {
     "id": "ai-agent",
-    "trustZone": "agent",
-    "capabilities": ["read", "propose"]
+    "name": "AI Agent",
+    "roles": ["reader", "proposer"],
+    "trustZone": "agent"
   }
 }
 ```
+
+The MCP server resolves the principal from the `DB_CLUSTER_PRINCIPAL` env var
+(JSON string) on startup. Capabilities are granted via `roles`; see
+`docs/policy-and-redaction.md` for the canonical `Capability` union.
 
 This allows:
 - Reading all non-restricted entities and artifacts

@@ -29,13 +29,13 @@ type StagedRecord = Omit<IndexRecord, 'id' | 'indexedAt' | 'owner'>;
  * Uses content-aware indexing for artifacts.
  * Does NOT mutate canonical, artifact, or ledger.
  *
- * Strategy (STORES-008): build the full list of replacement records in memory
- * BEFORE touching the live index, then either
- *   - call `replaceAll` (if available) for an atomic in-place swap, or
- *   - fall back to clear() + index() in tight succession.
- * Both paths keep the "empty index" window as short as possible. The old code
- * cleared the index unconditionally at the top of the function, leaving readers
- * to see a fully-empty index if the function crashed mid-way through reindexing.
+ * Strategy (STORES-008 / STORES-R003): build the full list of replacement records
+ * in memory BEFORE touching the live index, then atomically swap them in via
+ * `IndexStore.replaceAll` — a method that is now required on the contract
+ * (was previously duck-typed). The empty-index window collapses to a single
+ * filesystem rename on the local adapter. Pre-STORES-R003 the function
+ * fell back to clear() + index() if the method was missing; that fallback is
+ * gone now that the contract guarantees the method exists.
  */
 export async function rebuildIndex(stores: ClusterStores, options?: { dryRun?: boolean }): Promise<RebuildResult> {
     const dryRun = options?.dryRun ?? false;
@@ -99,28 +99,12 @@ export async function rebuildIndex(stores: ClusterStores, options?: { dryRun?: b
         return { rebuilt, removed, errors, dryRun };
     }
 
-    // 2. SWAP — atomic if the store supports replaceAll, otherwise clear+index
-    //    in tight succession. The empty-index window is one filesystem rename
-    //    on the replaceAll path; on the fallback path it is the time taken to
-    //    re-emit `staged.length` records (small but non-zero).
-    const indexStore = stores.index as unknown as {
-        replaceAll?: (records: StagedRecord[]) => Promise<void>;
-    };
-    if (typeof indexStore.replaceAll === 'function') {
-        try {
-            await indexStore.replaceAll(staged);
-        } catch (err: any) {
-            errors.push(`Atomic index swap failed: ${err.message}`);
-        }
-    } else {
-        await stores.index.clear();
-        for (const record of staged) {
-            try {
-                await stores.index.index(record);
-            } catch (err: any) {
-                errors.push(`Failed to write index record for ${record.sourceId}: ${err.message}`);
-            }
-        }
+    // 2. SWAP — atomic replacement via contract method. The empty-index window
+    //    is one filesystem rename on the local adapter.
+    try {
+        await stores.index.replaceAll(staged);
+    } catch (err: any) {
+        errors.push(`Atomic index swap failed: ${err.message}`);
     }
 
     return { rebuilt, removed, errors, dryRun };

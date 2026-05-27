@@ -525,4 +525,140 @@ describe('Wave 2 — Policy Engine', () => {
             expect(matchPolicy({ principal: admin, capability: 'read_owner_truth' }, policy)).toBe(false);
         });
     });
+
+    // ─── TESTS-R005 + SURFACE-004: default-deny on underspecified allow ──
+    //
+    // The audit re-audit noted that SURFACE-004's two behaviours had ZERO
+    // direct tests: (1) when an allow policy has a constraint (stores /
+    // kinds / uriPatterns / commandVerbs) and the request omits that field,
+    // the match REFUSES (no implicit grant); (2) when a deny policy has the
+    // same constraint and the request omits the field, the match STILL FIRES
+    // (err on the safe side). Plus (3) auto-derive ownerStore from a
+    // resourceUri so callers that pass a URI but forget ownerStore still get
+    // store-scoped policies correctly evaluated.
+
+    describe('SURFACE-004 — default-deny on underspecified allow + auto-derive ownerStore', () => {
+        const userPrincipal: Principal = {
+            id: 'user-1', name: 'User', roles: ['user'], trustZone: 'internal',
+        };
+
+        it('allow policy with stores constraint, request WITHOUT ownerStore → DENY', () => {
+            const allowOnCanonical: Policy[] = [
+                {
+                    id: 'allow-canonical-read',
+                    name: 'Allow canonical read',
+                    priority: 10,
+                    match: { principals: ['user'], capabilities: ['read_owner_truth'], stores: ['canonical'] },
+                    decision: 'allow',
+                    reason: 'Allow reads on canonical.',
+                },
+            ];
+            const decision = evaluatePolicy(
+                { principal: userPrincipal, capability: 'read_owner_truth' /* no ownerStore */ },
+                { policies: allowOnCanonical, trustZones: [] },
+            );
+            // Underspecified allow MUST NOT grant — fallback to default deny.
+            expect(decision.decision).toBe('deny');
+            expect(decision.matchedPolicyId).toBe('__default_deny');
+        });
+
+        it('deny policy with stores constraint, request WITHOUT ownerStore → DENY (still matches)', () => {
+            const denyOnArtifact: Policy[] = [
+                {
+                    id: 'deny-artifact',
+                    name: 'Deny artifact',
+                    priority: 10,
+                    match: { principals: ['user'], capabilities: ['read_owner_truth'], stores: ['artifact'] },
+                    decision: 'deny',
+                    reason: 'No artifacts.',
+                },
+                {
+                    id: 'broad-allow',
+                    name: 'Allow All',
+                    priority: 20,
+                    match: { principals: ['user'], capabilities: ['read_owner_truth'] },
+                    decision: 'allow',
+                    reason: 'Broad allow.',
+                },
+            ];
+            const decision = evaluatePolicy(
+                { principal: userPrincipal, capability: 'read_owner_truth' /* no ownerStore */ },
+                { policies: denyOnArtifact, trustZones: [] },
+            );
+            // Underspecified deny MUST still match (safe-side default) — fires
+            // before the broader allow at lower priority.
+            expect(decision.decision).toBe('deny');
+            expect(decision.matchedPolicyId).toBe('deny-artifact');
+        });
+
+        it('allow policy with commandVerbs constraint, request WITHOUT commandVerb → DENY', () => {
+            const allowCreateOnly: Policy[] = [
+                {
+                    id: 'allow-create',
+                    name: 'Allow create_entity',
+                    priority: 10,
+                    match: { principals: ['user'], capabilities: ['commit_command'], commandVerbs: ['create_entity'] },
+                    decision: 'allow',
+                    reason: 'Only create_entity.',
+                },
+            ];
+            const decision = evaluatePolicy(
+                { principal: userPrincipal, capability: 'commit_command' /* no commandVerb */ },
+                { policies: allowCreateOnly, trustZones: [] },
+            );
+            expect(decision.decision).toBe('deny');
+            expect(decision.matchedPolicyId).toBe('__default_deny');
+        });
+
+        it('request with cluster://canonical/<id> matches policy with stores: [canonical] (auto-derive ownerStore)', () => {
+            const allowOnCanonical: Policy[] = [
+                {
+                    id: 'allow-canonical',
+                    name: 'Allow canonical',
+                    priority: 10,
+                    match: { principals: ['user'], capabilities: ['read_owner_truth'], stores: ['canonical'] },
+                    decision: 'allow',
+                    reason: 'Canonical reads.',
+                },
+            ];
+            // Caller passes resourceUri but FORGETS to set ownerStore.
+            // evaluatePolicy must auto-derive 'canonical' from the URI and
+            // the policy must match.
+            const decision = evaluatePolicy(
+                {
+                    principal: userPrincipal,
+                    capability: 'read_owner_truth',
+                    resourceUri: 'cluster://canonical/some-entity-id',
+                },
+                { policies: allowOnCanonical, trustZones: [] },
+            );
+            expect(decision.decision).toBe('allow');
+            expect(decision.matchedPolicyId).toBe('allow-canonical');
+        });
+
+        it('request with cluster://canonical/<id> does NOT match policy with stores: [artifact]', () => {
+            const allowOnArtifact: Policy[] = [
+                {
+                    id: 'allow-artifact',
+                    name: 'Allow artifact',
+                    priority: 10,
+                    match: { principals: ['user'], capabilities: ['read_owner_truth'], stores: ['artifact'] },
+                    decision: 'allow',
+                    reason: 'Artifact reads.',
+                },
+            ];
+            const decision = evaluatePolicy(
+                {
+                    principal: userPrincipal,
+                    capability: 'read_owner_truth',
+                    resourceUri: 'cluster://canonical/some-entity-id',
+                },
+                { policies: allowOnArtifact, trustZones: [] },
+            );
+            // The auto-derived ownerStore is 'canonical', which doesn't match
+            // the policy's ['artifact'] constraint — falls through to default deny.
+            expect(decision.decision).toBe('deny');
+            expect(decision.matchedPolicyId).toBe('__default_deny');
+        });
+    });
 });

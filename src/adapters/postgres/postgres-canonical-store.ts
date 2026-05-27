@@ -109,18 +109,17 @@ export class PostgresCanonicalStore implements CanonicalStore {
      * Used by restore so that re-runs are idempotent and provenance events that
      * cite the original subjectId still resolve (STORES-001).
      *
-     * If an entity with the same id already exists, the existing row is returned
-     * unchanged (idempotent restore).
+     * Idempotent via `INSERT ... ON CONFLICT (id) DO NOTHING`: if the row
+     * already exists the insert is a no-op and we read the existing row back.
+     * Pre-STORES-R006 this was a TOCTOU read-then-insert that raced under
+     * concurrent restores. Two concurrent restores hitting the same id will
+     * now both succeed, both returning the row that won the race.
      */
     async importSnapshot(entity: Entity): Promise<Entity> {
-        // Idempotency: if it already exists, return it as-is.
-        const existing = await this.get(entity.id);
-        if (existing) {
-            return existing;
-        }
-        const result = await this.pool.query(
+        const insertResult = await this.pool.query(
             `INSERT INTO ${CANONICAL_TABLE} (id, kind, name, attributes, owner, created_at, updated_at)
              VALUES ($1, $2, $3, $4, 'canonical', $5, $6)
+             ON CONFLICT (id) DO NOTHING
              RETURNING id, kind, name, attributes, owner, created_at, updated_at`,
             [
                 entity.id,
@@ -131,7 +130,21 @@ export class PostgresCanonicalStore implements CanonicalStore {
                 entity.updatedAt,
             ],
         );
-        return this.rowToEntity(result.rows[0]);
+        if (insertResult.rows.length > 0) {
+            return this.rowToEntity(insertResult.rows[0]);
+        }
+        // Conflict — row already exists. Read it back for idempotent return.
+        const existing = await this.get(entity.id);
+        if (!existing) {
+            // Extremely unlikely: ON CONFLICT skipped insert but the row
+            // disappeared before we could read it. Surface as a hard error
+            // rather than returning null and breaking the contract.
+            throw new Error(
+                `importSnapshot: ON CONFLICT skipped insert for id=${entity.id} ` +
+                `but the conflicting row could not be read back.`,
+            );
+        }
+        return existing;
     }
 
     /**

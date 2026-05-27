@@ -31,9 +31,10 @@
  * kernel's switch arm passes it through to `stores.artifact.ingest` as-is,
  * which writes garbage). Until the kernel's `ingest_artifact` arm rehydrates
  * Buffer payloads, artifact ingest stays on the direct `kernel.ingestArtifact`
- * helper. The helper is itself wrapped by the kernel's policy layer when the
- * caller passed a `PolicyEnforcedKernel`, so the policy gate still fires —
- * what we lose is the inspectable command record (KERNEL-002 caveat).
+ * helper. KERNEL-001 added wrappers for ingestArtifact on
+ * PolicyEnforcedKernel (KERNEL-R003 ≡ SURFACE-R001/R002), so the policy gate
+ * fires whether the caller passes a `ClusterKernel` or `PolicyEnforcedKernel`.
+ * What we lose is the inspectable command record (KERNEL-002 caveat).
  *
  * When the caller passes a raw `ClusterKernel` (no policy layer), a runtime
  * warning is emitted: "policy layer not engaged for ingest." Production
@@ -232,13 +233,15 @@ export async function ingestRepoKnowledge(
         const filename = basename(source.path);
         const content = readFileSync(source.path);
 
-        // Ingest as artifact — direct helper call. Buffer payloads do not
-        // round-trip through CommandQueue persistence (see file header), so
-        // the lifecycle path is unsafe for artifact ingest today. The policy
-        // layer still fires if the caller passed a `PolicyEnforcedKernel`;
-        // what we lose is the inspectable command record.
-        const underlying = (kernel as { _kernel?: ClusterKernel })._kernel ?? (kernel as ClusterKernel);
-        const ingestResult = await underlying.ingestArtifact({
+        // Ingest as artifact via the kernel-helper path. Buffer payloads do
+        // not round-trip through CommandQueue persistence (see file header), so
+        // the lifecycle path is unsafe for artifact ingest today. With the
+        // KERNEL-001 wrappers landed (KERNEL-R003 ≡ SURFACE-R001/R002), the
+        // policy gate fires for both `ClusterKernel` and `PolicyEnforcedKernel`
+        // callers — what we lose is the inspectable command record. When the
+        // kernel grows Buffer-safe command persistence (Stage B), this site
+        // moves onto the propose → validate → approve → commit lifecycle.
+        const ingestResult = await kernel.ingestArtifact({
             filename,
             content,
             mimeType: getMimeType(filename),

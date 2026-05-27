@@ -16,6 +16,7 @@ import {
     redactCommand,
     redactReceipt,
     redactProvenanceActors,
+    redactProvenanceEvent,
     redactGraphNodes,
     sanitizeWarnings,
 } from '../policy/redactor.js';
@@ -313,12 +314,43 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
         });
 
         // Provenance events keyed to filtered subjects are also dropped so
-        // we don't surface them via the retrieval surface.
-        const filteredProvenance = bundle.provenanceEvents.filter((e) => {
-            if (e.subjectStore === 'canonical') return allowedEntityIds.has(e.subjectId);
-            if (e.subjectStore === 'artifact') return allowedArtifactIds.has(e.subjectId);
-            return true;
-        });
+        // we don't surface them via the retrieval surface. For ledger / index
+        // subjects (command_approved/rejected, mutation_committed targeting
+        // a derivative subject, etc.) the bare event has no obvious owner
+        // mapping, so we apply a `read_derivative` gate AND strip the
+        // `detail` payload (which would otherwise leak command verbs,
+        // payload field shapes, and target IDs to anyone allowed to discover
+        // events but not allowed to read the underlying truth). KERNEL-R004.
+        const filteredProvenance: ProvenanceEvent[] = [];
+        for (const e of bundle.provenanceEvents) {
+            if (e.subjectStore === 'canonical') {
+                if (allowedEntityIds.has(e.subjectId)) filteredProvenance.push(e);
+                continue;
+            }
+            if (e.subjectStore === 'artifact') {
+                if (allowedArtifactIds.has(e.subjectId)) filteredProvenance.push(e);
+                continue;
+            }
+            if (e.subjectStore === 'ledger' || e.subjectStore === 'index') {
+                // If the event references a targetStore in its detail, derive
+                // the effective ownerStore from there and gate accordingly.
+                const targetStore = typeof e.detail?.targetStore === 'string'
+                    ? (e.detail.targetStore as 'canonical' | 'artifact' | 'index' | 'ledger')
+                    : undefined;
+                const derivativeDecision = evaluatePolicy({
+                    principal: this.context.principal,
+                    capability: 'read_derivative',
+                    trustZone,
+                    ownerStore: targetStore ?? (e.subjectStore as 'ledger' | 'index'),
+                    resourceUri: `cluster://${e.subjectStore}/${e.subjectId}`,
+                }, this.policyOptions);
+                if (derivativeDecision.decision !== 'allow') continue;
+                // No clear resolved subject for opaque ledger/index events —
+                // surface the event with action+subjectId+timestamp+actor but
+                // drop the leaky `detail` payload.
+                filteredProvenance.push({ ...e, detail: {} });
+            }
+        }
 
         // Bundle-level redaction (apply blanket rules from the bundle
         // capability decision in addition to the per-object rules above).
@@ -416,18 +448,72 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
     // ─── Receipt verbs ───────────────────────────────────────────────
 
     async inspectCommand(commandId: string): Promise<Command> {
-        const decision = this.enforce('read_command');
+        // KERNEL-R006: the previous implementation called `enforce('read_command')`
+        // with no resource context, which meant store-scoped or verb-scoped
+        // policies (e.g. allow `read_command` only for `ingest_artifact`-verb
+        // commands targeting the artifact store) silently broadened to every
+        // command. Worse: synthetic commands manufactured by helpers
+        // (createEntity / ingestArtifact / linkEvidence — see KERNEL-002)
+        // carry `kind` / `name` / `entityId` in their payload, so a caller
+        // permitted to discover commands but NOT to read the owner truth
+        // could read entity names through the inspectCommand surface.
+        //
+        // Two-step fix:
+        // 1. Resolve the command first so we can pass verb + targetStore to
+        //    the policy gate.
+        // 2. Apply payload redaction based on the resolved policy's rules.
         const command = await this.kernel.inspectCommand(commandId);
+        const decision = this.enforce('read_command', {
+            resourceUri: `cluster://ledger/${commandId}`,
+            ownerStore: 'ledger',
+            commandVerb: command.verb,
+        });
         const rules = this.collectRedactionRules(decision);
         return rules.length > 0 ? redactCommand(command, rules) : command;
     }
 
     async listReceipts(filter?: { commandId?: string; since?: string; limit?: number }): Promise<Receipt[]> {
-        const decision = this.enforce('read_receipts');
-        const receipts = await this.kernel.listReceipts(filter);
-        const rules = this.collectRedactionRules(decision);
-        if (rules.length === 0) return receipts;
-        return receipts.map((r) => redactReceipt(r, rules));
+        // KERNEL-R007: prior implementation was a blanket `read_receipts`
+        // gate followed by the same redaction rules applied to every
+        // receipt. Two leaks resulted:
+        // - Restricted receipts (those that should be filtered out
+        //   entirely) were surfaced because there was no per-receipt
+        //   evaluatePolicy call.
+        // - `resultSummary` strings like `'Created entity: User/john@example.com'`
+        //   contain entity names verbatim — a caller allowed to list
+        //   receipts but not allowed to read owner truth would still see
+        //   the entity name through this surface.
+        //
+        // Two-stage fix:
+        // 1. Bundle-level `enforce('read_receipts')` — a principal that
+        //    cannot read receipts at all gets the typed PolicyDeniedError
+        //    instead of a silent empty list (preserves the existing API
+        //    contract for callers that distinguish 'no receipts visible'
+        //    from 'capability denied').
+        // 2. Per-receipt scoping (mirroring findSources / retrieveBundle):
+        //    each receipt gets its own evaluatePolicy call rooted at
+        //    `cluster://receipt/<id>`. Receipts whose decision is `deny`
+        //    are dropped (no leakage to a partially-restricted reader).
+        //    Receipts whose decision is `allow` are redacted with the
+        //    rules from that specific decision (which may include a
+        //    `receipt_details` rule that strips the leaky resultSummary).
+        this.enforce('read_receipts', { ownerStore: 'ledger' });
+        const trustZone = this.context.trustZone ?? this.context.principal.trustZone;
+        const allReceipts = await this.kernel.listReceipts(filter);
+        const filtered: Receipt[] = [];
+        for (const receipt of allReceipts) {
+            const decision = evaluatePolicy({
+                principal: this.context.principal,
+                capability: 'read_receipts',
+                trustZone,
+                ownerStore: 'ledger',
+                resourceUri: `cluster://receipt/${receipt.id}`,
+            }, this.policyOptions);
+            if (decision.decision !== 'allow') continue;
+            const rules = this.collectRedactionRules(decision);
+            filtered.push(rules.length > 0 ? redactReceipt(receipt, rules) : receipt);
+        }
+        return filtered;
     }
 
     // ─── Index verbs ─────────────────────────────────────────────────
@@ -435,8 +521,12 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
     /**
      * Returns the same IndexExplanation shape ClusterKernel.explainIndex
      * returns, but with `sourceObject` redacted per the matched policy.
-     * KERNEL-011 fix: previously this returned the raw Entity/Artifact/Event
-     * without any redaction, leaking restricted content.
+     *
+     * KERNEL-011 closed canonical + artifact redaction. KERNEL-R005 extends
+     * the redaction to ledger source-store events: prior to that fix the
+     * full {@link ProvenanceEvent} including `detail` was returned
+     * unredacted to read_derivative-only callers — leaking actor IDs and
+     * the original command payload through the index explanation surface.
      */
     async explainIndex(recordId: string): Promise<IndexExplanation> {
         const decision = this.enforce('explain_retrieval', { ownerStore: 'index' });
@@ -456,14 +546,17 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
 
         const rules = this.collectRedactionRules(decision);
         let sourceObject = explanation.sourceObject;
-        if (sourceObject) {
-            // Per-source-type redaction. The ledger event case has no
-            // dedicated redactor in this layer (provenance redaction is
-            // applied through the graph surface).
-            if (explanation.sourceStore === 'canonical' && rules.length > 0) {
+        if (sourceObject && rules.length > 0) {
+            // Per-source-type redaction.
+            if (explanation.sourceStore === 'canonical') {
                 sourceObject = redactEntity(sourceObject as Entity, rules);
-            } else if (explanation.sourceStore === 'artifact' && rules.length > 0) {
+            } else if (explanation.sourceStore === 'artifact') {
                 sourceObject = redactArtifact(sourceObject as Artifact, rules);
+            } else if (explanation.sourceStore === 'ledger') {
+                // KERNEL-R005: ledger sources flow through the dedicated
+                // ProvenanceEvent redactor — strips actor IDs and command
+                // payload while keeping audit-essential fields.
+                sourceObject = redactProvenanceEvent(sourceObject as ProvenanceEvent, rules);
             }
         }
 
@@ -502,10 +595,13 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
      * Wrap ClusterKernel.ingestArtifact behind the policy gate.
      *
      * Prior to KERNEL-001 there was NO wrapper for these helpers, which meant
-     * any caller holding either a raw `ClusterKernel` (via the `_kernel`
-     * getter) or the public `ClusterKernel` export could write to the
+     * any caller holding the public `ClusterKernel` export could write to the
      * artifact / canonical / ledger stores with zero policy check and zero
      * redaction. These wrappers route through `enforce()` first.
+     *
+     * The {@link PolicyEnforcedKernel} no longer exposes a backdoor accessor
+     * for the underlying kernel — every surface MUST call these wrappers
+     * (KERNEL-R003 ≡ SURFACE-R001).
      */
     async ingestArtifact(input: IngestArtifactInput) {
         const decision = this.enforce('commit_command', {
@@ -593,10 +689,8 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
         return checkVisibility(resourceUri, ownerStore, this.visibilityRules);
     }
 
-    // ─── Access to underlying kernel (for tests/internals only) ──────
-
-    /** @internal — for test verification. Not part of public contract. */
-    get _kernel(): ClusterKernel {
-        return this.kernel;
-    }
+    // KERNEL-R003 ≡ SURFACE-R001: the `_kernel` getter was deleted. Every
+    // verb that callers need is exposed through the wrappers above (verb
+    // parity is compiler-enforced via ClusterKernelInterface). If you find
+    // yourself wanting to reach behind this layer, add a wrapper instead.
 }

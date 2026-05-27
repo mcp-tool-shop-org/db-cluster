@@ -176,6 +176,20 @@
     integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y"
     crossorigin="anonymous"></script>
 
+  <!--
+    SURFACE-R010 fix — load the SHARED redaction lib (the same one
+    `test/dashboard-policy-view.test.ts` imports) and expose it as
+    `window.applyRedaction`. Components that previously inlined this
+    function now use the global, so the dashboard UI and the tests
+    exercise byte-identical logic. Markers are `{ _redacted: true }`
+    objects (not `'[REDACTED]'` strings) for full-object redaction —
+    components that render must detect and convert at the view layer.
+  -->
+  <script type="module">
+    import { applyRedaction } from './lib/apply-redaction.js';
+    window.applyRedaction = applyRedaction;
+  </script>
+
   <script type="text/babel" data-presets="react" src="demo-data.js"></script>
   <script type="text/babel" data-presets="react" src="ClusterTruthInspector.jsx"></script>
   <script type="text/babel" data-presets="react">

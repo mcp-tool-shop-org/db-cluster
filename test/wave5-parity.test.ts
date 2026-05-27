@@ -21,24 +21,27 @@ describe('Wave 5 — MCP / SDK Parity', () => {
         mkdirSync(TEST_DIR, { recursive: true });
         sdk = new ClusterSDK({ clusterDir: TEST_DIR });
 
-        // Seed data via SDK so both surfaces have something to query
-        await sdk.proposeMutation({
+        // Seed data via SDK so both surfaces have something to query.
+        // Wave A2 removed SDK auto-walk (KERNEL-R002) — explicit lifecycle.
+        const cmd1 = await sdk.proposeMutation({
             verb: 'create_entity',
             targetStore: 'canonical',
             payload: { kind: 'document', name: 'Alpha Report', attributes: { topic: 'parity-testing' } },
             proposedBy: 'test-setup',
-        }).then(async (cmd) => {
-            await sdk.commitMutation(cmd.id, 'test-setup');
         });
+        await sdk.validateMutation(cmd1.id);
+        await sdk.approveMutation(cmd1.id, 'setup-approver');
+        await sdk.commitMutation(cmd1.id, 'test-setup');
 
-        await sdk.proposeMutation({
+        const cmd2 = await sdk.proposeMutation({
             verb: 'create_entity',
             targetStore: 'canonical',
             payload: { kind: 'task', name: 'Beta Task', attributes: { topic: 'parity-testing' } },
             proposedBy: 'test-setup',
-        }).then(async (cmd) => {
-            await sdk.commitMutation(cmd.id, 'test-setup');
         });
+        await sdk.validateMutation(cmd2.id);
+        await sdk.approveMutation(cmd2.id, 'setup-approver');
+        await sdk.commitMutation(cmd2.id, 'test-setup');
     });
 
     afterEach(() => {
@@ -191,6 +194,8 @@ describe('Wave 5 — MCP / SDK Parity', () => {
                 payload: { kind: 'note', name: 'Commit Parity', attributes: {} },
                 proposedBy: 'parity-test',
             });
+            await sdk.validateMutation(cmd.id);
+            await sdk.approveMutation(cmd.id, 'parity-approver');
 
             const mcpResult = await handleTool('cluster_commit_mutation', { commandId: cmd.id, actorId: 'parity-test' }, sdk) as any;
 
@@ -319,6 +324,8 @@ describe('Wave 5 — MCP / SDK Parity', () => {
                 payload: { kind: 'note', name: 'Receipt Parity', attributes: {} },
                 proposedBy: 'parity-test',
             });
+            await sdk.validateMutation(cmd.id);
+            await sdk.approveMutation(cmd.id, 'approver');
 
             // Commit through MCP
             const mcpResult = await handleTool('cluster_commit_mutation', { commandId: cmd.id, actorId: 'mcp-actor' }, sdk) as any;
@@ -331,13 +338,15 @@ describe('Wave 5 — MCP / SDK Parity', () => {
         });
 
         it('MCP list_receipts returns same receipts as SDK', async () => {
-            // Create a committed command first
+            // Create a committed command first — full lifecycle since Wave A2 removed auto-walk.
             const cmd = await sdk.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
                 payload: { kind: 'note', name: 'List Receipts Parity', attributes: {} },
                 proposedBy: 'parity-test',
             });
+            await sdk.validateMutation(cmd.id);
+            await sdk.approveMutation(cmd.id, 'approver');
             await sdk.commitMutation(cmd.id, 'test-actor');
 
             const sdkReceipts = await sdk.listReceipts({});
@@ -406,7 +415,7 @@ describe('Wave 5 — MCP / SDK Parity', () => {
 
     describe('Parity 10: artifact sanitization preserves owner-store truth', () => {
         it('MCP strips content but SDK still has it', async () => {
-            // Ingest an artifact through SDK
+            // Ingest an artifact through SDK — full lifecycle (Wave A2: auto-walk removed).
             const cmd = await sdk.proposeMutation({
                 verb: 'ingest_artifact',
                 targetStore: 'artifact',
@@ -418,6 +427,8 @@ describe('Wave 5 — MCP / SDK Parity', () => {
                 },
                 proposedBy: 'parity-test',
             });
+            await sdk.validateMutation(cmd.id);
+            await sdk.approveMutation(cmd.id, 'parity-approver');
             await sdk.commitMutation(cmd.id, 'parity-test');
 
             // Retrieve via MCP — content should be sanitized

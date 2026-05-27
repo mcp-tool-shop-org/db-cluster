@@ -29,6 +29,7 @@ async function main() {
         proposedBy: 'example',
     });
     await sdk.validateMutation(artifactCmd.id);
+    await sdk.approveMutation(artifactCmd.id, 'example-approver', 'auto-approved in example');
     const { receipt: artifactReceipt } = await sdk.commitMutation(artifactCmd.id, 'example');
     const artifactId = artifactReceipt.affectedIds[0];
     console.log('Artifact ingested:', artifactId);
@@ -45,6 +46,7 @@ async function main() {
         proposedBy: 'example',
     });
     await sdk.validateMutation(entityCmd.id);
+    await sdk.approveMutation(entityCmd.id, 'example-approver', 'auto-approved in example');
     const { receipt: entityReceipt } = await sdk.commitMutation(entityCmd.id, 'example');
     const entityId = entityReceipt.affectedIds[0];
     console.log('Entity created:', entityId);

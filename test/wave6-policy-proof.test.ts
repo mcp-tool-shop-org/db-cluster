@@ -109,12 +109,30 @@ const visibilityRules: VisibilityRule[] = [
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function makeStores(): ClusterStores {
-    return createLocalCluster(mkdtempSync(join(tmpdir(), 'wave6-proof-')));
+/**
+ * Create a fresh cluster on disk and return both the stores and the data
+ * directory. Tests that build multiple kernel instances against the same
+ * cluster MUST pass that same dataDir into every makeKernel() call — the
+ * CommandQueue persists to dataDir/commands.json, so different kernels
+ * with no dataDir would maintain divergent in-memory command queues even
+ * though they share the four backing stores. This matters more after Wave
+ * A2 removed the _kernel bypass: previously a single restrictedK would
+ * use `_kernel.proposeMutation` to put a command in its own queue and
+ * then assert against restrictedK.inspectCommand; that worked. Now we
+ * need to seed via admin AND have restricted see the same command, which
+ * only happens if the command queue is shared (i.e., on disk).
+ */
+function makeStoresWithDir(): { stores: ClusterStores; dataDir: string } {
+    const dataDir = mkdtempSync(join(tmpdir(), 'wave6-proof-'));
+    return { stores: createLocalCluster(dataDir), dataDir };
 }
 
-function makeKernel(stores: ClusterStores, principal: Principal): PolicyEnforcedKernel {
-    return new PolicyEnforcedKernel(stores, { principal }, { policies, trustZones, visibilityRules });
+function makeStores(): ClusterStores {
+    return makeStoresWithDir().stores;
+}
+
+function makeKernel(stores: ClusterStores, principal: Principal, dataDir?: string): PolicyEnforcedKernel {
+    return new PolicyEnforcedKernel(stores, { principal }, { policies, trustZones, visibilityRules, dataDir });
 }
 
 function makeSDK(): ClusterSDK {
@@ -135,7 +153,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('inspectEntity throws PolicyDeniedError for index-only principal', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            const { entity } = await adminK._kernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'concept', name: 'Proof1Entity', attributes: { sensitive: 'data' }, actorId: 'admin-1',
             });
 
@@ -146,7 +164,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('traceObject throws PolicyDeniedError for index-only principal', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            const { entity } = await adminK._kernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'concept', name: 'Proof1Trace', attributes: {}, actorId: 'admin-1',
             });
 
@@ -157,7 +175,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('why() throws PolicyDeniedError for index-only principal', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            const { entity } = await adminK._kernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'concept', name: 'Proof1Why', attributes: {}, actorId: 'admin-1',
             });
 
@@ -168,7 +186,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('PolicyDeniedError does not contain entity data', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            await adminK._kernel.createEntity({
+            await adminK.createEntity({
                 kind: 'concept', name: 'SecretName', attributes: { password: 'hunter2' }, actorId: 'admin-1',
             });
 
@@ -193,7 +211,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('findSources for index-only filters BOTH canonical entities AND their backing index records', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            await adminK._kernel.createEntity({
+            await adminK.createEntity({
                 kind: 'concept', name: 'Derivative Test', attributes: { secret: 'value' }, actorId: 'admin-1',
             });
 
@@ -212,7 +230,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('index-only principal cannot escalate from index to owner truth', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            const { entity } = await adminK._kernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'concept', name: 'Index Only Proof', attributes: { classified: 'top-secret' }, actorId: 'admin-1',
             });
 
@@ -235,10 +253,10 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('findSources excludes entities denied by policy', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            await adminK._kernel.createEntity({
+            await adminK.createEntity({
                 kind: 'concept', name: 'Visible Entity', attributes: {}, actorId: 'admin-1',
             });
-            await adminK._kernel.createEntity({
+            await adminK.createEntity({
                 kind: 'secret', name: 'Hidden Entity', attributes: {}, actorId: 'admin-1',
             });
 
@@ -251,7 +269,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('listStaleRecords does not expose secret entity source IDs', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            const { entity } = await adminK._kernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'secret', name: 'Stale Secret', attributes: {}, actorId: 'admin-1',
             });
 
@@ -294,7 +312,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('restricted reader trace graph still has nodes and edges', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            const { entity } = await adminK._kernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'concept', name: 'Trace Target', attributes: { x: 1 }, actorId: 'admin-1',
             });
 
@@ -312,7 +330,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('ai-facing zone redacts provenance actors from metadata', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            const { entity } = await adminK._kernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'concept', name: 'Actor Hidden', attributes: {}, actorId: 'admin-1',
             });
 
@@ -339,7 +357,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('restricted reader receipts have id, commandId, committedAt but stripped details', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            await adminK._kernel.createEntity({
+            await adminK.createEntity({
                 kind: 'concept', name: 'Receipt Audit', attributes: { data: 'sensitive' }, actorId: 'admin-1',
             });
 
@@ -362,18 +380,23 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         });
 
         it('restricted reader commands have metadata but stripped payload', async () => {
-            const stores = makeStores();
-            const restrictedK = makeKernel(stores, restricted);
-            // Use full command lifecycle so command is stored in memory
-            // (KERNEL-006: validate is required before commit at the kernel layer)
-            const cmd = await restrictedK._kernel.proposeMutation({
+            // Shared dataDir so adminK + restrictedK see the same command queue.
+            const { stores, dataDir } = makeStoresWithDir();
+            const adminK = makeKernel(stores, admin, dataDir);
+            const restrictedK = makeKernel(stores, restricted, dataDir);
+            // Seed via admin since restricted has no propose_mutation /
+            // commit_command. (Previously used restrictedK._kernel to bypass;
+            // _kernel was removed in Wave A2.) Use full command lifecycle so
+            // the command is persisted (KERNEL-006: validate is required
+            // before commit at the kernel layer).
+            const cmd = await adminK.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
                 payload: { kind: 'concept', name: 'Command Audit', attributes: { secret: 'payload' } },
                 proposedBy: 'admin-1',
             });
-            await restrictedK._kernel.validateMutation(cmd.id);
-            await restrictedK._kernel.commitMutation(cmd.id, 'admin-1');
+            await adminK.validateMutation(cmd.id);
+            await adminK.commitMutation(cmd.id, 'admin-1');
 
             const command = await restrictedK.inspectCommand(cmd.id);
 
@@ -521,13 +544,13 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('proposer CANNOT approve', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            const command = await adminK._kernel.proposeMutation({
+            const command = await adminK.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
                 payload: { kind: 'concept', name: 'ApproveTest', attributes: {} },
                 proposedBy: 'admin-1',
             });
-            await adminK._kernel.validateMutation(command.id);
+            await adminK.validateMutation(command.id);
 
             const propK = makeKernel(stores, proposer);
             await expect(propK.approveMutation(command.id, 'proposer-1')).rejects.toThrow(PolicyDeniedError);
@@ -536,14 +559,14 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('proposer CANNOT commit', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            const command = await adminK._kernel.proposeMutation({
+            const command = await adminK.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
                 payload: { kind: 'concept', name: 'CommitTest', attributes: {} },
                 proposedBy: 'admin-1',
             });
-            await adminK._kernel.validateMutation(command.id);
-            await adminK._kernel.approveMutation(command.id, 'admin-1');
+            await adminK.validateMutation(command.id);
+            await adminK.approveMutation(command.id, 'admin-1');
 
             const propK = makeKernel(stores, proposer);
             await expect(propK.commitMutation(command.id, 'proposer-1')).rejects.toThrow(PolicyDeniedError);
@@ -552,10 +575,10 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('proposer CANNOT compensate', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            const { entity } = await adminK._kernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'concept', name: 'CompensateTest', attributes: {}, actorId: 'admin-1',
             });
-            const receipts = await adminK._kernel.listReceipts({});
+            const receipts = await adminK.listReceipts({});
             const commandId = receipts[0].commandId;
 
             const propK = makeKernel(stores, proposer);
@@ -569,16 +592,19 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
 
     describe('Proof 9: Approver can approve but cannot bypass command law', () => {
         it('approver can approve a validated command', async () => {
-            const stores = makeStores();
-            const appK = makeKernel(stores, approver);
-            // Seed command via same kernel's internal ClusterKernel
-            const command = await appK._kernel.proposeMutation({
+            // Shared dataDir so admin's command is visible to approver's kernel.
+            const { stores, dataDir } = makeStoresWithDir();
+            const adminK = makeKernel(stores, admin, dataDir);
+            const appK = makeKernel(stores, approver, dataDir);
+            // Seed command via the admin kernel since approver has no
+            // propose_mutation; the _kernel bypass was removed in Wave A2.
+            const command = await adminK.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
                 payload: { kind: 'concept', name: 'ApproveMe', attributes: {} },
                 proposedBy: 'admin-1',
             });
-            await appK._kernel.validateMutation(command.id);
+            await adminK.validateMutation(command.id);
 
             const approved = await appK.approveMutation(command.id, 'approver-1', 'looks good');
             expect(approved.status).toBe('approved');
@@ -586,31 +612,33 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         });
 
         it('approver can reject a command', async () => {
-            const stores = makeStores();
-            const appK = makeKernel(stores, approver);
-            const command = await appK._kernel.proposeMutation({
+            const { stores, dataDir } = makeStoresWithDir();
+            const adminK = makeKernel(stores, admin, dataDir);
+            const appK = makeKernel(stores, approver, dataDir);
+            const command = await adminK.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
                 payload: { kind: 'concept', name: 'RejectMe', attributes: {} },
                 proposedBy: 'admin-1',
             });
-            await appK._kernel.validateMutation(command.id);
+            await adminK.validateMutation(command.id);
 
             const rejected = await appK.rejectMutation(command.id, 'approver-1', 'not needed');
             expect(rejected.status).toBe('rejected');
         });
 
         it('approver CANNOT commit — policy prevents bypassing lifecycle', async () => {
-            const stores = makeStores();
-            const appK = makeKernel(stores, approver);
-            const command = await appK._kernel.proposeMutation({
+            const { stores, dataDir } = makeStoresWithDir();
+            const adminK = makeKernel(stores, admin, dataDir);
+            const appK = makeKernel(stores, approver, dataDir);
+            const command = await adminK.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
                 payload: { kind: 'concept', name: 'CommitBypass', attributes: {} },
                 proposedBy: 'admin-1',
             });
-            await appK._kernel.validateMutation(command.id);
-            await appK._kernel.approveMutation(command.id, 'admin-1');
+            await adminK.validateMutation(command.id);
+            await adminK.approveMutation(command.id, 'admin-1');
 
             await expect(appK.commitMutation(command.id, 'approver-1')).rejects.toThrow(PolicyDeniedError);
         });
@@ -618,7 +646,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('approver CANNOT read owner truth directly', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            const { entity } = await adminK._kernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'concept', name: 'OwnerTruth', attributes: {}, actorId: 'admin-1',
             });
 
@@ -646,7 +674,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('owner truth: entity lives in canonical store', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            const { entity } = await adminK._kernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'concept', name: 'Owner Truth', attributes: { x: 1 }, actorId: 'admin-1',
             });
 
@@ -659,25 +687,28 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('index derivation: index is derivative of canonical', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            await adminK._kernel.createEntity({
+            await adminK.createEntity({
                 kind: 'concept', name: 'Index Derives', attributes: {}, actorId: 'admin-1',
             });
 
             // This proof is about cluster doctrine — "the index is a derivative
-            // store, sourced from canonical." That's a property of the kernel
-            // layer, not of the policy layer. Use the underlying kernel here
-            // (admin already has full access; the policy layer adds visibility
-            // filtering that's tested separately in Proof 2/3 above).
-            const result = await adminK._kernel.findSources({ query: 'Index Derives' });
-            expect(result.indexRecords.length).toBeGreaterThan(0);
-            expect(result.indexRecords[0].owner).toBe('index');
-            expect(result.indexRecords[0].sourceStore).toBe('canonical');
+            // store, sourced from canonical." That's a property of the storage
+            // layer, not of the policy layer. Read directly from the index
+            // store. (Previously this used adminK._kernel.findSources to
+            // bypass the policy/visibility layer; the _kernel getter was
+            // removed in Wave A2 / KERNEL-R003. Going to the store directly
+            // is the principled replacement — the question being asked is
+            // about doctrine, not about what a policy-bound caller sees.)
+            const records = await stores.index.search({ text: 'Index Derives' });
+            expect(records.length).toBeGreaterThan(0);
+            expect(records[0].owner).toBe('index');
+            expect(records[0].sourceStore).toBe('canonical');
         });
 
         it('provenance graph: entity creation produces provenance trail', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            const { entity } = await adminK._kernel.createEntity({
+            const { entity } = await adminK.createEntity({
                 kind: 'concept', name: 'Provenance Law', attributes: {}, actorId: 'admin-1',
             });
 
@@ -737,7 +768,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
         it('receipts: every commit produces a receipt in the ledger', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
-            await adminK._kernel.createEntity({
+            await adminK.createEntity({
                 kind: 'concept', name: 'Receipt Law', attributes: {}, actorId: 'admin-1',
             });
 

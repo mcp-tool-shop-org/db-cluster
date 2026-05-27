@@ -100,10 +100,14 @@ export class ClusterKernel implements ClusterKernelInterface {
     /**
      * Best-effort record an `mutation_orphaned` ledger event when the
      * post-mutation provenance/receipt sequence fails after the store has
-     * already mutated. We swallow secondary failures here — if the ledger
-     * itself is the failing component, there is no place to record the
-     * orphan. The caller then throws {@link ReceiptFailedError} so the
-     * audit lens sees both the cause and the orphan record (if any).
+     * already mutated. If the ledger itself is the failing component there
+     * is no place to record the orphan; in that case we log to stderr so
+     * operators get a signal (KERNEL-R009 — prior implementation swallowed
+     * silently and no `ops/` consumer ever sees the orphan when the ledger
+     * is broken). The caller then throws {@link ReceiptFailedError}; we
+     * attach the orphan-write failure as a `secondaryError` field on
+     * `(cause as any)` so the cause chain surfaces both faults to whatever
+     * lens unpacks the error.
      */
     private async recordOrphanMutation(
         subjectId: string,
@@ -126,8 +130,29 @@ export class ClusterKernel implements ClusterKernelInterface {
                     errorName: cause.name,
                 },
             );
-        } catch {
-            // Secondary failure — nothing we can do safely here.
+        } catch (orphanErr) {
+            // Secondary failure — the ledger itself is unhealthy. We cannot
+            // record the orphan but we MUST surface a signal: silent swallowing
+            // is what KERNEL-R009 fixed. Two prongs:
+            //  1. Log to stderr with a stable prefix `[db-cluster]` so
+            //     operator log shippers can pattern-match.
+            //  2. Attach the secondary failure to the primary cause so any
+            //     downstream `(err as ReceiptFailedError).cause` inspection
+            //     can also reach the orphan-write failure.
+            const message = orphanErr instanceof Error ? orphanErr.message : String(orphanErr);
+            // eslint-disable-next-line no-console
+            console.error(
+                `[db-cluster] Failed to record orphan mutation for ` +
+                    `${subjectStore}/${subjectId}` +
+                    `${commandId ? ` (command ${commandId})` : ''}: ${message}`,
+            );
+            try {
+                (cause as Error & { secondaryError?: Error }).secondaryError =
+                    orphanErr instanceof Error ? orphanErr : new Error(String(orphanErr));
+            } catch {
+                // Defensive: if the cause object is frozen we still have the
+                // stderr signal above.
+            }
         }
     }
 
@@ -546,7 +571,18 @@ export class ClusterKernel implements ClusterKernelInterface {
                 break;
             }
             case 'reindex': {
-                resultSummary = 'Reindex requested';
+                // KERNEL-R008: prior implementation was a no-op — it set
+                // `resultSummary` and `primarySubjectStore` but never touched
+                // the index. The arm now invokes the shared rebuild helper
+                // ({@link performIndexRebuild}) so the actual rebuild work
+                // happens. The surrounding `commitMutation` flow emits the
+                // single `mutation_committed` provenance + receipt; we do
+                // NOT call {@link rebuildIndex} here because that would
+                // double-emit (its own provenance/receipt sequence runs
+                // independently of this commit flow).
+                const rebuilt = await this.performIndexRebuild();
+                affectedIds.push('index');
+                resultSummary = `Index rebuilt: ${rebuilt} records from owner stores`;
                 primarySubjectStore = 'index';
                 break;
             }
@@ -769,11 +805,16 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Rebuild the index from owner stores (canonical, artifact, ledger).
-     * Clears the entire index, then re-derives from source truth.
-     * Returns the count of records rebuilt.
+     * Internal index rebuild — clears the index and re-derives from canonical
+     * + artifact source truth. Returns the count of records rebuilt.
+     *
+     * Factored out of {@link rebuildIndex} so that the `'reindex'` arm of
+     * {@link commitMutation} can perform the actual rebuild work without
+     * double-emitting provenance/receipt (KERNEL-R008). The two call sites
+     * share this helper for the truth-mutation phase and emit their own
+     * surrounding provenance/receipt sequence.
      */
-    async rebuildIndex(actorId: string): Promise<{ rebuilt: number; provenance: ProvenanceEvent; receipt: Receipt }> {
+    private async performIndexRebuild(): Promise<number> {
         // NOTE: see STORES-008 — clear-then-rebuild leaves an empty index window
         // on mid-rebuild crash. That hazard is owned by ops/rebuild.ts /
         // IndexStore contract changes (out of scope for the kernel agent).
@@ -809,6 +850,17 @@ export class ClusterKernel implements ClusterKernelInterface {
             });
             rebuilt++;
         }
+
+        return rebuilt;
+    }
+
+    /**
+     * Rebuild the index from owner stores (canonical, artifact, ledger).
+     * Clears the entire index, then re-derives from source truth.
+     * Returns the count of records rebuilt.
+     */
+    async rebuildIndex(actorId: string): Promise<{ rebuilt: number; provenance: ProvenanceEvent; receipt: Receipt }> {
+        const rebuilt = await this.performIndexRebuild();
 
         // Provenance + synthetic command persistence + receipt
         // (see KERNEL-002, KERNEL-005). Index mutation has already happened

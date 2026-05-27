@@ -109,6 +109,54 @@ export function redactReceipt(receipt: Receipt, rules: RedactionRule[]): Receipt
     }
 }
 
+// ─── Provenance event redaction (single event, not graph) ─────────────────
+
+/**
+ * Redact a single ProvenanceEvent surfaced through {@link
+ * import('../kernel/cluster-kernel.js').ClusterKernel.explainIndex} when
+ * the index record points at a ledger source. The shape parallels
+ * {@link redactEntity}: we strip leaky fields based on rules but keep the
+ * audit-essential identifiers (id, action, timestamp, subjectId,
+ * subjectStore). KERNEL-R005.
+ *
+ * Rules consulted:
+ * - `command_payload` → strips the `detail.payload` and `detail.commandId`
+ *   fields (these mirror the original command payload through the ledger).
+ * - `provenance_actors` → masks `actorId`.
+ * - `receipt_details` → strips the full `detail` object (the most aggressive).
+ *
+ * If no rule fires, the event is returned unchanged.
+ */
+export function redactProvenanceEvent(
+    event: import('../types/provenance-event.js').ProvenanceEvent,
+    rules: RedactionRule[],
+): import('../types/provenance-event.js').ProvenanceEvent {
+    if (rules.length === 0) return event;
+
+    let detail = event.detail;
+    let actorId = event.actorId;
+
+    const receiptRule = rules.find((r) => r.target === 'receipt_details');
+    const payloadRule = rules.find((r) => r.target === 'command_payload');
+    const actorRule = rules.find((r) => r.target === 'provenance_actors');
+
+    if (receiptRule) {
+        // Aggressive: drop the whole detail object.
+        detail = {};
+    } else if (payloadRule) {
+        const next: Record<string, unknown> = { ...detail };
+        if ('payload' in next) delete next.payload;
+        if ('commandId' in next) delete next.commandId;
+        detail = next;
+    }
+
+    if (actorRule) {
+        actorId = actorRule.behavior === 'strip' ? '' : REDACTED;
+    }
+
+    return { ...event, actorId, detail };
+}
+
 // ─── Provenance actor redaction ────────────────────────────────────────────
 
 export function redactProvenanceActors(graph: ProvenanceGraph, rules: RedactionRule[]): ProvenanceGraph {

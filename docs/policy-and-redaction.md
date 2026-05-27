@@ -9,12 +9,31 @@ Every actor in the system is a `Principal`:
 ```typescript
 interface Principal {
     id: string;
+    name: string;
+    roles: string[];
     trustZone: string;
-    capabilities: Capability[];
+    metadata?: Record<string, unknown>;
 }
 
-type Capability = 'read' | 'write' | 'propose' | 'approve' | 'admin';
+type Capability =
+    | 'discover_existence'    // can see that an object exists in search/index
+    | 'read_owner_truth'      // can read the full object from its owner store
+    | 'read_derivative'       // can read index/derivative records
+    | 'trace_provenance'      // can walk provenance graph
+    | 'propose_mutation'      // can propose a command (writes nothing)
+    | 'validate_command'      // can trigger validation on a proposed command
+    | 'approve_command'       // can approve a validated command
+    | 'reject_command'        // can reject a command
+    | 'commit_command'        // can commit a validated/approved command (writes truth)
+    | 'compensate_command'    // can compensate a committed command
+    | 'read_receipts'         // can read mutation receipts
+    | 'read_command'          // can inspect command lifecycle state
+    | 'explain_retrieval';    // can see retrieval explanation / stale warnings
 ```
+
+Capabilities are granted via `roles`. Roles are defined separately (each role
+bundles a `capabilities: Capability[]` plus a `scope`), so principals carry
+named roles rather than raw capability lists.
 
 ## Trust zones
 
@@ -102,25 +121,25 @@ When `visible: false`, the object is completely excluded from results — `find`
 
 ```bash
 # Explain what policy decides for a principal
-db-cluster policy explain --principal '{"id":"agent","trustZone":"agent","capabilities":["read","propose"]}'
+db-cluster policy explain --principal '{"id":"agent","name":"Agent","roles":["reader"],"trustZone":"agent"}' --resource 'cluster://canonical/entity-id'
 
 # Test a specific action
-db-cluster policy test --principal '{"id":"agent","trustZone":"agent","capabilities":["read"]}' --verb read --store canonical
+db-cluster policy test --principal '{"id":"agent","name":"Agent","roles":["reader"],"trustZone":"agent"}' --capability read_owner_truth --store canonical
 ```
 
 ## SDK
 
 ```typescript
 const explanation = sdk.policyExplain({
-    principal: { id: 'agent', trustZone: 'agent', capabilities: ['read', 'propose'] },
+    principal: { id: 'agent', name: 'Agent', roles: ['reader'], trustZone: 'agent' },
     resource: 'cluster://canonical/entity-id',
 });
 
 const test = sdk.policyTest({
-    principal: { id: 'external', trustZone: 'external', capabilities: ['read'] },
+    principal: { id: 'external', name: 'External', roles: ['reader'], trustZone: 'external' },
     actions: [
-        { verb: 'read', store: 'canonical' },
-        { verb: 'write', store: 'canonical' },
+        { capability: 'read_owner_truth', store: 'canonical' },
+        { capability: 'commit_command', store: 'canonical' },
     ],
 });
 // test.results[0].decision === 'allow'
@@ -130,11 +149,11 @@ const test = sdk.policyTest({
 ## MCP
 
 ```json
-{"tool": "cluster_policy_explain", "arguments": {"principal": {"id": "agent", "trustZone": "agent", "capabilities": ["read"]}, "resource": "cluster://canonical/..."}}
+{"tool": "cluster_policy_explain", "arguments": {"principal": {"id": "agent", "name": "Agent", "roles": ["reader"], "trustZone": "agent"}, "resource": "cluster://canonical/..."}}
 ```
 
 ```json
-{"tool": "cluster_policy_test", "arguments": {"principal": {"id": "agent", "trustZone": "agent", "capabilities": ["read", "propose"]}, "actions": [{"verb": "read", "store": "canonical"}]}}
+{"tool": "cluster_policy_test", "arguments": {"principal": {"id": "agent", "name": "Agent", "roles": ["reader", "proposer"], "trustZone": "agent"}, "actions": [{"capability": "read_owner_truth", "store": "canonical"}]}}
 ```
 
 ## Enforcement layers

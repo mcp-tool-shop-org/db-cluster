@@ -197,10 +197,7 @@ program
         const filename = file.split(/[/\\]/).pop()!;
         const mimeType = guessMime(filename);
 
-        // PolicyEnforcedKernel does not expose ingestArtifact today (KERNEL-001).
-        // Fall back to the underlying ClusterKernel when policy-enforced.
-        const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
-        const result = await underlying.ingestArtifact({
+        const result = await kernel.ingestArtifact({
             filename,
             content,
             mimeType,
@@ -229,8 +226,7 @@ entity
         const operator = resolveOperator(rootActor());
         const attributes = safeJsonParse(opts.attr, '--attr');
 
-        const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
-        const result = await underlying.createEntity({
+        const result = await kernel.createEntity({
             kind: opts.kind,
             name: opts.name,
             attributes,
@@ -253,8 +249,7 @@ program
         const kernel = getKernel();
         const operator = resolveOperator(rootActor());
 
-        const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
-        const result = await underlying.linkEvidence({
+        const result = await kernel.linkEvidence({
             artifactId: opts.artifact,
             entityId: opts.entity,
             actorId: operator.actorId,
@@ -301,9 +296,7 @@ program
         const kernel = getKernel();
 
         try {
-            // inspectEntity is on the underlying kernel (KERNEL-001 — not wrapped).
-            const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
-            const entity = await underlying.inspectEntity(entityId);
+            const entity = await kernel.inspectEntity(entityId);
             console.log(`Entity: ${entity.kind}/${entity.name}`);
             console.log(`  id:         ${entity.id}`);
             console.log(`  owner:      ${entity.owner}`);
@@ -350,16 +343,16 @@ program
 
         try {
             // Inspect the command to see who proposed it and its current state.
-            const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
-            const proposed = await underlying.inspectCommand(commandId).catch(() => null);
+            // SURFACE-005 self-approve guard fires before any lifecycle write.
+            const proposed = await kernel.inspectCommand(commandId).catch(() => null);
             const proposer = proposed?.proposedBy;
             checkSelfApproval(proposer, operator, !!opts.selfApprove);
 
-            // Kernel now requires `validated` or `approved` before commit (KERNEL-006 fix).
-            // Walk the lifecycle from whatever state the command is in to "approved".
-            // Operators who want to inspect intermediate states can call `validate` /
-            // `approve` explicitly; the CLI's `commit` verb stays a one-shot for
-            // ergonomic parity with the single-user local flow.
+            // KERNEL-R002 fix: the CLI now explicitly chains validate → approve →
+            // commit. The SDK's commitMutation no longer auto-walks; callers must
+            // sequence the lifecycle themselves so separation of duties is visible
+            // at every layer above the kernel. The self-approve guard above is
+            // the operator-identity check; this section just orders the writes.
             if (proposed && proposed.status === 'proposed') {
                 await kernel.validateMutation(commandId);
                 await kernel.approveMutation(commandId, operator.actorId);
@@ -412,8 +405,7 @@ program
         const kernel = getKernel();
         const operator = resolveOperator(rootActor());
         try {
-            const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
-            const proposed = await underlying.inspectCommand(commandId).catch(() => null);
+            const proposed = await kernel.inspectCommand(commandId).catch(() => null);
             const proposer = proposed?.proposedBy;
             checkSelfApproval(proposer, operator, !!opts.selfApprove);
 
@@ -529,8 +521,7 @@ index
     .description('Show index status and staleness estimate')
     .action(async () => {
         const kernel = getKernel();
-        const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
-        const status = await underlying.indexStatus();
+        const status = await kernel.indexStatus();
         console.log(`Index status:`);
         console.log(`  total records: ${status.total}`);
         console.log(`  expected:      ${status.expectedTotal}`);
@@ -680,8 +671,7 @@ program
         if (opts.graph) {
             console.log(JSON.stringify(graph, null, 2));
         } else {
-            const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
-            console.log(underlying.explainTrace(graph));
+            console.log(kernel.explainTrace(graph));
         }
     });
 
@@ -709,8 +699,7 @@ program
             includeReceipts: true,
             includeGaps: true,
         });
-        const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
-        console.log(underlying.explainTrace(graph));
+        console.log(kernel.explainTrace(graph));
     });
 
 // --- trace-bundle ---
@@ -723,15 +712,14 @@ program
     .action(async (query: string, opts: { limit: string; direction: string; graph: boolean }) => {
         const kernel = getKernel();
         const bundle = await kernel.retrieveBundle(query, { limit: parseInt(opts.limit) });
-        const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
-        const graph = await underlying.traceBundle(bundle, {
+        const graph = await kernel.traceBundle(bundle, {
             direction: opts.direction as 'backward' | 'forward' | 'bidirectional',
         });
 
         if (opts.graph) {
             console.log(JSON.stringify(graph, null, 2));
         } else {
-            console.log(underlying.explainTrace(graph));
+            console.log(kernel.explainTrace(graph));
         }
     });
 

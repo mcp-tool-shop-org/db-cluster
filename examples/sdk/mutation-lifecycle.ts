@@ -26,6 +26,7 @@ async function main() {
         proposedBy: 'architect',
     });
     await sdk.validateMutation(seedCmd.id);
+    await sdk.approveMutation(seedCmd.id, 'architect-approver', 'auto-approved in example seed');
     const { receipt: seedReceipt } = await sdk.commitMutation(seedCmd.id, 'architect');
     const entityId = seedReceipt.affectedIds[0];
     console.log('Entity created:', entityId);

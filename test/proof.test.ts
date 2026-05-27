@@ -438,18 +438,35 @@ describe('Wave 5 — Proof Tests', () => {
             expect(updateAfter).toHaveLength(0);
 
             // The index still has the OLD text (`drifted: Original`) but the
-            // canonical entity now reads "Drifted" — verify() should surface
-            // this as a stale index entry, an orphan, or both.
+            // canonical entity now reads "Drifted" — verify() builds the
+            // expected text as `${entity.kind}: ${entity.name}` and searches
+            // the index for it; the old index entry doesn't match so the
+            // index_references_valid check flips to 'stale'.
+            //
+            // TESTS-R008: was a loose `checks.some(c => c.status !== 'healthy')`.
+            // Any future regression that flipped an UNRELATED check (e.g.
+            // provenance_references_valid going stale for a different reason)
+            // would silently pass this test. Now we pin the SPECIFIC check
+            // expected to fire, and additionally assert the other checks
+            // remain healthy — so we're catching the actual drift, not a
+            // sibling bug.
             const { verify } = await import('../src/ops/verify.js');
             const health = await verify(cluster);
 
-            // Aggregate health must not be a clean "healthy".
-            // (`buildClusterHealth` derives an overall status from the per-check
-            // statuses; any non-healthy check should push aggregate off `healthy`.)
-            const hasUnhealthyCheck = health.checks.some((c) =>
-                c.status === 'stale' || c.status === 'corrupt' || c.status === 'unreachable',
-            );
-            expect(hasUnhealthyCheck).toBe(true);
+            const indexCheck = health.checks.find((c) => c.name === 'index_references_valid');
+            expect(indexCheck, 'verify() must include the index_references_valid check').toBeDefined();
+            expect(indexCheck!.status).toBe('stale');
+
+            // The other checks should still be healthy — proves we're catching
+            // the drift (canonical-vs-index mismatch) and not picking up an
+            // unrelated regression.
+            const otherChecks = health.checks.filter((c) => c.name !== 'index_references_valid');
+            for (const c of otherChecks) {
+                expect(
+                    c.status,
+                    `Unrelated check ${c.name} flipped to ${c.status} — drift test may be catching the wrong bug`,
+                ).toBe('healthy');
+            }
         });
     });
 

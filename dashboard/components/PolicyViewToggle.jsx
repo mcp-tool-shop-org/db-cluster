@@ -80,41 +80,33 @@ function PolicyViewToggle({ currentView, views, onViewChange, children }) {
 }
 
 /**
- * applyRedaction — filter DashboardObject fields for the given policy view.
- * Returns a copy with redacted paths replaced by '[REDACTED]'.
- * Source truth is never modified.
+ * `applyRedaction` is no longer inlined here (SURFACE-R010 fix).
+ *
+ * The canonical implementation lives at `dashboard/lib/apply-redaction.js`
+ * and is loaded by `dashboard/index.html` via a `<script type="module">`
+ * tag that assigns the export to `window.applyRedaction`. The dashboard
+ * UI and `test/dashboard-policy-view.test.ts` now exercise byte-identical
+ * logic — TESTS-004's "security boundary tests its own mirror" risk is
+ * closed.
+ *
+ * Note on the lib's contract: full-object redaction yields
+ * `{ _redacted: true }` (a structural object marker), NOT the string
+ * `'[REDACTED]'`. Field-level redaction yields the literal string
+ * `'[REDACTED]'`. Renderers that need to display a placeholder must
+ * detect `obj._redacted === true` at the view layer and emit their own
+ * string (typically `'[REDACTED]'`) for the human-readable surface.
+ *
+ * Renderer guidance — within JSX:
+ *
+ *   const redactedDisplay = obj && obj._redacted === true
+ *       ? '[REDACTED]'
+ *       : obj;
+ *
+ *   <pre>{JSON.stringify(redactedDisplay, null, 2)}</pre>
+ *
+ * This view-layer adapter is the responsibility of each component that
+ * renders a redacted DashboardObject; this file's component only renders
+ * the toggle UI and does not call `applyRedaction` itself.
  */
-function applyRedaction(dashObj, policyView) {
-    if (!dashObj || !policyView) return dashObj;
-
-    const copy = JSON.parse(JSON.stringify(dashObj));
-    const visible = new Set(policyView.visible);
-
-    // If the object's store isn't visible, redact everything
-    if (!visible.has(copy.ownerStore)) {
-        copy.object = '[REDACTED]';
-        copy.provenanceGraph = { nodes: [], edges: [], warnings: ['store not visible to this principal'] };
-        copy.receipts = [];
-        copy.warnings = [...copy.warnings, 'full object redacted for this view'];
-        return copy;
-    }
-
-    // Apply field-level redaction
-    for (const field of policyView.redacted) {
-        const [store, path] = field.split('.');
-        if (store === copy.ownerStore || (store === 'artifact' && copy.type === 'artifact')) {
-            if (path === '*') {
-                copy.object = '[REDACTED]';
-            } else if (copy.object && typeof copy.object === 'object') {
-                if (path in copy.object) {
-                    copy.object[path] = '[REDACTED]';
-                }
-            }
-        }
-    }
-
-    return copy;
-}
 
 window.PolicyViewToggle = PolicyViewToggle;
-window.applyRedaction = applyRedaction;

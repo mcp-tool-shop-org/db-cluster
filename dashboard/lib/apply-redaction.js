@@ -20,7 +20,7 @@
  *
  * The source object passed in is never mutated.
  *
- * @template {import('../../src/dashboard/dashboard-model.js').DashboardObject} T
+ * @template {import('../../dist/dashboard/dashboard-model.js').DashboardObject} T
  * @param {T} dashObj
  * @param {{
  *   principal: string,

@@ -3,12 +3,10 @@
  *
  * - CorruptStoreError — raised by load() when a persistence file fails JSON.parse
  *   or otherwise looks unreadable. Carries the file path and a recovery hint.
- * - InvalidContentHashError — raised by LocalArtifactStore.importSnapshot when
- *   the caller-supplied contentHash does not match the expected `[a-f0-9]{64}` shape.
- *   Prevents path traversal via tampered backup metadata (STORES-006).
- * - ImportSnapshotNotSupportedError — surfaced by ops/backup.ts (Surface domain)
- *   when an adapter does not implement the optional importSnapshot method. Defined
- *   here so adapter-side and surface-side code share a single error type.
+ * - InvalidContentHashError — raised by LocalArtifactStore.importSnapshot AND
+ *   LocalArtifactStore.getContent when the contentHash does not match the
+ *   expected `[a-f0-9]{64}` shape. Prevents path traversal via tampered backup
+ *   metadata or tampered artifacts.json (STORES-006 / STORES-R005).
  */
 
 export class CorruptStoreError extends Error {
@@ -44,17 +42,4 @@ export class InvalidContentHashError extends Error {
 
 export function isValidContentHash(hash: unknown): hash is string {
     return typeof hash === 'string' && CONTENT_HASH_PATTERN.test(hash);
-}
-
-export class ImportSnapshotNotSupportedError extends Error {
-    public readonly storeName: string;
-    constructor(storeName: string) {
-        super(
-            `Store ${storeName} does not implement importSnapshot. ` +
-                `Restore cannot preserve original IDs/timestamps on this backend. ` +
-                `Upgrade the adapter or use a backend that supports importSnapshot.`,
-        );
-        this.name = 'ImportSnapshotNotSupportedError';
-        this.storeName = storeName;
-    }
 }

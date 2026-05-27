@@ -75,10 +75,14 @@ db-cluster doctor
 ## Package exports
 
 ```typescript
-import { ClusterKernel, createLocalCluster } from 'db-cluster';
+import { createLocalCluster, createCluster, doctor, verify, backup, restore } from 'db-cluster';
 import { ClusterSDK } from 'db-cluster/sdk';
 import { PolicyEnforcedKernel } from 'db-cluster/policy';
 ```
+
+The raw `ClusterKernel` class is no longer publicly exported (KERNEL-013); drive
+the kernel via `ClusterSDK` (recommended) or `PolicyEnforcedKernel` for
+in-process callers that need policy-enforced direct kernel access.
 
 ## Postgres (optional)
 
@@ -87,7 +91,7 @@ Optional: Postgres canonical backend via `createCluster({ backends: { canonical:
 
 ## Status
 
-15 development phases complete. <!-- TODO: update test count after Wave A1 (pre-Wave-A1 baseline: 614 tests passing) --> 614+ tests passing as of pre-Wave-A1 baseline. Integration gate with repo-knowledge proven. Package boundary deliberate and documented. Dogfood-swarm Stage A surfaced and corrected drift across CI, examples, and docs.
+15 development phases complete. 623+ tests passing (post-Wave-A2 count finalized in the amend report). Integration gate with repo-knowledge proven. Package boundary deliberate and documented. Dogfood-swarm Stage A surfaced and corrected drift across CI, examples, and docs through two amend waves (A1 and A2).
 
 ## License
 
