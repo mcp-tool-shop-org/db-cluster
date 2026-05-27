@@ -1,0 +1,163 @@
+{
+  "verifier_lens": "C-V3 Edge-state + contract-implementation-parity",
+  "wave": "C1-Amend",
+  "findings_count": 15,
+  "findings": [
+    {
+      "id": "V3-C1-001",
+      "severity": "HIGH",
+      "category": "contract-wired",
+      "site": "src/policy/error-formatter.ts:55",
+      "headline": "formatForUser documented as canonical CLI+MCP+SDK+dashboard helper but NO surface actually calls it",
+      "evidence": "error-formatter.ts:13 JSDoc claims canonical. Grep across src/ finds zero call sites — only tests import it. cli.ts:478-487 re-implements inline. MCP server.ts:1006-1023 builds envelope inline. SDK no error formatting. StateBoundary reads err.message + err.remediation_hint inline.",
+      "family_probe_result": "scanned-sibling-sites: CLI cliCommand, MCP server catch arm, dashboard StateBoundary, SDK. misses: ALL four.",
+      "fix_shape": "Wire CLI cliCommand → formatForUser(err). Wire MCP catch arm → errorToAiEnvelope(). Wire StateBoundary error case to delegate."
+    },
+    {
+      "id": "V3-C1-002",
+      "severity": "HIGH",
+      "category": "field-parity",
+      "site": "src/types/component-state.ts:69",
+      "headline": "ComponentState.empty.reason union uses 'all_filtered' but producer EmptyResultMeta uses 'all_filtered_by_policy' — three-vocabulary mismatch",
+      "evidence": "component-state.ts:69: 'all_filtered'. ai-envelope.ts:120: 'all_filtered_by_policy'. cluster-kernel.ts:134 + policy-enforced-kernel.ts:483 emit 'all_filtered_by_policy'. mcp/server.ts:499 emits only 'no_data' | 'no_match' (no 'all_filtered' arm). StateBoundary jsx:62 only renders prose for 'all_filtered'. Producer value 'all_filtered_by_policy' → falls through to default 'No data.', losing policy-filter signal.",
+      "family_probe_result": "scanned-sibling-sites: ComponentState union, EmptyResultMeta union, FindSourcesResult._meta, PolicyEnforcedKernel surface, MCP server tools, docs/mcp.md. misses: ALL share NO common vocabulary.",
+      "fix_shape": "Pick ONE value: 'all_filtered_by_policy'. Update component-state.ts:69 + state-boundary.jsx:62 to match. Add MCP server.ts 'all_filtered' arm."
+    },
+    {
+      "id": "V3-C1-003",
+      "severity": "HIGH",
+      "category": "contract-wired",
+      "site": "dashboard/components/PolicyViewToggle.jsx:117",
+      "headline": "renderRedactionMarkers defined and globalized but NO consumer panel actually calls it",
+      "evidence": "JSDoc says 'OperationsPanel, CommandPreviewPanel, ClusterTruthInspector payload preview call through this helper.' Grep: definition + window-assignment + ONE existence test. Zero consumer panels. CommandPreviewPanel.jsx:178 + ClusterTruthInspector.jsx:500 + OperationsPanel — none wrap.",
+      "family_probe_result": "scanned-sibling-sites: CommandPreviewPanel (line 178), ClusterTruthInspector ProposeMutationPanel (line 500), OperationsPanel. misses: ALL three.",
+      "fix_shape": "Wrap every JSON.stringify of payload/policy-filtered content with `window.renderRedactionMarkers(value)`. Add regression test."
+    },
+    {
+      "id": "V3-C1-004",
+      "severity": "HIGH",
+      "category": "contract-wired",
+      "site": "src/sdk/cluster-sdk.ts:579",
+      "headline": "CommandLifecycleEnvelope.nextValidActions documented as universal but only ONE kernel method returns it, and SDK/MCP/CLI strip it from success path",
+      "evidence": "Kernel design says envelope is 'Returned by proposeMutation, validateMutation, approveMutation, rejectMutation, commitMutation, compensateMutation'. ACTUAL: proposeMutation→Promise<Command>, validateMutation→Promise<Command>, approveMutation→Promise<Command>, rejectMutation→Promise<Command>, compensateMutation→Promise<Command|CompensateResult>, commitMutation→Promise<CommitMutationResult> (only this one has nextValidActions). SDK commitMutation drops the field. MCP success arms don't forward. CLI lifecycle commands don't surface.",
+      "family_probe_result": "scanned-sibling-sites: 6 kernel methods, 6 SDK methods, MCP arms, CLI commands. misses: 5 of 6 kernel methods, 100% SDK, ALL MCP success arms, ALL CLI lifecycle commands.",
+      "fix_shape": "Either narrow envelope claim to 'commit only' OR have all 6 lifecycle methods return CommandLifecycleEnvelope. Widen SDK return types. MCP success arms spread result.nextValidActions."
+    },
+    {
+      "id": "V3-C1-005",
+      "severity": "HIGH",
+      "category": "contract-wired",
+      "site": "src/cli.ts:478",
+      "headline": "Adapter-layer typed errors carry remediationHint + code fields but cliCommand only reads ClusterError — fields silently dropped",
+      "evidence": "cli.ts:478 only branches ClusterError + PolicyConfigError. Adapter errors extend plain Error (errors.ts:38-56 documents convention). BackupTargetExistsError has code + remediationHint. CLI catch falls to 502-507 generic branch — exit 1, no `→ try:` line. typedErrorToExitCode HAS arms for CORRUPT_STORE etc. but unreachable.",
+      "family_probe_result": "scanned-sibling-sites: 11 adapter error sibling classes. misses: 10 of 11 fall through (only PolicyConfigError handled).",
+      "fix_shape": "Extend cliCommand to handle objects with shape {code: string, remediationHint?: string, message: string} regardless of class hierarchy. Or AdapterErrorShape marker interface dispatch."
+    },
+    {
+      "id": "V3-C1-006",
+      "severity": "HIGH",
+      "category": "field-parity",
+      "site": "src/mcp/sanitize.ts:122",
+      "headline": "Two divergent AiErrorEnvelope shapes — sanitize.ts version optional fields + code: string; canonical types/ai-envelope.ts required fields + code: ClusterErrorCode",
+      "evidence": "sanitize.ts:122-159 declares parallel interface. ai-envelope.ts:55-89 canonical. sanitize.ts:533 void-cast doesn't enforce. redactError returns LOCAL interface — fields undefined-possible.",
+      "family_probe_result": "scanned-sibling-sites: canonical + parallel. misses: sanitize.ts sole producer with loose shape.",
+      "fix_shape": "Delete local AiErrorEnvelope in sanitize.ts. Have redactError return canonical type. Mark unknown adapter errors as INTERNAL_ERROR code. Replace no-op type-reference with executed structural check."
+    },
+    {
+      "id": "V3-C1-007",
+      "severity": "MEDIUM",
+      "category": "contract-wired",
+      "site": "src/mcp/server.ts:550",
+      "headline": "EmptyResultMeta contract claimed universal at read tools, but cluster_retrieve_bundle / cluster_explain_retrieval / cluster_trace never attach `_meta.empty_reason`",
+      "evidence": "cluster_find_sources + cluster_list_receipts have it. cluster_retrieve_bundle (550-585) returns empty arrays, never attaches. cluster_explain_retrieval (587-594) same. cluster_trace (635-653) same.",
+      "family_probe_result": "scanned-sibling-sites: 8 read tools. misses: 5 of 8 (2 throw NotFoundError so irrelevant).",
+      "fix_shape": "Add attachEmptyReason() helper. Apply to each read-tool case-arm. Document NotFoundError-throwing tools opt out."
+    },
+    {
+      "id": "V3-C1-008",
+      "severity": "MEDIUM",
+      "category": "render-state",
+      "site": "dashboard/index.html:255",
+      "headline": "Mount-loop only polls for ClusterTruthInspector + applyRedaction, not the four new C1 globals (StateBoundary, OperationsPanel, CommandPreviewPanel, renderRedactionMarkers)",
+      "evidence": "index.html:254-264 checks 2 globals. Script-load order has 5 new components. If state-boundary.jsx fails to load mid-deploy, mount loop proceeds when ClusterTruthInspector ready, but OperationsPanel.jsx:35 hits window.StateBoundary=undefined → crash.",
+      "family_probe_result": "scanned-sibling-sites: SURFACE-B-015 race fix polled 2 globals; SURFACE-C-017/018/019/020 added 4 more but didn't extend poll. misses: ALL four C1 globals.",
+      "fix_shape": "Extend mount-loop condition to include 4 new globals. Add regression test."
+    },
+    {
+      "id": "V3-C1-009",
+      "severity": "MEDIUM",
+      "category": "test-coverage",
+      "site": "test/wave-c1-tests-dashboard-render.test.ts:183",
+      "headline": "Dashboard StateBoundary 'simulated' tests re-implement the function inline — production JSX changes will NOT trigger test failures",
+      "evidence": "wave-c1-tests-dashboard-render.test.ts:183-223 defines loadStateBoundary() which RE-IMPLEMENTS production switch arms. Comment says 'mirrors 1:1.' Production file is state-boundary.jsx. Logical-refactor-but-no-semantic-change → tests still pass against stale mirror.",
+      "family_probe_result": "scanned-sibling-sites: tests for OperationsPanel render, CommandPreviewPanel render, StateBoundary behavior. misses: ALL — every dashboard-render test either string-matches OR re-implements.",
+      "fix_shape": "Install JSDOM/happy-dom + @testing-library/react. Mount actual JSX. Or parse production into AST and assert switch-arm output."
+    },
+    {
+      "id": "V3-C1-010",
+      "severity": "MEDIUM",
+      "category": "render-state",
+      "site": "dashboard/ClusterTruthInspector.jsx:451",
+      "headline": "Four ClusterTruthInspector sub-panels (StoreLanesMap, ProvenanceTimeline, ExplainIndexPanel, ProposeMutationPanel) never wrap in StateBoundary",
+      "evidence": "4 sub-panel components — StoreLanesMap (220), ProvenanceTimeline (390), ExplainIndexPanel (451), ProposeMutationPanel (494). None wrap data input in StateBoundary. ExplainIndexPanel has inline fallback (467-489), others have none — crash on null/undefined props.",
+      "family_probe_result": "scanned-sibling-sites: OperationsPanel + CommandPreviewPanel use StateBoundary. misses: 5 of 7 — only OperationsPanel + CommandPreviewPanel adopted.",
+      "fix_shape": "Wrap each sub-panel in StateBoundary at its entry. Or document parent's guard + add assertion."
+    },
+    {
+      "id": "V3-C1-011",
+      "severity": "MEDIUM",
+      "category": "field-parity",
+      "site": "src/dashboard/ops-model.ts:33",
+      "headline": "ProvenanceHealth.totalEvents typed `number` but runtime sets to null on countEvents failure — null collapsed to 0 at line 275, silently masking degraded → healthy",
+      "evidence": "ops-model.ts:33 declares totalEvents: number. Line 161 `let totalEvents: number | null = 0`. Catch sets null. Line 275 `totalEvents: totalEvents ?? 0` collapses. Comment claims null preserves signal, but code collapses. orphanEvents correctly typed null. totalEvents lost parity.",
+      "family_probe_result": "scanned-sibling-sites: orphanEvents (correctly null), totalEvents (collapsed). misses: 1 of 2.",
+      "fix_shape": "Change ProvenanceHealth.totalEvents type to `number | null` at line 33. Remove `?? 0`. Update OperationsPanel + overall-health calc."
+    },
+    {
+      "id": "V3-C1-012",
+      "severity": "MEDIUM",
+      "category": "invariant-coverage",
+      "site": "scripts/jsdoc-gate.mjs:60",
+      "headline": "jsdoc-gate.mjs only enforces 2 symbols and never EXECUTES @example blocks — gate validates structure only, not behavior",
+      "evidence": "jsdoc-gate.mjs:60 REQUIRED_JSDOC_SYMBOLS = ['formatForUser', 'errorToAiEnvelope']. 11+ SDK methods called out in audit not in allowlist. Gate checks @example tag PRESENCE via getJsdocTagNames(); doesn't parse body, doesn't pipe through tsc, doesn't execute. Empty examples pass.",
+      "family_probe_result": "scanned-sibling-sites: jsdoc-gate.mjs allowlist (2), wave-c1-tests-jsdoc-examples.test.ts (vacuous lower bound), doc-drift.mjs (typechecks docs/**.md). misses: SDK methods, no execution path.",
+      "fix_shape": "Expand allowlist to 11 SDK methods. Extract @example contents to generated test file, pipe through tsc, fail on type errors."
+    },
+    {
+      "id": "V3-C1-013",
+      "severity": "MEDIUM",
+      "category": "field-parity",
+      "site": "src/cli.ts:483",
+      "headline": "CLI cliCommand reads err.code via remediationForCode() map duplicate instead of reading err.remediationHint already set on ClusterError instance",
+      "evidence": "ClusterError subclasses override .remediationHint. cli.ts:478-487 reads via remediationForCode(err.code) — separate switch table DUPLICATING the prose. If subclass changes hint, cli.ts emits stale prose.",
+      "family_probe_result": "scanned-sibling-sites: cli.ts remediationForCode, sanitize.ts TYPED_ERROR_ENRICHMENT, kernel ClusterError.remediationHint. misses: 2 of 3 maps duplicate. CLI never reads err.remediationHint.",
+      "fix_shape": "Replace cliCommand's remediationForCode(err.code) with err.remediationHint direct read. Delete remediationForCode() function. Add regression test."
+    },
+    {
+      "id": "V3-C1-014",
+      "severity": "MEDIUM",
+      "category": "test-coverage",
+      "site": "test/wave-c1-tests-mcp-envelope.test.ts:59",
+      "headline": "MCP envelope tests roundtrip through hand-copied mirror of catch-arm wrapper — production drift won't fail tests",
+      "evidence": "wave-c1-tests-mcp-envelope.test.ts:59-103 defines mirror of server.ts:949-988 + 991-1031. Comment claims 'fail loud when source diverges' but diverge-detection is string-match against production — logical refactor passes. Tests don't exercise production catch-arm closure.",
+      "family_probe_result": "scanned-sibling-sites: 4 wave-c1 test files. misses: 2 of 4 mirror logic (MCP + Dashboard); CLI tests spawn properly.",
+      "fix_shape": "Spin up MCP stdio process. Or extract catch-arm wrapper into exported helper that both server.ts + tests call."
+    },
+    {
+      "id": "V3-C1-015",
+      "severity": "LOW",
+      "category": "field-parity",
+      "site": "src/cli.ts:414",
+      "headline": "typedErrorToExitCode missing arms for 9 codes in CLUSTER_ERROR_CODES + BUILTIN_ERROR_CODES — all collapse to exit 1",
+      "evidence": "typedErrorToExitCode has 17 arms. CLUSTER_ERROR_CODES has 32 entries. Missing 9 codes: BACKUP_TARGET_EXISTS, INVALID_CLUSTER_URI, INVALID_ROTATE_TIMESTAMP, ROTATE_BOUNDARY_IN_FUTURE, IMPORT_SNAPSHOT_NOT_SUPPORTED, RESOLVE_NOT_FOUND, COMMAND_NOT_FOUND, COMMAND_ALREADY_TERMINAL, INVALID_STATE_TRANSITION.",
+      "family_probe_result": "scanned-sibling-sites: CLUSTER_ERROR_CODES (32), BUILTIN_ERROR_CODES (~20), typedErrorToExitCode (17). misses: 9 codes.",
+      "fix_shape": "Add arms for 9 missing codes. Generate map from CLUSTER_ERROR_CODES at compile time."
+    }
+  ],
+  "lens_self_assessment": {
+    "highest_value_finding": "V3-C1-001 (formatForUser documented canonical but never wired) — central documented-contract-not-wired bug; closing it cascades V3-C1-005 + V3-C1-013.",
+    "lens_blind_spots": "(1) JSDOM/Playwright unavailable; (2) no MCP-host roundtrip; (3) Postgres/external-store edge states; (4) wave-internal 'gentle' invariants de-prioritized.",
+    "submodularity_estimate_vs_C-V1": "~0.20 (slightly above 0.10 budget but acceptable). Overlap on V3-C1-001, V3-C1-013 (remediation_hint not surfaced) + V3-C1-006 (envelope poverty).",
+    "submodularity_estimate_vs_C-V2": "~0.05 (well under). Disjoint coverage. Faint overlap on V3-C1-015 backup-overwrite intersecting C-V2 output-protection."
+  }
+}

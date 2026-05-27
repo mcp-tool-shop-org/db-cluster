@@ -1,0 +1,153 @@
+{
+  "verifier_lens": "C-V2 Operator-progress + destructive-op safety",
+  "wave": "C1-Amend",
+  "findings_count": 14,
+  "findings": [
+    {
+      "id": "V2-C1-001",
+      "severity": "HIGH",
+      "category": "destructive",
+      "site": "src/cli.ts:1156-1166",
+      "headline": "`db-cluster index rebuild` is a parallel destructive code path that bypasses every safety guard the wave landed on `db-cluster rebuild index`",
+      "evidence": "Reproduced: `node dist/cli.js index rebuild` (no --yes / no --dry-run / non-TTY pipe) returns EXIT 0, rebuilds the index, writes mutation_committed provenance + receipt, creates NO auto-snapshot. cli.ts:1157 `.command('rebuild')` under `index` group uses plain `cliCommand(...)`. Top-level `rebuild index` at cli.ts:1804 wraps `destructiveCommand`. Both call paths clear and rebuild the index.",
+      "family_probe_result": "scanned-sibling-sites: rebuild index (1804) destructiveCommand correctly; restore (1888) correctly; backup (1853) inline overwrite guard. misses: index rebuild (1157) — wrong wrapper; compensate (1107) — also destructive, also wrong wrapper.",
+      "fix_shape": "Either route `index rebuild` through destructiveCommand, OR remove the duplicate verb. Add CLI snapshot test asserting `db-cluster index rebuild` requires --yes in non-TTY pipeline."
+    },
+    {
+      "id": "V2-C1-002",
+      "severity": "HIGH",
+      "category": "destructive",
+      "site": "src/cli.ts:1107-1119",
+      "headline": "`db-cluster compensate` is implicitly destructive (writes a new committed command + receipt) but uses plain cliCommand, with no --dry-run / --yes / pre-snapshot / undo hint",
+      "evidence": "kernel/cluster-kernel.ts:1384 compensateMutation constructs proposeCommand→validateCommand→markCommitted in single call. cli.ts:1110 plain cliCommand. No flag warns operator destructive. No snapshot. Compensate cannot be undone.",
+      "family_probe_result": "scanned-sibling-sites: restore + rebuild index correctly use destructiveCommand. misses: compensate.",
+      "fix_shape": "Wrap compensate in destructiveCommand({ name: 'compensate', preMutationSnapshot: true, undoHint: 'compensation is permanently recorded — re-propose corrective mutation instead' })."
+    },
+    {
+      "id": "V2-C1-003",
+      "severity": "HIGH",
+      "category": "destructive",
+      "site": "src/cli.ts:1922-1929",
+      "headline": "`restore` silently buries per-record errors on human-readable surface AND returns exit 0 even when entities errored — STORES-C-003 only partially closed",
+      "evidence": "Reproduced: cluster with entity id='bogus', then restore backup with same id different name. Result: EXIT 0, stdout `Entities: 0 created, 0 skipped`. RestoreResult.entities.errors[] has the full ImportConflictError but cli.ts:1922-1929 only prints counts. summary + warnings fields NEVER read. Only --json mode surfaces errors. Operator CI cannot branch.",
+      "family_probe_result": "scanned-sibling-sites: doctor, verify, rebuild render error[]. misses: restore (1925-1928).",
+      "fix_shape": "In non-JSON branch, print result.summary, loop through each store-kind's errors[]. When error count > 0, process.exit(1) or typed exit code. Add test asserting conflict exits non-zero."
+    },
+    {
+      "id": "V2-C1-004",
+      "severity": "HIGH",
+      "category": "destructive",
+      "site": "src/cli.ts:478, 490",
+      "headline": "cliCommand catch arm only inspects `instanceof ClusterError | PolicyConfigError` — adapter-tier typed errors (CorruptStoreError, ImportConflictError, …) extend plain Error, so their err.code is never consulted; every adapter error collapses to exit 1 even though typedErrorToExitCode maps to 65/70/78",
+      "evidence": "Reproduced: corrupted canonical/entities.json, then `db-cluster entity create` returned exit 1 (expected 70 for CORRUPT_STORE). cliCommand third branch treats as generic Error → exit 1. test/wave-c1-tests-exit-codes.test.ts:158-166 documents the gap with soft assertion.",
+      "family_probe_result": "scanned-sibling-sites: PolicyConfigError has its own branch. misses: every adapter typed error (CorruptStoreError, InvalidContentHashError, ImportConflictError, ImportSnapshotNotSupportedError, LedgerCycleDetectedError, InvalidRotateTimestampError, RotateBoundaryInFutureError, BackupTargetExistsError) extends plain Error → fall through.",
+      "fix_shape": "Add AdapterErrorShape instanceof check OR duck-type ('code' in err) BEFORE generic-Error fall-through. Map err.code through typedErrorToExitCode + emit `→ try:` line via remediationForCode."
+    },
+    {
+      "id": "V2-C1-005",
+      "severity": "HIGH",
+      "category": "long-running",
+      "site": "src/cli.ts:1814, 1788, 1724, 1862",
+      "headline": "onProgress callback added to all four ops contracts (rebuildIndex, verify, doctor, backup) but ZERO CLI commands subscribe — operator still stares at blank for 30+ seconds",
+      "evidence": "grep onProgress src/ returns 4 producer files. grep src/cli.ts returns 0 matches. CLI invocations: rebuildIndex/verify/doctor/backup — none pass onProgress. STORES-C-002 not closed on consumer side.",
+      "family_probe_result": "scanned-sibling-sites: all four ops methods carry onProgress declaration. All four CLI commands DON'T consume. SDK doesn't expose. MCP doesn't ship. misses: every single consumer.",
+      "fix_shape": "Wire default progress renderer in cli.ts — write `\\r${current}/${total} ${label}` to stderr when TTY is interactive AND --quiet not set. Pass to all four ops calls."
+    },
+    {
+      "id": "V2-C1-006",
+      "severity": "HIGH",
+      "category": "pipeline-discipline",
+      "site": "src/cli.ts:762-763",
+      "headline": "`--quiet` and `--log-level` flags declared but NEVER consumed anywhere in cli.ts — declared-but-unwired regression",
+      "evidence": "Reproduced: `--quiet doctor` produces byte-identical stdout. grep 'quiet|logLevel|log-level' src/cli.ts returns ONLY declarations. No program.opts().quiet read anywhere.",
+      "family_probe_result": "scanned-sibling-sites: --actor consumed; --help-exit-codes consumed. misses: --quiet, --log-level have no readers.",
+      "fix_shape": "WIRE them — gate stderr through level-aware logger, gate stdout banners through quiet check. OR REMOVE."
+    },
+    {
+      "id": "V2-C1-007",
+      "severity": "MEDIUM",
+      "category": "long-running",
+      "site": "src/ops/verify.ts:67",
+      "headline": "`verify` fires onProgress 4 times for 4 major steps but receipts step walks ALL receipts with no per-record tick — on 10k-receipt cluster bar freezes for the entire step",
+      "evidence": "verify.ts:60-67 tick once per major step. Receipts step (line 295-307) iterates `for (const receipt of receipts)` with no inner tick. Same for provenance step (170-185), index-references step (76-99).",
+      "family_probe_result": "scanned-sibling-sites: rebuild.ts ticks per record correctly; backup.ts ticks per record. misses: verify.ts (only per-step), doctor.ts (only per-step).",
+      "fix_shape": "Expand total to encompass per-record work OR add separate totalRecords channel. Document granularity in JSDoc."
+    },
+    {
+      "id": "V2-C1-008",
+      "severity": "MEDIUM",
+      "category": "long-running",
+      "site": "src/ops/receipt-check.ts:42 + src/ops/provenance-check.ts:41",
+      "headline": "checkReceipts + checkProvenance walk all receipts/events with per-record async lookups but have NO onProgress in their contracts at all — family-of-call-sites miss vs verify/doctor/rebuild/backup",
+      "evidence": "receipt-check.ts:42 + provenance-check.ts:41 iterate with no onProgress option. Both exported and called by external consumers.",
+      "family_probe_result": "scanned-sibling-sites: 4 ops with onProgress. misses: receipt-check.ts, provenance-check.ts.",
+      "fix_shape": "Add onProgress to ReceiptCheckResult/ProvenanceCheckResult options. Tick per record."
+    },
+    {
+      "id": "V2-C1-009",
+      "severity": "HIGH",
+      "category": "mcp-destructive",
+      "site": "src/mcp/server.ts:219-450",
+      "headline": "Zero MCP tools front the long-running ops (doctor/verify/rebuild/backup/restore) — SURFACE-C-002 audit finding not addressed this wave",
+      "evidence": "16 MCP tools listed. None of doctor/verify/rebuild/backup/restore. reindex propose-verb routes through cluster_propose_mutation but its description carries no time-bound expectation OR confirmDestructive field. No progressNotification channel.",
+      "family_probe_result": "scanned-sibling-sites: 2 of 16 tools carry time-bound prose. misses: 14 of 16.",
+      "fix_shape": "Either add cluster_doctor / cluster_verify / cluster_rebuild_index / cluster_backup / cluster_restore tools (with time-bound + confirmDestructive: true on mutating ones), OR document in docs/mcp.md that long-running ops are CLI-only. NOTE: SURFACE-C-002 advisor disposition said docs-only OK; if so, defer."
+    },
+    {
+      "id": "V2-C1-010",
+      "severity": "MEDIUM",
+      "category": "destructive",
+      "site": "src/cli.ts:730-741",
+      "headline": "Auto-snapshot directory name uses millisecond ISO timestamp + operation name only — two concurrent ops within same ms collide silently, AND operation name 'rebuild index' contains a SPACE breaking shell scripts",
+      "evidence": "auto-snapshots/`2026-05-27T15-59-28-527Z-rebuild index/` — space in name. undoHint surfaces verbatim. No random suffix. mkdirSync recursive silent on collision.",
+      "family_probe_result": "scanned-sibling-sites: ledger archive uses random tmp suffixes. misses: takeAutoSnapshot.",
+      "fix_shape": "Append random suffix: `${isoTs}-${operationName}-${randomBytes(4).toString('hex')}`. Replace space in operation names with `-`."
+    },
+    {
+      "id": "V2-C1-011",
+      "severity": "MEDIUM",
+      "category": "destructive",
+      "site": "src/cli.ts:711",
+      "headline": "Undo hint template carries TWO placeholders (<previous-snapshot> AND <file>) but HOF only replaces the first — operators see literal <file>",
+      "evidence": "cli.ts:709-711 `opts.undoHint.replace('<previous-snapshot>', snapshotPath)`. undoHints end with `db-cluster restore <file>`. After replace, `<previous-snapshot>` substituted but `<file>` remains literal.",
+      "family_probe_result": "scanned-sibling-sites: doctor's →fix has no placeholders. misses: destructiveCommand.undoHint — only one of two placeholders substituted.",
+      "fix_shape": "Replace `<file>` with `join(snapshotPath, 'cluster-snapshot.json')` in same .replace() chain."
+    },
+    {
+      "id": "V2-C1-012",
+      "severity": "MEDIUM",
+      "category": "output-protection",
+      "site": "src/cli.ts:1853-1885",
+      "headline": "`backup -o <file> --force` overwrites silently with no auto-snapshot of prior file, no diff hint, no undo path",
+      "evidence": "cli.ts:1871 existsSync check, then writeFileSync overwrites silently when --force. No `<outPath>.bak.<ts>` move. Operator loses prior month snapshot.",
+      "family_probe_result": "scanned-sibling-sites: restore + rebuild auto-snapshot cluster. misses: backup -o has its own guard but no equivalent backup of output file.",
+      "fix_shape": "When --force set and target exists, rename existing to `<outPath>.<isoTs>.bak`. Surface bak path on stderr."
+    },
+    {
+      "id": "V2-C1-013",
+      "severity": "MEDIUM",
+      "category": "pipeline-discipline",
+      "site": "src/cli.ts:1882",
+      "headline": "`backup -o <file>` writes status message to stdout — `db-cluster backup -o foo.json | something` gets unexpected payload on stdin",
+      "evidence": "cli.ts:1882 `console.log('Backup written to ...')`. The whole point of -o is write payload to file. Success belongs on stderr.",
+      "family_probe_result": "scanned-sibling-sites: doctor/verify --json correctly route. misses: backup -o success on stdout.",
+      "fix_shape": "Change to `process.stderr.write('Backup written to ${opts.output}\\n')`."
+    },
+    {
+      "id": "V2-C1-014",
+      "severity": "LOW",
+      "category": "mcp-destructive",
+      "site": "src/mcp/server.ts:296-450",
+      "headline": "MCP tool descriptions inconsistently carry time-bound expectations — 2 of 16 tools have them",
+      "evidence": "grep 'may take|time-bound|seconds' in server.ts: 2 matches. 14 tools have none.",
+      "family_probe_result": "scanned-sibling-sites: 2/16 annotated.",
+      "fix_shape": "Add one-line time-bound expectation per tool that walks records server-side."
+    }
+  ],
+  "lens_self_assessment": {
+    "highest_value_finding": "V2-C1-001 (db-cluster index rebuild bypasses destructiveCommand — operator can wipe index in piped non-TTY with exit 0 and no snapshot). Tied with V2-C1-003 (restore silent error swallowing).",
+    "lens_blind_spots": "(a) Postgres adapter long-running paths; (b) actual wall-clock measurement; (c) dashboard progress UI (non-applicable); (d) destructiveCommand args-detection fuzz.",
+    "submodularity_estimate_vs_C-V1": "~0.10-0.15. Overlap on V2-C1-004 + V2-C1-006.",
+    "submodularity_estimate_vs_C-V3": "~0.10. Overlap on V2-C1-005 (onProgress not wired) and V2-C1-006 (--quiet not wired) which V3 likely also flags."
+  }
+}

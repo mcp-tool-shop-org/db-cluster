@@ -1,0 +1,163 @@
+{
+  "verifier_lens": "C-V1 Actionability-envelope",
+  "wave": "C1-Amend",
+  "findings_count": 15,
+  "findings": [
+    {
+      "id": "V1-C1-001",
+      "severity": "HIGH",
+      "consumer_class": "AI",
+      "site": "src/kernel/commands.ts:16-31",
+      "headline": "CommandValidationFailedError typed error has code 'COMMAND_VALIDATION_FAILED' that's NOT mapped in BUILTIN_ERROR_CODES, TYPED_ERROR_ENRICHMENT, CLUSTER_ERROR_CODES, typedErrorToExitCode, or remediationForCode — falls into INTERNAL_ERROR bucket at every boundary",
+      "evidence": "src/kernel/commands.ts:17 `public readonly code = 'COMMAND_VALIDATION_FAILED'`; thrown at commands.ts:107 inside validateCommand(); class extends Error (not ClusterError). Grep COMMAND_VALIDATION_FAILED across src/ returns only the single definition site. mcp/sanitize.ts:194-227 BUILTIN_ERROR_CODES has no entry for CommandValidationFailedError; cli.ts:414-435 typedErrorToExitCode has no case; cli.ts:526-571 remediationForCode has no case; kernel/errors.ts:69-103 CLUSTER_ERROR_CODES const does not include 'COMMAND_VALIDATION_FAILED'. Result: every validate-mutation-with-bad-payload call surfaces through MCP as `{code:'INTERNAL_ERROR'}` with no remediation_hint, no retryable, no context — AI consumer cannot branch.",
+      "family_probe_result": "scanned-sibling-sites: CommandValidationFailedError export from kernel/index.ts:42; thrown in validateCommand only. misses: NOT in BUILTIN_ERROR_CODES, NOT in TYPED_ERROR_ENRICHMENT, NOT in CLUSTER_ERROR_CODES, NOT in typedErrorToExitCode, NOT in remediationForCode.",
+      "fix_shape": "Either (a) promote CommandValidationFailedError to extend ClusterError so existing ClusterError sanitizer machinery automatically handles it + add 'COMMAND_VALIDATION_FAILED' to CLUSTER_ERROR_CODES; OR (b) add the class-name → code mapping in BUILTIN_ERROR_CODES + TYPED_ERROR_ENRICHMENT entry + typedErrorToExitCode case + remediationForCode case. (a) is preferred."
+    },
+    {
+      "id": "V1-C1-002",
+      "severity": "HIGH",
+      "consumer_class": "AI",
+      "site": "src/mcp/server.ts:972-989",
+      "headline": "lifecycleNextValidActions handles only 3 of 7 lifecycle error codes — new typed errors KERNEL-C-005 introduced (COMMAND_NOT_FOUND, COMMAND_ALREADY_TERMINAL, INVALID_STATE_TRANSITION) return undefined; AI gets no next_valid_actions hint",
+      "evidence": "src/mcp/server.ts:972-989 switch covers only COMMAND_NOT_VALIDATED, COMMAND_REJECTED, NOT_FOUND. But KERNEL-C-005 split off CommandNotFoundError (code COMMAND_NOT_FOUND), CommandAlreadyTerminalError (code COMMAND_ALREADY_TERMINAL), InvalidStateTransitionError (code INVALID_STATE_TRANSITION). COMMAND_VALIDATION_FAILED also missing.",
+      "family_probe_result": "scanned-sibling-sites: 7 typed-error codes from COMMAND_LIFECYCLE_TOOLS at server.ts:949-957. misses: COMMAND_NOT_FOUND, COMMAND_ALREADY_TERMINAL, INVALID_STATE_TRANSITION, COMMAND_VALIDATION_FAILED.",
+      "fix_shape": "Extend lifecycleNextValidActions to cover all 7 codes. For COMMAND_ALREADY_TERMINAL, branch on terminalStatus (committed→['cluster_compensate_mutation'], rejected→['cluster_propose_mutation']). For INVALID_STATE_TRANSITION, map from-status to validTransitions(from). For COMMAND_NOT_FOUND, ['cluster_propose_mutation']. For COMMAND_VALIDATION_FAILED, ['cluster_propose_mutation']."
+    },
+    {
+      "id": "V1-C1-003",
+      "severity": "HIGH",
+      "consumer_class": "Cross-cutting",
+      "site": "src/types/component-state.ts:69 vs src/types/ai-envelope.ts:120",
+      "headline": "Contract drift between ComponentState.empty.reason and EmptyResultMeta.empty_reason — dashboard StateBoundary recognizes 'all_filtered' but kernel produces 'all_filtered_by_policy'",
+      "evidence": "ai-envelope.ts:120 declares 'all_filtered_by_policy'. component-state.ts:69 declares 'all_filtered'. dashboard/lib/state-boundary.jsx:62 reason === 'all_filtered' check won't fire on the kernel-produced 'all_filtered_by_policy' (falls to default 'No data.'). docs/mcp.md:315 documents 'all_filtered_by_policy'. policy-enforced-kernel.ts:483 produces 'all_filtered_by_policy'.",
+      "family_probe_result": "scanned-sibling-sites: AiErrorEnvelope vs sanitize.ts AiErrorEnvelope (parallel drift); ComponentState.reason vs EmptyResultMeta.empty_reason. misses: contracts shipped this wave produce/consume types are misaligned.",
+      "fix_shape": "Unify ComponentState.empty.reason to 'all_filtered_by_policy'. Update state-boundary.jsx:62 to match. Also unify the AiErrorEnvelope shapes — sanitize.ts:122 should re-export the canonical type."
+    },
+    {
+      "id": "V1-C1-004",
+      "severity": "HIGH",
+      "consumer_class": "Operator",
+      "site": "src/dashboard/ops-model.ts:207 and 238",
+      "headline": "ops-model.ts repair suggestions reference phantom CLI commands `db-cluster reindex` and `db-cluster doctor --repair` — same SHA-STORES-PHANTOM-CMD class as Stage C audit flagged",
+      "evidence": "ops-model.ts:207 `command: 'db-cluster reindex'`. Line 238 `command: 'db-cluster doctor --repair'`. grep `'reindex'` and `--repair` in src/cli.ts returns no matches. Real CLI subcommand is `db-cluster rebuild index` (cli.ts:1804).",
+      "family_probe_result": "scanned-sibling-sites: SHA-STORES-PHANTOM-CMD doctor.ts:202 fixed; ops-model.ts NOT fixed.",
+      "fix_shape": "Change ops-model.ts:207 to `command: 'db-cluster rebuild index'`. For the generic-unhealthy suggestion at 238, derive from `check.suggestedCommand` instead of inventing `--repair`."
+    },
+    {
+      "id": "V1-C1-005",
+      "severity": "MEDIUM",
+      "consumer_class": "Operator",
+      "site": "src/ops/verify.ts:187, 309 + src/ops/provenance-check.ts:68 + src/ops/receipt-check.ts:67",
+      "headline": "Four HealthCheck producers with non-trivial nextSteps + remediation commands DO NOT set suggestedCommand — violates doctor.ts contract claim",
+      "evidence": "verify.ts:187 + 309, provenance-check.ts:68, receipt-check.ts:67 all have nextSteps citing CLI commands but no suggestedCommand → doctor footer's Top fix can't find them.",
+      "family_probe_result": "scanned-sibling-sites: every HealthCheck producer in src/ops/*. doctor.ts sets suggestedCommand correctly. misses: 4 verify/check checks above.",
+      "fix_shape": "Set suggestedCommand on these 4 checks. cli.ts verify renderer should also branch on suggestedCommand like doctor renderer does."
+    },
+    {
+      "id": "V1-C1-006",
+      "severity": "MEDIUM",
+      "consumer_class": "AI",
+      "site": "src/mcp/server.ts:296-318 cluster_propose_mutation",
+      "headline": "Per-verb payload schema missing the `compensate` verb that validatePayloadForVerb handles",
+      "evidence": "server.ts:300-307 lists 5 verbs but src/kernel/commands.ts:295-302 also handles `case 'compensate'` requiring {originalCommandId, reason}.",
+      "family_probe_result": "scanned-sibling-sites: validatePayloadForVerb cases in commands.ts:225-308. misses: compensate verb not in MCP propose payload schema docs.",
+      "fix_shape": "Add compensate verb to cluster_propose_mutation description and verb enum at server.ts:312."
+    },
+    {
+      "id": "V1-C1-007",
+      "severity": "HIGH",
+      "consumer_class": "Cross-cutting",
+      "site": "src/policy/error-formatter.ts:55-75",
+      "headline": "formatForUser + errorToAiEnvelope exported as canonical helpers but neither CLI nor MCP actually calls them — both surfaces re-implement the same logic inline with subtle drift",
+      "evidence": "src/index.ts:92 re-exports formatForUser + errorToAiEnvelope. errors.ts:34-36 module JSDoc CLAIMS: 'MCP + CLI + SDK + dashboard all call those single sources of truth — no duplicated enumeration.' Reality: grep returns 3 files only (definition, JSDoc, re-export). NO consumer site. cli.ts:478-486 inline-formats; sanitize.ts:461-529 redactError has its own extractTypedErrorContext (line 397) duplicating the logic.",
+      "family_probe_result": "scanned-sibling-sites: cli.ts cliCommand catch arm, mcp/sanitize.ts redactError, mcp/server.ts catch arm, state-boundary.jsx error case. misses: NONE call formatForUser; NONE call errorToAiEnvelope.",
+      "fix_shape": "Either wire it up — cli.ts:478-486 uses formatForUser; sanitize.ts extractTypedErrorContext → errorToAiEnvelope. OR remove the dead exports and fix the false claim. Adopting is preferred."
+    },
+    {
+      "id": "V1-C1-008",
+      "severity": "HIGH",
+      "consumer_class": "Operator",
+      "site": "src/cli.ts:762-763",
+      "headline": "Top-level CLI options `--quiet` and `--log-level` declared but NEVER consumed — grep opts.quiet / opts.logLevel returns zero matches",
+      "evidence": "cli.ts:762-763 declare options. grep returns ONLY declarations. Operators piping `db-cluster doctor --json --quiet | jq` find stderr warnings interleaving.",
+      "family_probe_result": "scanned-sibling-sites: --actor consumed at rootActor; --help-exit-codes consumed at 795. misses: --quiet and --log-level have no readers.",
+      "fix_shape": "Either implement gate or remove. The dead options actively mislead operators."
+    },
+    {
+      "id": "V1-C1-009",
+      "severity": "HIGH",
+      "consumer_class": "Dashboard",
+      "site": "dashboard/components/PolicyViewToggle.jsx:123-135",
+      "headline": "renderRedactionMarkers helper claims sibling consumer panels call through it but grep across dashboard/ shows zero consumer panels actually invoke it",
+      "evidence": "JSDoc says 'OperationsPanel, CommandPreviewPanel, ClusterTruthInspector payload preview call through this helper.' grep `renderRedactionMarkers` across dashboard/ returns ONLY the definition site. CommandPreviewPanel.jsx:178 does bare `JSON.stringify(commandState.payload, null, 2)`. ClusterTruthInspector.jsx:554 same. SURFACE-C-019 audit identified exactly this pattern.",
+      "family_probe_result": "scanned-sibling-sites: every JSX consumer. misses: CommandPreviewPanel.jsx:178, ClusterTruthInspector.jsx:554, OperationsPanel.",
+      "fix_shape": "Wrap each <pre>{JSON.stringify(...)}</pre> through `window.renderRedactionMarkers(...)`. Add test asserting {_redacted:true} renders as '[REDACTED]'."
+    },
+    {
+      "id": "V1-C1-010",
+      "severity": "HIGH",
+      "consumer_class": "AI",
+      "site": "src/types/ai-envelope.ts:55-89 vs src/mcp/sanitize.ts:122-159",
+      "headline": "Two AiErrorEnvelope type declarations coexist with divergent requiredness — canonical type requires retryable/remediation_hint/context; sanitize.ts variant marks them optional",
+      "evidence": "ai-envelope.ts requires all three. sanitize.ts:122-159 declares parallel interface with all three OPTIONAL. sanitize.ts:533 void-cast doesn't enforce. Runtime envelope can produce undefined remediation_hint violating canonical contract.",
+      "family_probe_result": "scanned-sibling-sites: sanitize.ts is sole producer with loose shape; types/ai-envelope.ts canonical; error-formatter.ts + component-state.ts use canonical. misses: sanitize.ts parallel declaration.",
+      "fix_shape": "Delete parallel AiErrorEnvelope in sanitize.ts. Re-export canonical. Populate defaults for missing-enrichment fallback. Resolve next_valid_actions type drift (CommandStatus[] vs string[])."
+    },
+    {
+      "id": "V1-C1-011",
+      "severity": "MEDIUM",
+      "consumer_class": "Operator",
+      "site": "src/cli.ts:1632-1635 + 1638-1639 + 1645-1646 + 1649-1651",
+      "headline": "stores verify command has 4 console.error sites that emit error/warning prose with NO `→ try:` line — bypasses cliCommand uniform error pipeline",
+      "evidence": "cli.ts:1632-1655 prose-only emissions then `process.exit(1)`. Postgres connection failure exits 1 instead of 70/78.",
+      "family_probe_result": "scanned-sibling-sites: 12+ process.exit(1) sites bypassing cliCommand.",
+      "fix_shape": "Convert inline console.error+process.exit(1) sites to throws of typed errors."
+    },
+    {
+      "id": "V1-C1-012",
+      "severity": "MEDIUM",
+      "consumer_class": "Developer",
+      "site": "src/kernel/policy-enforced-kernel.ts:50-68",
+      "headline": "errorToAiEnvelope context extractor at error-formatter.ts:100-148 doesn't extract PolicyDeniedError-specific capability fields fully — RedactedMarker.capability may not be populated by all redactor sites",
+      "evidence": "ai-envelope.ts:70 promises {capability, matchedPolicyName, principalId}. error-formatter.ts:126-133 extracts from e.decision. KERNEL-C-004 asked for capability ON THE REDACTION MARKER. Verify every redactedMarker() call passes the third capability arg.",
+      "family_probe_result": "scanned-sibling-sites: redactedMarker factory in redaction.ts:143. misses: when policy redacts a single field, per-field marker should name capability.",
+      "fix_shape": "Audit every redactedMarker() call in src/policy/redactor.ts. Pass third capability arg when trigger is policy denial."
+    },
+    {
+      "id": "V1-C1-013",
+      "severity": "MEDIUM",
+      "consumer_class": "AI",
+      "site": "src/mcp/server.ts:233 + 246 + 271",
+      "headline": "cluster_explain_retrieval + cluster_why have NO time-bound docs in their descriptions despite calling heavy paths",
+      "evidence": "cluster_retrieve_bundle + cluster_trace have time-bound notes. cluster_explain_retrieval (587-594 calls retrieveBundle internally — same time profile) and cluster_why (655 calls traceObject depth 5) have NO time bound.",
+      "family_probe_result": "scanned-sibling-sites: 2/16 tools have time-bound. misses: cluster_explain_retrieval, cluster_why.",
+      "fix_shape": "Append time-bound expectation to server.ts:245-246 + 284-285."
+    },
+    {
+      "id": "V1-C1-014",
+      "severity": "LOW",
+      "consumer_class": "Developer",
+      "site": "src/kernel/errors.ts:33-36",
+      "headline": "ClusterError module JSDoc claims canonical helpers but per-code remediation is duplicated in cli.ts, sanitize.ts, ops-model.ts",
+      "evidence": "Three+ remediation-string sources coexist. Updating one (CLI command rename) requires hunting through three files.",
+      "family_probe_result": "scanned-sibling-sites: cli.ts remediationForCode, sanitize.ts TYPED_ERROR_ENRICHMENT, errors.ts subclass remediationHint. misses: NO single source of truth.",
+      "fix_shape": "Adopt errors.ts subclass .remediationHint as single source. (Closed by V1-C1-007 wiring.)"
+    },
+    {
+      "id": "V1-C1-015",
+      "severity": "LOW",
+      "consumer_class": "Operator",
+      "site": "src/cli.ts:267-269 + 1655-1656 + 678-679 + 832-833 + 201-202",
+      "headline": "Five CLI process.exit(1) sites bypass cliCommand — operators get exit 1 across structurally-different failures",
+      "evidence": "Multiple raw console.error+process.exit(1) sites. Cannot distinguish 'cluster not init' from 'file missing' from 'TTY required' — all exit 1.",
+      "family_probe_result": "scanned-sibling-sites: 12+ sites. misses: each is categorical failure with matching sysexits code.",
+      "fix_shape": "Convert raw console.error+process.exit(1) sites to throws of typed errors that cliCommand catches and maps."
+    }
+  ],
+  "lens_self_assessment": {
+    "highest_value_finding": "V1-C1-001",
+    "lens_blind_spots": "(1) test surface coverage; (2) dashboard accessibility; (3) backup/restore progress UX; (4) Postgres adapter migrations; (5) CommandStatus[] vs tool-name strings drift.",
+    "submodularity_estimate_vs_C-V2": "~0.13 — overlap on V1-C1-008 (--quiet) and V1-C1-011 (console.error sites). 2 of 15 findings overlap.",
+    "submodularity_estimate_vs_C-V3": "~0.20 — overlap on V1-C1-003 (ComponentState drift), V1-C1-007 (formatForUser unused), V1-C1-009 (renderRedactionMarkers unused), V1-C1-010 (AiErrorEnvelope parallel). 3-4 of 15 findings overlap, slightly above 0.25 target."
+  }
+}
