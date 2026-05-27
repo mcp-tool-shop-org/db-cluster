@@ -23,3 +23,5 @@ export type {
     NodeType,
     EdgeType,
 } from './provenance-graph.js';
+export type { RedactedMarker } from './redaction.js';
+export { isRedactedMarker, redactedMarker } from './redaction.js';

@@ -54,8 +54,14 @@ db-cluster trace-bundle "query text"
 ```typescript
 const graph = await sdk.traceObject('cluster://canonical/<entity-id>');
 
+// graph.focalUri is the URI you traced from
+// graph.nodes carry uri, type, ownerStore, label, isSourceTruth
+// graph.edges carry from, to, type, reason
 for (const node of graph.nodes) {
-    console.log(node.uri, node.action, node.actorId);
+    console.log(node.uri, node.type, node.label, node.isSourceTruth ? '(source)' : '(derivative)');
+}
+for (const edge of graph.edges) {
+    console.log(edge.from, '→', edge.to, `[${edge.type}]`, edge.reason);
 }
 
 const explanation = await sdk.why('cluster://canonical/<entity-id>');
@@ -74,31 +80,89 @@ console.log(explanation);
 
 ## The provenance graph
 
-Traces return a `ProvenanceGraph`:
+Traces return a `ProvenanceGraph`. The canonical type lives at
+`src/types/provenance-graph.ts` and is re-exported through `db-cluster/types`:
+
+```typescript
+import type {
+    ProvenanceGraph,
+    ProvenanceNode,
+    ProvenanceEdge,
+    NodeType,
+    EdgeType,
+    TraceDirection,
+    TraceOptions,
+    TraceGap,
+    TraceWarning,
+    TraceSummary,
+} from 'db-cluster/types';
+```
+
+The shape:
 
 ```typescript
 interface ProvenanceGraph {
-    rootUri: string;
+    /** The focal URI — the object this graph was traced from */
+    focalUri: string;
+    /** Trace direction */
+    direction: TraceDirection;
+    /** All nodes in the graph */
     nodes: ProvenanceNode[];
+    /** All edges in the graph */
     edges: ProvenanceEdge[];
+    /** Gaps — missing provenance or truth */
+    gaps: TraceGap[];
+    /** Warnings — stale projections, missing chains */
+    warnings: TraceWarning[];
+    /** Summary statistics */
+    summary: TraceSummary;
+    /** When this graph was assembled */
+    assembledAt: string;
 }
 
 interface ProvenanceNode {
+    /** Cluster URI for this node */
     uri: string;
-    store: string;
-    action: string;
-    actorId: string;
-    timestamp: string;
+    /** Node type */
+    type: NodeType;
+    /** Owner store (or null for gaps) */
+    ownerStore: string | null;
+    /** Is this source truth or derivative? */
+    isSourceTruth: boolean;
+    /** Display label */
+    label: string;
+    /** Optional metadata snapshot */
+    metadata?: Record<string, unknown>;
+    /** Whether this node represents a gap/warning */
+    isGap?: boolean;
 }
 
 interface ProvenanceEdge {
+    /** Source node URI */
     from: string;
+    /** Target node URI */
     to: string;
-    relationship: string;
+    /** Edge type — the reason this connection exists */
+    type: EdgeType;
+    /** Human-readable reason */
+    reason: string;
+    /** Provenance event ID that establishes this edge (if any) */
+    sourceEventId?: string;
+    /** Timestamp of the edge relationship */
+    timestamp?: string;
+    /** Is this edge a warning (stale, missing)? */
+    isWarning?: boolean;
 }
 ```
 
-Nodes represent events. Edges represent causal relationships (parent→child, evidence→claim, source→derivative).
+Nodes carry a typed `NodeType` (one of: `entity`, `artifact`, `index_record`,
+`provenance_event`, `receipt`, `command`, `evidence_bundle`). Edges carry a
+typed `EdgeType` (11 variants covering all store relationships) and a
+human-readable `reason`. Older docs sometimes showed invented fields like
+`rootUri`, `store`, `action`, `actorId` or `relationship` — those don't exist
+on the real type. The `scripts/doc-drift.mjs` detector (release-gate stage
+[8/8]) typechecks every `typescript` code block in `docs/` against the actual
+`src/` types to prevent this drift from re-appearing.
 
 ## Parent chains
 

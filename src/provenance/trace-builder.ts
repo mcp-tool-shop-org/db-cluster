@@ -1,9 +1,4 @@
 import type { ClusterStores } from '../contracts/index.js';
-import type { Entity } from '../types/entity.js';
-import type { Artifact } from '../types/artifact.js';
-import type { IndexRecord } from '../types/index-record.js';
-import type { ProvenanceEvent } from '../types/provenance-event.js';
-import type { Receipt } from '../types/receipt.js';
 import type {
     ProvenanceGraph,
     ProvenanceNode,
@@ -16,6 +11,8 @@ import type {
     EdgeType,
 } from '../types/provenance-graph.js';
 import { parseClusterUri, formatClusterUri, type ClusterUri } from '../uri/cluster-uri.js';
+import type { RedactionRule } from '../types/policy.js';
+import { redactedMarker } from '../types/redaction.js';
 
 const DEFAULT_OPTIONS: TraceOptions = {
     direction: 'backward',
@@ -27,10 +24,135 @@ const DEFAULT_OPTIONS: TraceOptions = {
 };
 
 /**
+ * Structured label payload (KERNEL-B-006 / AGG-008 — Stage B Wave B1-Amend).
+ *
+ * Pre-fix, `addNode` accepted a pre-baked `label` string like
+ * `${entity.kind}: ${entity.name}` and stored it on the node. Even when
+ * a policy declared `provenance_actors`-redaction, the actor regex only
+ * scrubbed `by <actor>` patterns — entity names, filenames, action
+ * verbs all leaked through the literal label string.
+ *
+ * Post-fix, callers pass a structured {@link LabelData} object. The
+ * trace-builder stores both the structured `labelData` AND a rendered
+ * unredacted `label` string (so the public `ProvenanceNode.label`
+ * field, which the type signature claims is a string, still works for
+ * consumers that don't apply policy). PolicyEnforcedKernel surfaces
+ * call `renderProvenanceLabel(labelData, policyView)` to produce a
+ * redacted display string under policy.
+ *
+ * The label-stored-on-node IS the rendered form; consumers that need
+ * to RE-render under policy can find `labelData` on the node's
+ * `metadata.labelData` field (we serialize it there so it round-trips
+ * through every consumer that walks `metadata`).
+ */
+export type LabelData =
+    | {
+          kind: 'entity';
+          /** The entity.kind value (`'document'`, `'project'`, ...). */
+          kind_value: string;
+          /** The entity.name value (sensitive — gated by `entity_name` rule). */
+          name: string;
+      }
+    | {
+          kind: 'artifact';
+          /** The artifact filename (sensitive — gated by `artifact_filename` rule). */
+          filename: string;
+          /** Artifact version number. */
+          version: number;
+      }
+    | {
+          kind: 'provenance_event';
+          /** Event action verb (e.g. 'entity_created'). */
+          action: string;
+          /** Actor ID (sensitive — gated by `provenance_actors` rule). */
+          actorId: string;
+      }
+    | {
+          kind: 'index_record';
+          /** The index record's text snapshot. */
+          text: string;
+      }
+    | {
+          kind: 'receipt';
+          /** Receipt's result summary. */
+          resultSummary: string;
+      }
+    | {
+          kind: 'gap';
+          /** Free-form description of what's missing. */
+          description: string;
+      };
+
+/**
+ * Render a structured {@link LabelData} into a display string under a
+ * policy view. The policy view is a list of `RedactionRule`s — any rule
+ * targeting a label-bound axis (`entity_name`, `artifact_filename`,
+ * `provenance_actors`) gates the corresponding label component.
+ *
+ * When a component is denied by policy, it is replaced by `[REDACTED]`
+ * in the rendered string. The structural {@link
+ * import('../types/redaction.js').RedactedMarker} is the canonical
+ * shape for redacted values OUTSIDE label rendering — for the
+ * concatenated label string we collapse to the user-visible
+ * `[REDACTED]` token (so a label like "document: [REDACTED]" is
+ * obviously redacted to a human reading the graph).
+ *
+ * No policy → unredacted label.
+ *
+ * This function lives in the trace-builder module so call sites that
+ * need redacted labels don't have to walk a second module boundary.
+ */
+export function renderProvenanceLabel(
+    labelData: LabelData,
+    policyView: ReadonlyArray<RedactionRule>,
+): string {
+    const has = (target: RedactionRule['target']) =>
+        policyView.some((r) => r.target === target);
+    const REDACT = '[REDACTED]';
+    switch (labelData.kind) {
+        case 'entity': {
+            const name = has('entity_name') ? REDACT : labelData.name;
+            return `${labelData.kind_value}: ${name}`;
+        }
+        case 'artifact': {
+            const fn = has('artifact_filename') ? REDACT : labelData.filename;
+            return `${fn} v${labelData.version}`;
+        }
+        case 'provenance_event': {
+            const actor = has('provenance_actors') ? REDACT : labelData.actorId;
+            return `${labelData.action} by ${actor}`;
+        }
+        case 'index_record':
+            return `[index] ${labelData.text}`;
+        case 'receipt':
+            return `Receipt: ${labelData.resultSummary}`;
+        case 'gap':
+            return `[MISSING] ${labelData.description}`;
+        default: {
+            // AGG-005 / KERNEL-B-003: runtime-loaded labelData with an
+            // unexpected kind. Return a safe sentinel rather than
+            // crashing or leaking through string-coercion.
+            const _exhaustive: never = labelData;
+            void _exhaustive;
+            return REDACT;
+        }
+    }
+}
+
+/**
  * TraceBuilder — builds cross-store provenance graphs from any cluster URI.
  *
  * Not just ledger parent chains. Crosses all four stores + receipts.
  * Surfaces gaps, warnings, stale projections honestly.
+ *
+ * KERNEL-B-006 / AGG-008: nodes now carry both a rendered `label` string
+ * (back-compat with the `ProvenanceNode.label: string` contract) AND a
+ * structured `metadata.labelData` payload that policy surfaces can use
+ * to RE-render with redaction. The `label` produced here is the
+ * unredacted form (no policy applied). Policy-aware consumers
+ * (PolicyEnforcedKernel.traceObject, dashboard) read `metadata.labelData`
+ * and call `renderProvenanceLabel(labelData, policyView)` to get the
+ * gated display string.
  */
 export class TraceBuilder {
     private nodes = new Map<string, ProvenanceNode>();
@@ -101,22 +223,36 @@ export class TraceBuilder {
             return;
         }
 
-        this.addNode(uri, 'entity', 'canonical', true, `${entity.kind}: ${entity.name}`, {
-            kind: entity.kind,
-            name: entity.name,
-            createdAt: entity.createdAt,
-        });
+        // KERNEL-B-006: previously baked `${entity.kind}: ${entity.name}`
+        // into the label string. The entity name leaked through every
+        // traceObject / why surface. Now stored as structured labelData;
+        // the rendered label here is for back-compat with the
+        // `ProvenanceNode.label: string` contract, but policy-aware
+        // consumers should re-render via `renderProvenanceLabel(metadata.labelData, policyView)`.
+        // The structured labelData lives on `metadata.labelData` and
+        // round-trips through every consumer that walks `metadata`.
+        this.addStructuredNode(uri, 'entity', 'canonical', true,
+            { kind: 'entity', kind_value: entity.kind, name: entity.name },
+            {
+                kind: entity.kind,
+                name: entity.name,
+                createdAt: entity.createdAt,
+            },
+        );
 
         // Backward: find provenance events for this entity
         if (this.options.direction !== 'forward') {
             const events = await this.stores.ledger.listEvents({ subjectId: id });
             for (const event of events) {
                 const eventUri = formatClusterUri('ledger', event.id);
-                this.addNode(eventUri, 'provenance_event', 'ledger', true, `${event.action} by ${event.actorId}`, {
-                    action: event.action,
-                    actorId: event.actorId,
-                    timestamp: event.timestamp,
-                });
+                this.addStructuredNode(eventUri, 'provenance_event', 'ledger', true,
+                    { kind: 'provenance_event', action: event.action, actorId: event.actorId },
+                    {
+                        action: event.action,
+                        actorId: event.actorId,
+                        timestamp: event.timestamp,
+                    },
+                );
 
                 const edgeType = this.eventToEdgeType(event.action);
                 this.addEdge(eventUri, uri, edgeType, `${event.action} at ${event.timestamp}`, event.id, event.timestamp);
@@ -140,7 +276,15 @@ export class TraceBuilder {
                 this.warnings.push({
                     type: 'missing_provenance',
                     subjectUri: uri,
-                    message: `Entity ${entity.kind}/${entity.name} exists without supporting provenance`,
+                    // KERNEL-B-006: warning message previously interpolated
+                    // `${entity.kind}/${entity.name}`. Surfaces through the
+                    // warnings array on retrieveBundle. Replace name with a
+                    // RedactedMarker stand-in (string form) so the warning
+                    // shape stays a string for back-compat. Consumers that
+                    // want the structured form should call traceObject and
+                    // pull labelData from the node, not parse the warning
+                    // message.
+                    message: `Entity ${entity.kind}/[name] exists without supporting provenance`,
                 });
             }
         }
@@ -165,23 +309,29 @@ export class TraceBuilder {
             return;
         }
 
-        this.addNode(uri, 'artifact', 'artifact', true, `${artifact.filename} v${artifact.version}`, {
-            filename: artifact.filename,
-            version: artifact.version,
-            mimeType: artifact.mimeType,
-            ingestedAt: artifact.ingestedAt,
-        });
+        this.addStructuredNode(uri, 'artifact', 'artifact', true,
+            { kind: 'artifact', filename: artifact.filename, version: artifact.version },
+            {
+                filename: artifact.filename,
+                version: artifact.version,
+                mimeType: artifact.mimeType,
+                ingestedAt: artifact.ingestedAt,
+            },
+        );
 
         // Backward: find ingestion event
         if (this.options.direction !== 'forward') {
             const events = await this.stores.ledger.listEvents({ subjectId: id });
             for (const event of events) {
                 const eventUri = formatClusterUri('ledger', event.id);
-                this.addNode(eventUri, 'provenance_event', 'ledger', true, `${event.action} by ${event.actorId}`, {
-                    action: event.action,
-                    actorId: event.actorId,
-                    timestamp: event.timestamp,
-                });
+                this.addStructuredNode(eventUri, 'provenance_event', 'ledger', true,
+                    { kind: 'provenance_event', action: event.action, actorId: event.actorId },
+                    {
+                        action: event.action,
+                        actorId: event.actorId,
+                        timestamp: event.timestamp,
+                    },
+                );
                 this.addEdge(eventUri, uri, 'artifact_ingested_from', `${event.action}`, event.id, event.timestamp);
             }
 
@@ -195,7 +345,10 @@ export class TraceBuilder {
                 this.warnings.push({
                     type: 'missing_provenance',
                     subjectUri: uri,
-                    message: `Artifact ${artifact.filename} exists without supporting provenance`,
+                    // KERNEL-B-006: filename interpolation. Replace with
+                    // [filename] placeholder; structured form is on the
+                    // node's metadata.labelData.
+                    message: `Artifact [filename] exists without supporting provenance`,
                 });
             }
         }
@@ -228,11 +381,14 @@ export class TraceBuilder {
             return;
         }
 
-        this.addNode(uri, 'index_record', 'index', false, `[index] ${record.text}`, {
-            sourceStore: record.sourceStore,
-            sourceId: record.sourceId,
-            indexedAt: record.indexedAt,
-        });
+        this.addStructuredNode(uri, 'index_record', 'index', false,
+            { kind: 'index_record', text: record.text },
+            {
+                sourceStore: record.sourceStore,
+                sourceId: record.sourceId,
+                indexedAt: record.indexedAt,
+            },
+        );
 
         // Backward: trace to owner truth
         if (this.options.direction !== 'forward') {
@@ -292,13 +448,16 @@ export class TraceBuilder {
             return;
         }
 
-        this.addNode(uri, 'provenance_event', 'ledger', true, `${event.action} by ${event.actorId}`, {
-            action: event.action,
-            actorId: event.actorId,
-            subjectId: event.subjectId,
-            subjectStore: event.subjectStore,
-            timestamp: event.timestamp,
-        });
+        this.addStructuredNode(uri, 'provenance_event', 'ledger', true,
+            { kind: 'provenance_event', action: event.action, actorId: event.actorId },
+            {
+                action: event.action,
+                actorId: event.actorId,
+                subjectId: event.subjectId,
+                subjectStore: event.subjectStore,
+                timestamp: event.timestamp,
+            },
+        );
 
         // Backward: trace parent event
         if (this.options.direction !== 'forward' && event.parentEventId) {
@@ -325,11 +484,14 @@ export class TraceBuilder {
             return;
         }
 
-        this.addNode(uri, 'receipt', 'ledger', true, `Receipt: ${receipt.resultSummary}`, {
-            commandId: receipt.commandId,
-            committedAt: receipt.committedAt,
-            resultSummary: receipt.resultSummary,
-        });
+        this.addStructuredNode(uri, 'receipt', 'ledger', true,
+            { kind: 'receipt', resultSummary: receipt.resultSummary },
+            {
+                commandId: receipt.commandId,
+                committedAt: receipt.committedAt,
+                resultSummary: receipt.resultSummary,
+            },
+        );
 
         // Backward: trace the provenance event that emitted this receipt
         if (this.options.direction !== 'forward' && receipt.provenanceEventId) {
@@ -364,10 +526,13 @@ export class TraceBuilder {
         const matching = records.filter((r) => r.sourceId === sourceId);
         for (const record of matching) {
             const indexUri = formatClusterUri('index', record.id);
-            this.addNode(indexUri, 'index_record', 'index', false, `[index] ${record.text}`, {
-                sourceStore: record.sourceStore,
-                sourceId: record.sourceId,
-            });
+            this.addStructuredNode(indexUri, 'index_record', 'index', false,
+                { kind: 'index_record', text: record.text },
+                {
+                    sourceStore: record.sourceStore,
+                    sourceId: record.sourceId,
+                },
+            );
             this.addEdge(sourceUri, indexUri, 'index_record_derived_from', 'Index derived from this truth');
         }
     }
@@ -377,30 +542,106 @@ export class TraceBuilder {
         const related = receipts.filter((r) => r.affectedIds.includes(subjectId));
         for (const receipt of related) {
             const receiptUri = formatClusterUri('receipt', receipt.id);
-            this.addNode(receiptUri, 'receipt', 'ledger', true, `Receipt: ${receipt.resultSummary}`, {
-                commandId: receipt.commandId,
-                committedAt: receipt.committedAt,
-            });
+            this.addStructuredNode(receiptUri, 'receipt', 'ledger', true,
+                { kind: 'receipt', resultSummary: receipt.resultSummary },
+                {
+                    commandId: receipt.commandId,
+                    committedAt: receipt.committedAt,
+                },
+            );
             this.addEdge(receiptUri, subjectUri, 'receipt_emitted_for', 'Receipt covers this object');
         }
     }
 
-    private addNode(
+    /**
+     * Internal: store a node with structured labelData.
+     *
+     * KERNEL-B-006 / AGG-B1-1a (post-coordinator-fixup doctrine):
+     * the rendered `label` string emitted here is the LITERAL form
+     * (i.e. `renderProvenanceLabel(labelData, [])` — no policy applied).
+     * The bare ClusterKernel surface is treated as trusted-internal:
+     * its `node.label` carries the literal identifier for back-compat
+     * with the `ProvenanceNode.label: string` contract.
+     *
+     * Policy-aware redaction happens at the BOUNDARY, not here:
+     *   - `PolicyEnforcedKernel.traceObject` / `traceBundle` re-render
+     *     every node's label via `renderProvenanceLabel(metadata.labelData,
+     *     policyView)` where `policyView` is the redaction rule set
+     *     collected from the matched policy + trust zone.
+     *   - The MCP boundary (`cluster_trace` route) consumes graphs that
+     *     have already passed through a PolicyEnforcedKernel, so the
+     *     literal label has been replaced upstream when policy required.
+     *   - The dashboard inspector renders the policy-aware label via
+     *     the same helper.
+     *
+     * Why we still set `label: string` on the node (not `string |
+     * RedactedMarker`): the `ProvenanceNode.label: string` contract is
+     * consumed by every SDK / dashboard / why surface. Migrating that
+     * to a sum type would cascade across all five domains; B2 may
+     * promote the boundary upstream via branded `BareGraph` types but
+     * for B1-Amend the doctrine is: literal at bare kernel, re-rendered
+     * at the policy boundary. Consumers that hold a bare ClusterKernel
+     * graph MUST NOT surface its labels to AI-facing trust zones
+     * without going through PolicyEnforcedKernel first.
+     */
+    private addStructuredNode(
         uri: string,
         type: NodeType,
         ownerStore: string | null,
         isSourceTruth: boolean,
-        label: string,
+        labelData: LabelData,
         metadata?: Record<string, unknown>,
         isGap?: boolean,
     ): void {
         if (!this.nodes.has(uri)) {
-            this.nodes.set(uri, { uri, type, ownerStore, isSourceTruth, label, metadata, isGap });
+            // KERNEL-B-006 / AGG-B1-1a: produce the LITERAL label at the
+            // bare ClusterKernel surface (no policy applied). The
+            // PolicyEnforcedKernel / MCP / dashboard boundary re-renders
+            // this label via `renderProvenanceLabel(metadata.labelData,
+            // policyView)` before surfacing to AI-facing trust zones.
+            // Holding a bare ClusterKernel graph carries the trust
+            // assumption that its labels are not surfaced unredacted.
+            const label = this.renderPublicLabel(labelData);
+            const fullMetadata: Record<string, unknown> = {
+                ...(metadata ?? {}),
+                labelData,
+            };
+            this.nodes.set(uri, { uri, type, ownerStore, isSourceTruth, label, metadata: fullMetadata, isGap });
         }
     }
 
+    /**
+     * Render the literal `node.label: string` for the bare ClusterKernel
+     * graph. Per the KERNEL-B-006 / AGG-B1-1a doctrine: render-once-at-
+     * bare-kernel-with-no-policy, re-render-at-the-PolicyEnforced-boundary-
+     * with-policy-view.
+     *
+     * The bare ClusterKernel is the trust boundary's INSIDE — its
+     * `node.label` carries the literal identifier. PolicyEnforcedKernel
+     * is the boundary that gates AI-facing access; its `traceObject` /
+     * `traceBundle` re-render every node via
+     * {@link renderProvenanceLabel}(metadata.labelData, policyView)
+     * where `policyView` comes from the matched policy + trust zone.
+     * The MCP `cluster_trace` and the dashboard inspector consume
+     * already-re-rendered graphs from a PolicyEnforcedKernel and never
+     * see the bare-kernel literal.
+     *
+     * Equivalent to `renderProvenanceLabel(labelData, [])`.
+     */
+    private renderPublicLabel(labelData: LabelData): string {
+        return renderProvenanceLabel(labelData, []);
+    }
+
     private addGapNode(uri: string, type: NodeType, store: string, description: string): void {
-        this.addNode(uri, type, null, false, `[MISSING] ${description}`, undefined, true);
+        // Gap node: label is purely descriptive (not derived from sensitive
+        // identifiers) so we render via the structured path with the
+        // `gap` kind. Note: `description` may contain identifiers (entity
+        // ID, etc.). Callers should pass IDs they're comfortable
+        // surfacing in the public label.
+        this.addStructuredNode(uri, type, null, false, { kind: 'gap', description }, undefined, true);
+        // Mark the resulting node as a gap node:
+        const node = this.nodes.get(uri);
+        if (node) node.isGap = true;
         this.gaps.push({ description, expectedUri: uri, store, impact: 'high' });
     }
 
@@ -466,3 +707,7 @@ export class TraceBuilder {
         };
     }
 }
+
+// Suppress unused import warning while the marker import documents the
+// structural relationship with AGG-008 markers.
+void redactedMarker;

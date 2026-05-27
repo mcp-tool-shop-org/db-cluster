@@ -1,14 +1,39 @@
+# npm install output
 node_modules/
+
+# tsc build output, rebuilt by `npm run build`
 dist/
+
+# vitest temp dirs (test/temp-cluster-XXX)
 .test-*
+
+# release-gate pack output (CIDOCS-B-017)
 *.tgz
+
+# quickstart cluster data
 .db-cluster/
+
+# quickstart cluster data inside examples
 examples/**/.db-cluster/
+
+# mutation testing baseline
 .stryker-tmp/
+
+# mutation/stryker html reports
 reports/
 
 # Release-gate per-stage log artifacts (CIDOCS-B-025)
 .release-gate-output/
+
+# Doc-drift detector synthetic extract dir (CIDOCS-B-001 / scripts/doc-drift.mjs)
+.doc-drift-extract/
+
+# Repo-knowledge SQLite data files (defensive — CIDOCS-B-021)
+.repo-knowledge/
+**/.repo-knowledge/
+
+# Backup output filename pattern from `db-cluster backup -o ...` (defensive)
+cluster-backup-*.json
 
 # Stray top-level .txt files (CIDOCS-009 — workspace hygiene)
 /*.txt

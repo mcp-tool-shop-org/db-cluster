@@ -1,3 +1,20 @@
+/**
+ * TESTS-B-008 (Wave B1-Amend) — doctrine for this file's hook strategy.
+ *
+ * Tests 1-7 are READ-ONLY against the shared dataDir (search the index;
+ * no mutations). They keep beforeAll because the per-test cost of
+ * re-ingesting 5 artifacts + rebuilding the index would be ~8× the read
+ * cost for zero correctness gain.
+ *
+ * Test 8 (`index remains rebuildable and derivative`) MUTATES the index
+ * (calls `index.clear()` then `rebuildIndex`). It has been isolated to a
+ * per-test fresh dir so it does not corrupt the shared seed for the read
+ * tests above. This is the audit's recommended pattern: leave safe
+ * beforeAll, isolate only the mutating site.
+ *
+ * The 9-10 unit tests at the bottom of this file don't touch any cluster
+ * state — they exercise tokenizer functions pure.
+ */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { rmSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -147,17 +164,43 @@ Backup/restore does not preserve artifact truth.`),
         expect(artifact!.filename).toContain('phase-6');
     });
 
+    // TESTS-B-008 (Wave B1-Amend): isolated to per-test fresh dir.
+    // Pre-fix: this test called `await stores.index.clear()` on the SHARED
+    // dataDir, mutating shared state. If this test ran BEFORE tests 1-7 (a
+    // future rename / `.only` / fixture-reorder), tests 1-7 would fail
+    // because the shared index was wiped.
+    // Post-fix: this test uses its own fresh dir, fully seeded inline.
+    // The seven read-only tests above still share dataDir (safe — they
+    // don't mutate). This is the targeted fix per the audit's recommendation:
+    // "for safe-vs-unsafe distinction, leave safe beforeAll; isolate only
+    // the mutating site."
     it('index remains rebuildable and derivative', async () => {
-        const stores = createLocalCluster(dataDir);
-        // Clear index
-        await stores.index.clear();
-        const empty = await stores.index.search({ text: 'MCP' });
-        expect(empty.length).toBe(0);
+        const isolatedDir = mkdtempSync(join(tmpdir(), 'content-idx-isolated-'));
+        try {
+            const isolatedStores = createLocalCluster(isolatedDir);
+            const isolatedKernel = new ClusterKernel(isolatedStores, { dataDir: isolatedDir });
 
-        // Rebuild
-        await rebuildIndex(stores);
-        const rebuilt = await stores.index.search({ text: 'MCP' });
-        expect(rebuilt.length).toBeGreaterThan(0);
+            // Inline seed — minimal subset of beforeAll's artifacts that
+            // produces a searchable 'MCP' term post-rebuild.
+            await isolatedKernel.ingestArtifact({
+                filename: 'docs/phase-6-isolated.md',
+                content: Buffer.from('# Phase 6 — MCP and SDK\nMCP tools expose cluster thesis.'),
+                mimeType: 'text/markdown',
+                actorId: 'operator',
+            });
+            await rebuildIndex(isolatedStores);
+
+            // Now clear and re-rebuild — the load-bearing assertion.
+            await isolatedStores.index.clear();
+            const empty = await isolatedStores.index.search({ text: 'MCP' });
+            expect(empty.length).toBe(0);
+
+            await rebuildIndex(isolatedStores);
+            const rebuilt = await isolatedStores.index.search({ text: 'MCP' });
+            expect(rebuilt.length).toBeGreaterThan(0);
+        } finally {
+            try { rmSync(isolatedDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+        }
     });
 
     // Unit tests for tokenizer

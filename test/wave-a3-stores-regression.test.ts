@@ -123,6 +123,291 @@ describe('Wave A3 — Stores regression nets', () => {
                 rmSync(dir, { recursive: true, force: true });
             }
         });
+
+        // ─── TESTS-B-006 (Wave B1-Amend) — all 5 ledger-subject event types ─
+        //
+        // V3-009 carry-over: Wave A3 covered 2 of 5 ledger-subject (and
+        // index-subject) event types whose subjectId is a command/index UUID
+        // not present in canonical/artifact. The other 3 (command_compensated,
+        // mutation_orphaned with subjectStore='ledger', index_rebuilt with
+        // subjectStore='index') had no consumer test.
+        //
+        // The verify() filter at src/ops/verify.ts:111 keeps both
+        // 'ledger'-subject AND 'index'-subject events out of the
+        // canonical/artifact existence check; both subjectStore values
+        // must be exercised to pin the contract. The 5 event types this
+        // suite enumerates correspond to the source comment at
+        // src/ops/verify.ts:97-101.
+        //
+        // Each entry plants the event in the ledger (via lifecycle helpers
+        // where convenient, or via direct ledger.append for synthetic
+        // orphans) and asserts that verify()'s provenance_references_valid
+        // check stays 'healthy' — proving the filter handles that subject.
+        const ledgerSubjectEventCases = [
+            {
+                action: 'command_approved',
+                subjectStore: 'ledger' as const,
+                kind: 'lifecycle' as const,
+            },
+            {
+                action: 'command_rejected',
+                subjectStore: 'ledger' as const,
+                kind: 'reject' as const,
+            },
+            {
+                action: 'command_compensated',
+                subjectStore: 'ledger' as const,
+                kind: 'compensate' as const,
+            },
+            {
+                // mutation_orphaned via compensate path emits with
+                // subjectStore='ledger' (cluster-kernel.ts:1030-1042). Synthetic
+                // append covers the contract — a real orphan trigger would
+                // require fault-injection into emitReceipt that ESM forbids.
+                action: 'mutation_orphaned',
+                subjectStore: 'ledger' as const,
+                kind: 'plant' as const,
+            },
+            {
+                // index_rebuilt + reindex-arm mutation_committed both emit
+                // with subjectStore='index'. verify()'s filter covers BOTH
+                // 'ledger' and 'index' subject (verify.ts:111); the
+                // index-subject side is the 5th type that previously had
+                // zero coverage.
+                action: 'index_rebuilt',
+                subjectStore: 'index' as const,
+                kind: 'rebuild' as const,
+            },
+        ];
+
+        it.each(ledgerSubjectEventCases)(
+            'verify() does NOT flag $action (subjectStore=$subjectStore) as orphan',
+            async ({ action, subjectStore, kind }) => {
+                const dir = mkdtempSync(join(tmpdir(), `wave-b1-verify-${action}-`));
+                try {
+                    const stores = createLocalCluster(dir);
+                    const kernel = new ClusterKernel(stores, { dataDir: dir });
+
+                    if (kind === 'lifecycle') {
+                        // Full propose→validate→approve→commit → command_approved
+                        const proposal = await kernel.proposeMutation({
+                            verb: 'create_entity',
+                            targetStore: 'canonical',
+                            payload: { kind: 'note', name: `b1-${action}`, attributes: {} },
+                            proposedBy: 'agent',
+                        });
+                        await kernel.validateMutation(proposal.id);
+                        await kernel.approveMutation(proposal.id, 'operator');
+                        await kernel.commitMutation(proposal.id, 'operator');
+                    } else if (kind === 'reject') {
+                        const proposal = await kernel.proposeMutation({
+                            verb: 'create_entity',
+                            targetStore: 'canonical',
+                            payload: { kind: 'note', name: `b1-${action}`, attributes: {} },
+                            proposedBy: 'agent',
+                        });
+                        await kernel.rejectMutation(proposal.id, 'operator', 'b1 denied');
+                    } else if (kind === 'compensate') {
+                        // Full lifecycle then compensate → command_compensated.
+                        const proposal = await kernel.proposeMutation({
+                            verb: 'create_entity',
+                            targetStore: 'canonical',
+                            payload: { kind: 'note', name: `b1-${action}`, attributes: {} },
+                            proposedBy: 'agent',
+                        });
+                        await kernel.validateMutation(proposal.id);
+                        await kernel.approveMutation(proposal.id, 'operator');
+                        await kernel.commitMutation(proposal.id, 'operator');
+                        await kernel.compensateMutation(proposal.id, 'operator', 'b1 compensate');
+                    } else if (kind === 'rebuild') {
+                        // Plant some real owner truth, then rebuild → index_rebuilt
+                        // event with subjectStore='index'.
+                        await stores.canonical.create({
+                            kind: 'document',
+                            name: `b1-rebuild-anchor`,
+                            attributes: {},
+                        });
+                        await kernel.rebuildIndex('operator');
+                    } else if (kind === 'plant') {
+                        // Plant a synthetic orphan with subjectStore='ledger'.
+                        // A real orphan-trigger path requires fault-injection
+                        // into emitReceipt which ESM module-freezing blocks.
+                        // The verify() filter is contract-driven (subjectStore
+                        // alone gates the check) so a planted event covers it.
+                        await stores.ledger.append({
+                            action: 'mutation_orphaned',
+                            actorId: 'kernel',
+                            subjectId: 'cmd-b1-synthetic',
+                            subjectStore: 'ledger',
+                            detail: { commandId: 'cmd-b1-synthetic', error: 'synthetic orphan' },
+                        });
+                    }
+
+                    // Sanity — the planted event is in the ledger with the
+                    // expected subjectStore.
+                    const events = await stores.ledger.listEvents({});
+                    const matching = events.filter((e) => e.action === action);
+                    expect(matching.length, `expected ≥1 ${action} event`).toBeGreaterThan(0);
+                    expect(matching[0].subjectStore).toBe(subjectStore);
+
+                    // Anchor entity so the cluster has owner truth and the
+                    // other checks don't degrade on emptiness.
+                    if (kind !== 'rebuild') {
+                        await stores.canonical.create({
+                            kind: 'document',
+                            name: `b1-anchor-${action}`,
+                            attributes: {},
+                        });
+                    }
+
+                    // verify() — the provenance_references_valid check
+                    // should NOT flag this event as orphan, because the
+                    // verify() filter excludes 'ledger'-subject AND
+                    // 'index'-subject events.
+                    const result = await verify(stores);
+
+                    const provCheck = result.checks.find(
+                        (c) => c.name === 'provenance_references_valid',
+                    );
+                    expect(provCheck, 'expected provenance_references_valid check').toBeDefined();
+                    expect(
+                        provCheck!.status,
+                        `${action} (${subjectStore}) caused provenance_references_valid to be ${provCheck!.status}: ${provCheck!.message}`,
+                    ).toBe('healthy');
+                } finally {
+                    rmSync(dir, { recursive: true, force: true });
+                }
+            },
+        );
+
+        // ─── TESTS-B-016 (Wave B1-Amend) — check-isolation ──────────────────
+        //
+        // V3-014 carry-over: this region's targeted-check assertions used
+        // `result.checks.find(...).status === 'healthy'`. A new check added
+        // by Wave B (or future) that happens to degrade overall but NOT
+        // provenance_references_valid would still pass each per-check
+        // assertion above — masking a regression in the broader verify().
+        //
+        // This isolation assertion pins TWO additional invariants:
+        //   1. After all 5 ledger-subject events are planted into the SAME
+        //      cluster, result.overall === 'healthy' (no other check fires).
+        //   2. result.checks.length === the count of checks verify() defines
+        //      today (verify.ts has 4 checks: index_references_valid,
+        //      provenance_references_valid, no_orphaned_mutations,
+        //      receipts_provenance_valid). If verify() grows a new check,
+        //      this assertion fails loudly and the test author updates
+        //      the expectation explicitly.
+        //
+        // mutation_orphaned (planted) DOES correctly degrade the
+        // no_orphaned_mutations check (STORES-R2-003 contract). Test
+        // strategy: build TWO clusters — one with all NON-orphan ledger
+        // events (asserts overall=healthy + check count); one with ALL
+        // events INCLUDING the orphan (asserts overall NOT healthy
+        // because the orphan check degrades, BUT provenance_references_valid
+        // stays healthy).
+        it('verify() overall=healthy + check-count fixed when only non-orphan ledger-subject events present', async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'wave-b1-isolation-clean-'));
+            try {
+                const stores = createLocalCluster(dir);
+                const kernel = new ClusterKernel(stores, { dataDir: dir });
+
+                // Plant: command_approved (full lifecycle), command_rejected,
+                // command_compensated, index_rebuilt — NO mutation_orphaned.
+                const p1 = await kernel.proposeMutation({
+                    verb: 'create_entity',
+                    targetStore: 'canonical',
+                    payload: { kind: 'note', name: 'iso-clean-approved', attributes: {} },
+                    proposedBy: 'agent',
+                });
+                await kernel.validateMutation(p1.id);
+                await kernel.approveMutation(p1.id, 'operator');
+                await kernel.commitMutation(p1.id, 'operator');
+                await kernel.compensateMutation(p1.id, 'operator', 'iso clean comp');
+
+                const p2 = await kernel.proposeMutation({
+                    verb: 'create_entity',
+                    targetStore: 'canonical',
+                    payload: { kind: 'note', name: 'iso-clean-rejected', attributes: {} },
+                    proposedBy: 'agent',
+                });
+                await kernel.rejectMutation(p2.id, 'operator', 'iso clean reject');
+
+                await kernel.rebuildIndex('operator');
+
+                const result = await verify(stores);
+
+                // The four checks verify() defines today, by name. This
+                // pinned set is the contract; an added check forces an
+                // explicit update here (catches "new check added that hides
+                // regression" per TESTS-B-016).
+                const expectedCheckNames = [
+                    'index_references_valid',
+                    'provenance_references_valid',
+                    'no_orphaned_mutations',
+                    'receipts_provenance_valid',
+                ];
+                expect(
+                    result.checks.map((c) => c.name).sort(),
+                    `verify() check set drifted from the TESTS-B-016-pinned contract. ` +
+                        `If a check was added/renamed intentionally, update the expected ` +
+                        `list AND audit the per-event-type tests above for coverage.`,
+                ).toEqual([...expectedCheckNames].sort());
+                expect(result.checks.length).toBe(expectedCheckNames.length);
+                expect(
+                    result.status,
+                    `status=${result.status}; check states:\n` +
+                        result.checks
+                            .map((c) => `  ${c.name}: ${c.status} (${c.message})`)
+                            .join('\n'),
+                ).toBe('healthy');
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+
+        it('verify() overall NOT healthy when synthetic mutation_orphaned is planted, but provenance_references_valid stays healthy', async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'wave-b1-isolation-orphan-'));
+            try {
+                const stores = createLocalCluster(dir);
+
+                await stores.ledger.append({
+                    action: 'mutation_orphaned',
+                    actorId: 'kernel',
+                    subjectId: 'cmd-isolation-synthetic',
+                    subjectStore: 'ledger',
+                    detail: { commandId: 'cmd-isolation-synthetic', error: 'synthetic' },
+                });
+                await stores.canonical.create({
+                    kind: 'document',
+                    name: 'iso-orphan-anchor',
+                    attributes: {},
+                });
+
+                const result = await verify(stores);
+
+                // The orphan check correctly degrades overall.
+                expect(result.status).not.toBe('healthy');
+                const orphanCheck = result.checks.find(
+                    (c) => c.name === 'no_orphaned_mutations',
+                );
+                expect(orphanCheck).toBeDefined();
+                expect(orphanCheck!.status).not.toBe('healthy');
+
+                // BUT provenance_references_valid stays healthy — the orphan
+                // event has subjectStore='ledger' and the verify() filter
+                // (verify.ts:111) excludes it from the canonical/artifact
+                // existence check. This is the load-bearing assertion: the
+                // check that protects against THIS finding's regression
+                // path is independent of the orphan-degradation path.
+                const provCheck = result.checks.find(
+                    (c) => c.name === 'provenance_references_valid',
+                );
+                expect(provCheck).toBeDefined();
+                expect(provCheck!.status).toBe('healthy');
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
     });
 
     // ─── STORES-R2-002 — import* hooks REQUIRED on contracts ─────────────

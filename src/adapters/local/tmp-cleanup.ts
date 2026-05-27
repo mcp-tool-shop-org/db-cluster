@@ -7,6 +7,14 @@
  * truncate the first one's data silently. The fix shifts each persist call to
  * a random-suffix tmp path so concurrent writers never collide.
  *
+ * Wave B1-Amend (cross-domain consolidation): the load-bearing helpers below
+ * now delegate to {@link src/util/tmp-paths.ts}, the canonical implementation
+ * extracted by the CI/Docs agent to close the AGG-A4-2 triplication finding
+ * (this file, `src/kernel/cluster-kernel.ts::getStagingDir`, and
+ * `src/kernel/command-queue.ts` all shipped the same logic inline pre-amend).
+ * The signatures and return shapes of these adapter-side helpers were
+ * preserved as `void` for back-compat with existing call sites.
+ *
  * The new failure mode is orphan tmp files: if a process dies between
  * writeFileSync and renameSync the random-suffix tmp file lingers forever.
  * `cleanupOrphanTmpFiles` sweeps the data directory at constructor time and
@@ -19,32 +27,31 @@
  * adapters' persist() methods.
  */
 
-import { readdirSync, statSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
-
-const DEFAULT_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+import {
+    buildRandomTmpPath as utilBuildRandomTmpPath,
+    cleanupOrphanTmpFiles as utilCleanupOrphanTmpFiles,
+    sweepContentDirOrphans as utilSweepContentDirOrphans,
+} from '../../util/tmp-paths.js';
 
 /**
  * Build the per-call random tmp path used by the local-store persist methods.
- * Centralized here so the cleanup regex stays in sync with the producer.
+ * Centralized in `src/util/tmp-paths.ts`; re-exported here as a back-compat
+ * shim so existing adapter call sites need no edits.
  *
  * Format: `${targetPath}.${process.pid}-${rand6}.tmp` where rand6 is 1-6
  * base36 characters. process.pid is included so per-process collision is
  * impossible; the random suffix handles intra-process concurrency.
  */
 export function buildRandomTmpPath(targetPath: string): string {
-    const rand = Math.random().toString(36).slice(2, 8);
-    return `${targetPath}.${process.pid}-${rand}.tmp`;
+    return utilBuildRandomTmpPath(targetPath);
 }
 
 /**
- * Scan dir for random-suffix orphan tmp files matching baseName and unlink
- * the ones older than maxAgeMs. Best-effort: any error during readdir / stat /
- * unlink is swallowed so a half-broken filesystem cannot prevent an adapter
- * from constructing.
+ * Scan `dir` for random-suffix orphan tmp files matching `baseName` and unlink
+ * the ones older than `maxAgeMs`. Best-effort.
  *
- * The match regex is anchored to baseName specifically so unrelated `.tmp`
- * files in the directory (e.g. operator backups, scratch files) survive.
+ * The adapter-side shim swallows the cleanup-count return value and presents
+ * a `void` signature for back-compat with the original Wave A4 callers.
  *
  * @param dir       Absolute path of the directory to scan.
  * @param baseName  The base file name (e.g. `entities.json`) — must NOT
@@ -58,44 +65,9 @@ export function buildRandomTmpPath(targetPath: string): string {
 export function cleanupOrphanTmpFiles(
     dir: string,
     baseName: string,
-    maxAgeMs: number = DEFAULT_MAX_AGE_MS,
+    maxAgeMs?: number,
 ): void {
-    let entries: string[];
-    try {
-        entries = readdirSync(dir);
-    } catch {
-        // Directory missing or unreadable — nothing to clean.
-        return;
-    }
-
-    // Escape regex metacharacters in baseName (e.g. periods in `entities.json`
-    // would otherwise act as wildcards).
-    const escapedBase = baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const orphanPattern = new RegExp(`^${escapedBase}\\.\\d+-[a-z0-9]{1,6}\\.tmp$`);
-
-    const cutoff = Date.now() - maxAgeMs;
-
-    for (const entry of entries) {
-        if (!orphanPattern.test(entry)) continue;
-        const fullPath = join(dir, entry);
-        let mtimeMs: number;
-        try {
-            const stat = statSync(fullPath);
-            mtimeMs = stat.mtimeMs;
-        } catch {
-            // Lost the race or stat failed — skip.
-            continue;
-        }
-        if (mtimeMs >= cutoff) {
-            // Young file — may belong to an actively-writing sibling process.
-            continue;
-        }
-        try {
-            unlinkSync(fullPath);
-        } catch {
-            // Best-effort. A failure here is non-fatal; we tried.
-        }
-    }
+    utilCleanupOrphanTmpFiles(dir, baseName, maxAgeMs !== undefined ? { maxAgeMs } : undefined);
 }
 
 /**
@@ -114,33 +86,7 @@ export function cleanupOrphanTmpFiles(
  */
 export function sweepContentDirOrphans(
     contentDir: string,
-    maxAgeMs: number = DEFAULT_MAX_AGE_MS,
+    maxAgeMs?: number,
 ): void {
-    let entries: string[];
-    try {
-        entries = readdirSync(contentDir);
-    } catch {
-        return;
-    }
-
-    const orphanPattern = /^[a-f0-9]{64}\.\d+-[a-z0-9]{1,6}\.tmp$/;
-    const cutoff = Date.now() - maxAgeMs;
-
-    for (const entry of entries) {
-        if (!orphanPattern.test(entry)) continue;
-        const fullPath = join(contentDir, entry);
-        let mtimeMs: number;
-        try {
-            const stat = statSync(fullPath);
-            mtimeMs = stat.mtimeMs;
-        } catch {
-            continue;
-        }
-        if (mtimeMs >= cutoff) continue;
-        try {
-            unlinkSync(fullPath);
-        } catch {
-            // Best-effort.
-        }
-    }
+    utilSweepContentDirOrphans(contentDir, maxAgeMs !== undefined ? { maxAgeMs } : undefined);
 }

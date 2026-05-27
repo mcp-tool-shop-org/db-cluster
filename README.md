@@ -55,11 +55,39 @@ db-cluster receipts
 
 ## Status
 
-**Phase 15 — Release Readiness & Package Boundary: PASS.** 699+ tests passing across 63 files (post-Wave-A3 count finalized in the amend report).
+**Phase 15 — Release Readiness & Package Boundary: PASS.** Post-Wave-B1-Amend
+baseline: **778+ tests passing across 68 files** (the exact number tracks
+through each amend wave — see `CHANGELOG.md` for the per-wave count).
+Stryker mutation testing is shipped but experimental — not in the standing
+release-gate per the v2 dogfood-swarm protocol's verifier-3 doctrine. See
+`docs/release-readiness.md` "Stryker mutation testing — current disposition".
 
-Phase 15 establishes a deliberate public API surface, package boundary, fresh install smoke tests, and release gate automation. The package is ready for versioned release as v0.1.0.
+Phase 15 establishes a deliberate public API surface, package boundary, fresh
+install smoke tests, and release gate automation. The package is ready for
+versioned release as v0.1.0. The release-gate (`scripts/release-gate.mjs`) is
+8 stages — build, tests, pack, smoke-install, docs-drift, package-exports,
+completeness-checks, and (new in Wave B1-Amend) the doc-drift detector that
+typechecks every `typescript` code block in `docs/` against the real
+`src/types/*` surface.
 
 Previous: Phase 14 — Repo-Knowledge Integration Gate.
+
+## Prerequisites
+
+- Node.js 20+ (enforced via `engines.node` in `package.json`)
+- npm
+
+## Documentation
+
+See [`docs/README.md`](docs/README.md) for the full doc map (Start here /
+Reference / Development phase history). Highlights:
+
+- [Quickstart](docs/quickstart.md) — 5-minute golden path
+- [Handbook](docs/handbook.md) — canonical operator + developer guide
+- [SDK](docs/sdk.md) / [CLI](docs/cli.md) / [MCP](docs/mcp.md) — surface references
+- [Policy and Redaction](docs/policy-and-redaction.md) — Principal, Capability, Policy, TrustZone
+- [Operations](docs/operations.md) — doctor, verify, rebuild, backup, restore
+- [Release readiness](docs/release-readiness.md) — release flow + known flake patterns
 
 ## License
 

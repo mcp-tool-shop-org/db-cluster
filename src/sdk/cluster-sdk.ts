@@ -127,8 +127,18 @@ export class ClusterSDK {
     private readonly resolver: ClusterResolver;
     private readonly policyOptions: PolicyEngineOptions | null;
     private readonly visibilityRules: VisibilityRule[];
-    /** True when this SDK wrapped the kernel with PolicyEnforcedKernel. */
-    public readonly policyEnforced: boolean;
+    /**
+     * True when this SDK wrapped the kernel with PolicyEnforcedKernel.
+     *
+     * SURFACE-B-007 (Wave B1-Amend): pre-fix `public readonly` made this
+     * an attractive bypass-branch surface — any consumer could read it and
+     * branch ("if policies aren't enforced, skip the principal check") —
+     * a documented anti-pattern that was compileable. Tests assert the
+     * value via the `isPolicyEnforced()` introspection method; production
+     * code outside the SDK should not branch on internal enforcement
+     * state.
+     */
+    private readonly policyEnforced: boolean;
 
     constructor(options: SDKOptions) {
         const stores = createLocalCluster(options.clusterDir);
@@ -186,14 +196,69 @@ export class ClusterSDK {
         }
     }
 
+    /**
+     * Test-seam introspection — returns whether this SDK is policy-enforced.
+     *
+     * SURFACE-B-007 (Wave B1-Amend): exposes the enforcement state through
+     * a method instead of a public field so consumers cannot trivially
+     * branch on it inline. Outside `NODE_ENV=test` a stderr warning is
+     * emitted to discourage production callers from reading the value —
+     * they should branch on capability semantics, not on internal
+     * enforcement state.
+     */
+    isPolicyEnforced(): boolean {
+        if (process.env.NODE_ENV !== 'test') {
+            // Emit a one-shot warning so production callers know this is a
+            // test-seam method, not a public branching surface.
+            console.warn(
+                'ClusterSDK.isPolicyEnforced(): test-seam introspection — do not branch on this in production code. ' +
+                'Use capability semantics (try/catch on POLICY_DENIED) instead.',
+            );
+        }
+        return this.policyEnforced;
+    }
+
     // ─── Retrieval ─────────────────────────────────────────────────
 
     async findSources(query: string, limit?: number): Promise<FindSourcesResult> {
         return this.kernel.findSources({ query, limit });
     }
 
+    /**
+     * Retrieve a structured evidence bundle for a query.
+     *
+     * SURFACE-B-008 fix (Wave B1-Amend): pre-fix this was a pure pass-through.
+     * The returned `EvidenceBundle` includes `indexRecords: IndexRecord[]`
+     * (with `metadata` mirroring entity content) and `provenanceEvents:
+     * ProvenanceEvent[]` (with `actorId` / `detail.payload`). With raw
+     * `ClusterKernel`, the bundle returned owner-store-truth raw — the
+     * SDK doctrine documented in `resolve()` ("the returned object is
+     * sanitized inline before it leaves the SDK boundary") was violated
+     * for these two fields. AGG-002 made `resolve()` unconditional; this
+     * extends the same shape to `retrieveBundle()`.
+     *
+     * Sanitization is unconditional (same shape as AGG-002 / SURFACE-R2-003).
+     * The sanitizers tolerate the new `RedactedMarker` type Kernel shipped
+     * this wave — values that are already RedactedMarker (e.g. policy-
+     * enforced kernel may have pre-redacted some fields) are passed
+     * through unchanged via the `_redacted: true` discriminator. Double-
+     * redaction is structurally avoided because the sanitizers operate
+     * on flat field shape, not on already-redacted markers.
+     */
     async retrieveBundle(query: string, options?: { limit?: number }): Promise<EvidenceBundle> {
-        return this.kernel.retrieveBundle(query, options);
+        const bundle = await this.kernel.retrieveBundle(query, options);
+        // SURFACE-B-008: sanitize indexRecords + provenanceEvents inline.
+        // The sanitizers return enriched objects (adding `_sourceType`,
+        // `_metadataPolicy`, and replacing `metadata`/`actorId`/`detail`).
+        // The EvidenceBundle type declares strict IndexRecord / ProvenanceEvent
+        // shapes; the cast widens to accept the sanitized superset. A future
+        // wave that updates `src/types/evidence-bundle.ts` to express the
+        // sanitization-aware shape would let us drop the cast.
+        return {
+            ...bundle,
+            indexRecords: bundle.indexRecords.map((r) => sanitizeIndexRecordForOutput(r) ?? r) as unknown as EvidenceBundle['indexRecords'],
+            provenanceEvents: bundle.provenanceEvents.map((ev) => sanitizeProvenanceEventForOutput(ev) ?? ev) as unknown as EvidenceBundle['provenanceEvents'],
+        };
     }
 
     async explainRetrieval(bundle: EvidenceBundle): Promise<{ summary: string; resolvedCount: number; missingCount: number; allFresh: boolean }> {

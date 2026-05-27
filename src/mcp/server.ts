@@ -5,8 +5,9 @@ import {
     CallToolRequestSchema,
     ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { resolve, sep } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { ClusterSDK } from '../sdk/cluster-sdk.js';
 import type { SDKOptions } from '../sdk/cluster-sdk.js';
 import type { Principal, Policy, TrustZone, VisibilityRule } from '../types/policy.js';
@@ -21,8 +22,28 @@ import {
     sanitizeProvenanceEventForOutput,
     sanitizeProvenanceGraphForOutput,
 } from '../policy/store-output-sanitizers.js';
+// SURFACE-B-006 (Wave B1-Amend): the shared structural validators live
+// in `src/mcp/config-validator.ts` so the CLI surface can import them too.
+// Pre-fix the validator was inline in this file; the CLI had no
+// validation at all.
+import { validatePrincipal } from './config-validator.js';
 
 const CLUSTER_DIR = resolve(process.env.DB_CLUSTER_DIR ?? process.cwd(), '.db-cluster');
+
+// SURFACE-B-013 (Wave B1-Amend): version read from package.json at module
+// load. Pre-fix the value was a hardcoded literal `'0.1.0'` that silently
+// went stale on every version bump — MCP hosts received the wrong version
+// in the capability handshake.
+const __serverDir = dirname(fileURLToPath(import.meta.url));
+const PACKAGE_VERSION: string = (() => {
+    try {
+        // dist/mcp/server.js → package.json is two levels up.
+        const pkgPath = resolve(__serverDir, '..', '..', 'package.json');
+        return JSON.parse(readFileSync(pkgPath, 'utf-8')).version as string;
+    } catch {
+        return 'unknown';
+    }
+})();
 
 /**
  * Build SDK options from environment.
@@ -37,25 +58,10 @@ const CLUSTER_DIR = resolve(process.env.DB_CLUSTER_DIR ?? process.cwd(), '.db-cl
  * If neither env var is set, the SDK falls back to raw `ClusterKernel`
  * (preserves existing MCP behavior for the ~614 baseline tests).
  */
-/**
- * Structural validation for a Principal parsed from JSON.
- *
- * SURFACE-R005 fix: `JSON.parse(process.env.DB_CLUSTER_PRINCIPAL)` was cast to
- * `Principal` with no runtime check. A malformed value (missing `roles`, wrong
- * type on `trustZone`, etc.) would slip into PolicyEnforcedKernel and silently
- * bypass policy via the trust-zone-not-found branch. The MCP server now
- * fails closed — invalid principal → log to stderr → exit(1).
- */
-function validatePrincipal(obj: unknown): obj is Principal {
-    if (typeof obj !== 'object' || obj === null) return false;
-    const o = obj as Record<string, unknown>;
-    if (typeof o.id !== 'string' || o.id.length === 0) return false;
-    if (typeof o.name !== 'string') return false;
-    if (!Array.isArray(o.roles)) return false;
-    if (!o.roles.every((r) => typeof r === 'string')) return false;
-    if (typeof o.trustZone !== 'string' || o.trustZone.length === 0) return false;
-    return true;
-}
+// SURFACE-R005 / SURFACE-B-006 (Wave B1-Amend): `validatePrincipal` was
+// inline here pre-fix. It now lives in `./config-validator.ts` so the CLI
+// surface can import the same fail-closed shape. The behavior is
+// unchanged; only the home moved.
 
 /**
  * Fail closed when the principal env var is malformed. Writing to stderr and
@@ -848,7 +854,8 @@ export { sanitizeArtifactForOutput } from './sanitize.js';
 // ─── Server setup ──────────────────────────────────────────────────────────
 
 const server = new Server(
-    { name: 'db-cluster', version: '0.1.0' },
+    // SURFACE-B-013 (Wave B1-Amend): version sourced from package.json.
+    { name: 'db-cluster', version: PACKAGE_VERSION },
     { capabilities: { tools: {} } },
 );
 

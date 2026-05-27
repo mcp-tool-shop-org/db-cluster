@@ -394,7 +394,9 @@ db-cluster compensate <command-id> --by operator --reason "Name was incorrect"
 
 ### 8.1 What policy controls
 
-Capabilities:
+Capabilities — quick reference; the canonical type union and the
+`PolicyMatch.capabilities` filter live in
+[`docs/policy-and-redaction.md`](policy-and-redaction.md):
 
 | Capability | Meaning |
 |-----------|---------|
@@ -413,24 +415,14 @@ Capabilities:
 
 ### 8.2 Principals and trust zones
 
-A `Principal` is any actor in the system:
-
-```typescript
-interface Principal {
-    id: string;
-    name: string;
-    roles: string[];
-    trustZone: string;
-    metadata?: Record<string, unknown>;
-}
-```
-
-Capabilities are granted via `roles`, not held directly on the principal. The
-`Capability` union has 13 specific verbs (`discover_existence`,
-`read_owner_truth`, `read_derivative`, `trace_provenance`, `propose_mutation`,
-`validate_command`, `approve_command`, `reject_command`, `commit_command`,
-`compensate_command`, `read_receipts`, `read_command`, `explain_retrieval`).
-See `docs/policy-and-redaction.md` for the canonical list.
+A `Principal` is any actor in the system. The canonical type definition and
+the full `Capability` union live in
+[`docs/policy-and-redaction.md`](policy-and-redaction.md) — that is the
+single source of truth and the consumer doc you should link to from new
+material. The Principal shape (id, name, roles[], trustZone, optional
+metadata) is small enough that the handbook used to restate it; that was
+removed in Wave B1-Amend so a future Capability addition only requires one
+doc edit, not six.
 
 Trust zones:
 

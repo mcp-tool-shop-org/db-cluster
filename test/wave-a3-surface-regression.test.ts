@@ -17,9 +17,58 @@ import fc from 'fast-check';
 import { execSync, spawnSync } from 'node:child_process';
 import {
     mkdtempSync, mkdirSync, writeFileSync, symlinkSync, existsSync, readFileSync, rmSync,
+    realpathSync, statSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+
+/**
+ * TESTS-B-005 — Wave B1-Amend: detect whether the current rig can create a
+ * directory junction (the SURFACE-R2-002 symlink-escape test substrate).
+ *
+ * Junctions are Windows directory reparse points that DON'T require admin
+ * privileges (unlike file or dir symlinks). They resolve via realpathSync
+ * the same way symlinks do, so the SURFACE-R2-002 escape-detection test can
+ * exercise the same invariant on the 5080 rig where this protection matters
+ * most. On non-Windows, plain symlinkSync works without 'junction'.
+ *
+ * Pre-fix (Wave A3): the test caught EPERM/ENOTSUP from `symlinkSync` and
+ * `return`ed silently with a console.warn. On the 5080 rig (Windows, no
+ * admin) the test ran every CI cycle but exercised nothing — false coverage
+ * confidence for the platform that needs SURFACE-R2-002 most.
+ *
+ * Post-fix (Wave B1-Amend): probe Junction support at module load. If the
+ * probe succeeds, the test EXECUTES via `it.skipIf(false)`. If the probe
+ * fails (truly restricted host), the skip is EXPLICIT and visible in vitest
+ * output (`it.skipIf(true)` produces a "skipped" line) — operators can no
+ * longer ship without realizing the gate didn't run.
+ */
+function probeCanSymlink(): boolean {
+    let probeDir: string | null = null;
+    try {
+        probeDir = mkdtempSync(join(tmpdir(), 'symlink-probe-'));
+        const target = join(probeDir, 'target');
+        mkdirSync(target);
+        const link = join(probeDir, 'link');
+        // 'junction' works on Windows without admin; on POSIX it's accepted
+        // and treated as a regular dir symlink (Node coerces it). The realpath
+        // round-trip is the load-bearing check — we need the OS to actually
+        // resolve the link.
+        symlinkSync(target, link, 'junction');
+        const linkStat = statSync(link);
+        const targetReal = realpathSync(link);
+        const targetExpected = realpathSync(target);
+        return linkStat.isDirectory() && targetReal === targetExpected;
+    } catch {
+        return false;
+    } finally {
+        if (probeDir) {
+            try { rmSync(probeDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+        }
+    }
+}
+
+const CAN_SYMLINK = probeCanSymlink();
 
 import { ClusterSDK } from '../src/sdk/cluster-sdk.js';
 import { createLocalCluster } from '../src/adapters/local/index.js';
@@ -122,16 +171,29 @@ describe('SURFACE-R2-001 — CLI resolve routes through policy/SDK', () => {
 // ─── SURFACE-R2-002 — Symlink sandbox bypass ────────────────────────────────
 
 describe('SURFACE-R2-002 — DB_CLUSTER_POLICIES_FILE path sandbox rejects symlinks', () => {
-    it('symlink-via-DB_CLUSTER_POLICIES_FILE pointing outside cwd is rejected by buildSDKOptions', async () => {
+    // TESTS-B-005 (Wave B1-Amend) — use it.skipIf(!CAN_SYMLINK) so the skip
+    // is EXPLICIT and visible in vitest output on hosts without symlink
+    // support. Pre-fix the test caught EPERM/ENOTSUP from symlinkSync and
+    // `return`d silently — on the 5080 rig (Windows, no admin) that meant
+    // SURFACE-R2-002's escape-detection had zero coverage on the platform
+    // where it matters most. Junction fallback (via probeCanSymlink at module
+    // load) gets the 5080 rig actually running this test.
+    it.skipIf(!CAN_SYMLINK)('symlink-via-DB_CLUSTER_POLICIES_FILE pointing outside cwd is rejected by buildSDKOptions', async () => {
         // Full invariant: the MCP server's buildSDKOptions must reject any
         // DB_CLUSTER_POLICIES_FILE that, after realpath resolution, points
         // outside the working directory. Symlinks that pass the lexical
         // check but resolve outside must be refused.
+        //
+        // TESTS-B-005 — Implementation note: on Windows without admin, file
+        // symlinks throw EPERM but DIRECTORY JUNCTIONS work. To exercise the
+        // same realpath-escape-detection invariant without requiring admin,
+        // we use a junction pointing at a directory OUTSIDE the sandbox, then
+        // reference the file via the junction. realpathSync follows junctions
+        // exactly like symlinks, so buildSDKOptions's realpath check fires.
         const sandbox = mkdtempSync(join(tmpdir(), 'a3-sandbox-'));
         const outside = mkdtempSync(join(tmpdir(), 'a3-outside-'));
 
-        // Write a real policies file outside the sandbox containing a marker.
-        const outsideFile = join(outside, 'evil-policies.json');
+        // Write a real policies file IN the outside directory.
         const evilPolicies = {
             policies: [
                 {
@@ -144,20 +206,16 @@ describe('SURFACE-R2-002 — DB_CLUSTER_POLICIES_FILE path sandbox rejects symli
                 },
             ],
         };
-        writeFileSync(outsideFile, JSON.stringify(evilPolicies), 'utf-8');
+        writeFileSync(join(outside, 'evil-policies.json'), JSON.stringify(evilPolicies), 'utf-8');
 
-        // Create a symlink inside the sandbox pointing to the outside file.
-        const linkInside = join(sandbox, 'policies.json');
-        try {
-            symlinkSync(outsideFile, linkInside);
-        } catch (err: any) {
-            // Windows often needs admin/privilege for symlinks — skip if so.
-            if (err.code === 'EPERM' || err.code === 'ENOTSUP') {
-                console.warn(`Skipping symlink test: ${err.code} (Windows needs admin / Developer Mode)`);
-                return;
-            }
-            throw err;
-        }
+        // Create a DIRECTORY JUNCTION inside the sandbox pointing at the
+        // outside directory. Junctions don't require admin on Windows.
+        // The env var below references the file via the junction:
+        // `outside-link/evil-policies.json`, which realpaths to
+        // `outside/evil-policies.json` — outside the sandbox.
+        const linkInside = join(sandbox, 'outside-link');
+        symlinkSync(outside, linkInside, 'junction');
+        const policyEnvPath = join('outside-link', 'evil-policies.json');
 
         // Initialize a cluster in the sandbox so the MCP server has a cluster.
         execSync(`${CLI} init`, { cwd: sandbox, encoding: 'utf-8' });
@@ -168,7 +226,7 @@ describe('SURFACE-R2-002 — DB_CLUSTER_POLICIES_FILE path sandbox rejects symli
         const prevDir = process.env.DB_CLUSTER_DIR;
         try {
             process.chdir(sandbox);
-            process.env.DB_CLUSTER_POLICIES_FILE = 'policies.json';
+            process.env.DB_CLUSTER_POLICIES_FILE = policyEnvPath;
             process.env.DB_CLUSTER_DIR = sandbox;
 
             // Re-import so the module sees the new cwd.
@@ -202,6 +260,9 @@ describe('SURFACE-R2-002 — DB_CLUSTER_POLICIES_FILE path sandbox rejects symli
             else process.env.DB_CLUSTER_POLICIES_FILE = prevEnv;
             if (prevDir === undefined) delete process.env.DB_CLUSTER_DIR;
             else process.env.DB_CLUSTER_DIR = prevDir;
+            // Cleanup junction + dirs (junctions remove via rmSync on Windows).
+            try { rmSync(sandbox, { recursive: true, force: true }); } catch { /* best-effort */ }
+            try { rmSync(outside, { recursive: true, force: true }); } catch { /* best-effort */ }
         }
     });
 });

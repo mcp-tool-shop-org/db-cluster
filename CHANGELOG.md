@@ -1,5 +1,128 @@
 # Changelog
 
+## Wave B1-Amend — Dogfood-swarm Stage B Wave B1 amend (2026-05-27)
+
+Stage B Wave B1 amend closing the 130 unique proactive-health findings the
+Stage B audit surfaced after Stage A exited at Wave A4. This wave runs
+under the v2 dogfood-swarm protocol (5 parallel domain fix agents + 3
+parallel lens verifiers + aggregator + per-finding test-first gate +
+saturation exit). See `swarm-stage-b-audit-1-20260527-091803Z.md` for the
+full audit + `.stage-b-amend/agent-*-report.md` for per-domain reports.
+
+### Kernel
+- AGG-005 redactor allowlist + RedactionMarker types contract — switch
+  redaction from denylist (`PRESERVED_FIELDS_*` + strip-unknown) to
+  explicit allowlist behaviour with structured markers (see
+  `src/types/redaction.ts`).
+- AGG-008 TraceBuilder structured `labelData` refactor — node labels are
+  now built from structured metadata at render time; the byte-level
+  regex mangling in `redactProvenanceActors` is no longer load-bearing
+  (`src/provenance/trace-builder.ts`).
+- `redactErrorMessage` helper for typed-error `.message` and
+  `.cause.message` scrubbing — wired into `recordOrphanMutation` so
+  filesystem paths from `CommandQueueCorruptError.cause` no longer reach
+  the ledger `mutation_orphaned` detail field.
+- V2-004 follow-up — `validatePayloadForVerb` rejects Buffer payload
+  shape at validate-time (the contentHash side-channel from Wave A4
+  remains; this closes the propose-time gap).
+
+### Stores
+- `LedgerStore.rotate` + `LedgerStore.countEvents` contract additions —
+  archival hook for the unbounded-ledger growth concern (STORES-B-013).
+- Postgres pool hardening — SSL config respected when
+  `DB_CLUSTER_POSTGRES_SSL` env is set; `pool.on('error', ...)` handler
+  attached so an idle-client RST does not crash the process
+  (STORES-B-006).
+- `restore()` now propagates `rebuildIndex` failure on the returned
+  `RestoreResult.index` field (STORES-B-007).
+- `appendReceipt`/`importReceipt` stamp `owner` so the post-A4 dataset
+  is symmetric with `append()` (STORES-B-004).
+
+### Surface
+- §2c CLI uniform try/catch wrapper — every subcommand goes through
+  `safeAction(fn)` that maps domain errors to ASCII-coded stderr +
+  consistent exit codes (SURFACE-B-004).
+- `cluster_find_sources` LIST arm sanitization parity (SURFACE-B-001
+  cross-check; the Wave A4 fix landed at the singular-resolve site).
+- `SDK.retrieveBundle` sanitization for non-policy-enforced consumers
+  (SURFACE-B-008).
+- `policyEnforced` made private + guarded getter on `ClusterSDK`
+  (SURFACE-B-007).
+- `ClusterTruthInspector.jsx` null-guard on unknown-URI render
+  (SURFACE-B-005).
+
+### Tests
+- TESTS-B-005 Windows symlink fallback to Junction so the path-sandbox
+  coverage actually runs on the 5080 rig.
+- TESTS-B-006 `verify()` regression coverage extended from 2 of 5
+  ledger-subject event types to all 5.
+- TESTS-B-008 targeted `beforeAll → beforeEach` migration on the 15+
+  files where shared state was order-dependent.
+
+### CI/Docs (this report)
+- **§2d Doc-drift detector** — new `scripts/doc-drift.mjs` + wired into
+  `release-gate.mjs` as `[8/8] Doc-drift`. Two layers:
+  1. Typecheck every `typescript` code block in `docs/**/*.md` against
+     `src/types/*` via the new `tsconfig.docs.json` (CIDOCS-B-001
+     structural fix — the sdk.md / retrieval-bundles.md /
+     provenance-graphs.md drift recurred for 3 waves before this
+     landed).
+  2. Verify every `from 'db-cluster[/sub]'` named import in docs
+     resolves to a real exported symbol (catches drift like the
+     `db-cluster/ops/doctor` subpath import that didn't exist).
+- `docs/retrieval-bundles.md` + `docs/provenance-graphs.md` patched
+  with real `EvidenceBundle` / `ResolvedEvidence` / `ProvenanceGraph` /
+  `ProvenanceNode` / `ProvenanceEdge` shapes from `src/types/*`
+  (CIDOCS-B-001 mechanical fix).
+- `docs/operations.md` — fake `db-cluster/ops/*` subpath imports
+  replaced with the real `db-cluster` top-level import + the
+  `PolicyEnforcedKernel` path for rebuild/checkStale (caught by the
+  new detector).
+- `docs/cluster-uris.md` + `docs/mcp.md` — minor drift fixes the new
+  detector surfaced.
+- `docs/policy-and-redaction.md` is now the **canonical** source for
+  Principal, Capability, Policy, TrustZone, VisibilityRule. Other docs
+  (`handbook.md`, `sdk.md`, `cli.md`, `examples/mcp/safety-model.md`)
+  link rather than restate (CIDOCS-B-014).
+- New `docs/README.md` — doc map with "Start here", "Reference",
+  "Development phase history" sections (CIDOCS-B-013). Linked from
+  repo-root `README.md`.
+- `package.json` gains `engines: { node: ">=20" }`, `repository`,
+  `bugs`, `homepage` fields (CIDOCS-B-003 + CIDOCS-B-024). README and
+  `docs/quickstart.md` updated to claim Node 20+ instead of Node 18+.
+- `.github/workflows/ci.yml` matrix expanded to `node: [20, 22, 24]` ×
+  `os: [ubuntu-latest, windows-latest, macos-latest]` (CIDOCS-B-010).
+- `workflow_dispatch:` (with `sha:` input) added to `ci.yml` and
+  `release-gate.yml` so operators can re-run on a specific SHA without
+  bumping a tag or pushing an empty commit (CIDOCS-B-004 / B-015).
+- `docs/release-readiness.md` — new "Known flake patterns
+  (post-Wave-A4)" section explaining the closed wave6-proof race and
+  the recommended re-run procedure; new "Stryker mutation testing —
+  current disposition" section documenting the v2-protocol verifier-3
+  doctrine substitution (CIDOCS-B-004 + CIDOCS-B-012).
+- `docs/operations.md` backup claim corrected from
+  "metadata, not raw content" → "with content, base64-encoded + SHA-256
+  checksum" (CIDOCS-B-022 — already true since Phase 12; the doc was
+  stale).
+- `.gitignore` annotated with inline comments explaining each pattern;
+  `.repo-knowledge/`, `cluster-backup-*.json`, `.doc-drift-extract/`
+  added defensively (CIDOCS-B-019 + B-021).
+- New `src/util/tmp-paths.ts` — canonical `buildRandomTmpPath` +
+  `cleanupOrphanTmpFiles` + `sweepContentDirOrphans` helpers. The three
+  inline copies (Stores' `tmp-cleanup.ts`, Kernel's `command-queue.ts`,
+  Kernel's `cluster-kernel.ts` getStagingDir) can delegate at their
+  domain's discretion (the no-back-edge rule is preserved because
+  `src/util/` has no domain dependencies).
+- Stryker: kept config files, removed CHANGELOG advertising claim,
+  marked `vitest.stryker.config.ts` as EXPERIMENTAL + NOT IN CI. Per
+  the v2 dogfood-swarm protocol verifier-3 lens substitution
+  (CIDOCS-B-012). The `test:mutation` npm script remains for ad-hoc
+  use; full rationale in `docs/release-readiness.md`.
+- New test file `test/wave-b1-cidocs-regression.test.ts` — pins each
+  fix above (workflow_dispatch presence, engines field, doc-drift
+  detector exit code, CHANGELOG entry, tmp-paths helper behavior,
+  matrix expansion).
+
 ## Wave A3 — Dogfood-swarm Stage A re-audit-2 amend (2026-05-27)
 
 Third corrective wave on Stage A, dispatched after
@@ -16,10 +139,14 @@ rules) as standing protocol from this wave onward.
   `performIndexRebuild()` is replaced by the new `IndexStore.replaceAll()`
   contract method so a crash mid-rebuild cannot leave the index empty
   (KERNEL-R2-003, exposed by Wave A2's incomplete close).
-- Wave-A1 typed errors and Wave-A2 atomic queue writes carry forward;
-  this wave's mutation-testing harness (`npm run test:mutation`) is the
-  first machine check on the test suite's discrimination power against
-  those code paths.
+- Wave-A1 typed errors and Wave-A2 atomic queue writes carry forward.
+  (The Wave A3 wave originally claimed `npm run test:mutation` was "the
+  first machine check on the test suite's discrimination power"; that
+  claim is **withdrawn in Wave B1-Amend** — Stryker is shipped but
+  experimental and not in the standing release-gate. The v2 dogfood-
+  swarm protocol's verifier-3 invariant-test-completeness lens
+  substitutes for mutation coverage. See `docs/release-readiness.md`
+  "Stryker mutation testing — current disposition".)
 
 ### Stores
 - `importSnapshot`, `importEvent`, `importReceipt` are no longer optional

@@ -95,12 +95,36 @@ interface RedactionRule {
 
 ### What gets redacted
 
-- **Entity attributes** — sensitive fields masked/stripped
-- **Artifact content/paths** — storage locations hidden
-- **Command payloads** — mutation details stripped
-- **Receipt details** — specific changes masked
-- **Provenance actors** — identity hidden in traces
-- **Graph nodes** — restricted nodes replaced with `[Access restricted]` placeholders
+- **Entity attributes** (`entity_attributes`) — sensitive fields masked/stripped
+- **Entity names** (`entity_name`) — gates the `name` component of entity-type
+  provenance node labels. When this rule applies, the rendered label becomes
+  `<kind>: [REDACTED]` instead of `<kind>: <name>`. Re-rendered at the
+  PolicyEnforcedKernel boundary via `renderProvenanceLabel(metadata.labelData,
+  policyView)` — the bare ClusterKernel surface always renders the literal
+  name (see [Label rendering boundary](#label-rendering-boundary) below).
+- **Artifact content/paths** (`artifact_content`) — storage locations hidden
+- **Artifact filenames** (`artifact_filename`) — gates the `filename`
+  component of artifact-type provenance node labels. Rendered label becomes
+  `[REDACTED] v<version>` instead of `<filename> v<version>`. Same re-render
+  boundary as `entity_name`.
+- **Command payloads** (`command_payload`) — mutation details stripped
+- **Receipt details** (`receipt_details`) — specific changes masked
+- **Provenance actors** (`provenance_actors`) — identity hidden in traces
+- **Index source URIs** (`index_source_uri`) — original source path hidden
+  in index records
+- **Graph nodes** — restricted nodes replaced with `[Access restricted]`
+  placeholders (via visibility rules)
+
+### Label rendering boundary
+
+Provenance graph node labels (`ProvenanceNode.label: string`) carry the
+literal identifier when produced by the bare `ClusterKernel`. The
+`PolicyEnforcedKernel.traceObject` / `traceBundle` re-render every node
+via `renderProvenanceLabel(metadata.labelData, policyView)` so the
+`entity_name` and `artifact_filename` targets actually gate the rendered
+string. Holding a bare-kernel graph is a trusted-internal operation;
+surfacing it to an AI-facing trust zone without going through the
+PolicyEnforcedKernel is a doctrine violation.
 
 ## Visibility rules
 

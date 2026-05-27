@@ -8,12 +8,22 @@
  * Usage: node scripts/smoke-install.mjs <path-to-tgz>
  */
 
-import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
 
-const tgzPath = resolve(process.argv[2] || 'db-cluster-0.1.0.tgz');
+// AGG-B1-3: read the tarball name from package.json so we don't break on
+// version bumps. The SURFACE-B-013 family probe stopped at src/ and missed
+// scripts/; here was a hardcoded fallback string referencing the literal
+// tarball path that would silently miss the actual tarball after any bump.
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(SCRIPT_DIR, '..');
+const PKG = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf-8'));
+const DEFAULT_TGZ = join(REPO_ROOT, `${PKG.name}-${PKG.version}.tgz`);
+
+const tgzPath = resolve(process.argv[2] || DEFAULT_TGZ);
 if (!existsSync(tgzPath)) {
     console.error(`Tarball not found: ${tgzPath}`);
     process.exit(1);

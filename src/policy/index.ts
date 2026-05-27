@@ -23,11 +23,24 @@ export {
     redactCommand,
     redactReceipt,
     redactProvenanceActors,
+    redactProvenanceEvent,
+    redactIndexRecord,
     redactGraphNodes,
     sanitizeWarnings,
     redactIndexSourceUri,
+    redactErrorMessage,
+    PRESERVED_FIELDS_ARTIFACT,
+    PRESERVED_FIELDS_ENTITY,
+    PRESERVED_FIELDS_COMMAND,
+    PRESERVED_FIELDS_RECEIPT,
+    PRESERVED_FIELDS_PROVENANCE_EVENT,
+    PRESERVED_FIELDS_INDEX_RECORD,
     REDACTED,
+    isRedactedMarker,
+    redactedMarker,
 } from './redactor.js';
+
+export type { RedactedMarker } from './redactor.js';
 
 export type { Principal, Policy, TrustZone, VisibilityRule } from '../types/policy.js';
 

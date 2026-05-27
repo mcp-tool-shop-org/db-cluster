@@ -154,6 +154,17 @@ const BUILTIN_ERROR_CODES: Record<string, string> = {
     ImportSnapshotNotSupportedError: 'IMPORT_SNAPSHOT_NOT_SUPPORTED',
     ResolveError: 'RESOLVE_NOT_FOUND',
     ClusterUriError: 'INVALID_CLUSTER_URI',
+    // Wave B1-Amend fix-up (V2-B1-006): PolicyConfigError was missing
+    // from the map and fell back to INTERNAL_ERROR. The validator throws
+    // it on structurally-malformed `policies.json` — MCP hosts should
+    // see the stable code rather than a generic internal error.
+    PolicyConfigError: 'INVALID_POLICY_CONFIG',
+    // Wave B1-Amend fix-up (AGG-B1-2b / AGG-B1-2d): new rotate-related
+    // typed errors. Both extend plain Error (the adapter-layer typed-
+    // error convention) so they need explicit entries to surface their
+    // codes at the MCP boundary.
+    InvalidRotateTimestampError: 'INVALID_ROTATE_TIMESTAMP',
+    RotateBoundaryInFutureError: 'ROTATE_BOUNDARY_IN_FUTURE',
 };
 
 /** Strip absolute filesystem paths from an error message. */

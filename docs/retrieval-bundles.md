@@ -12,23 +12,64 @@ Retrieval in db-cluster is not vector similarity search. It is structured resolu
 
 ## The EvidenceBundle
 
+The canonical type lives at `src/types/evidence-bundle.ts` and is re-exported
+through `db-cluster/types`:
+
+```typescript
+import type {
+    EvidenceBundle,
+    ResolvedEvidence,
+    FreshnessAssessment,
+    MissingContext,
+    ConfidenceBoundary,
+} from 'db-cluster/types';
+```
+
+The shape:
+
 ```typescript
 interface EvidenceBundle {
+    /** Unique bundle ID */
+    id: string;
+    /** The original query that produced this bundle */
     query: string;
+    /** When the bundle was assembled */
+    assembledAt: string;
+    /** Entities resolved from owner stores (canonical truth) */
     resolvedEntities: ResolvedEvidence<Entity>[];
+    /** Artifacts resolved from owner stores (artifact truth) */
     resolvedArtifacts: ResolvedEvidence<Artifact>[];
+    /** Index records that matched (derivative — not truth) */
     indexRecords: IndexRecord[];
-    gaps: string[];
-    confidence: 'high' | 'medium' | 'low' | 'none';
-    staleRecords: string[];
+    /** Provenance events supporting the resolved objects */
+    provenanceEvents: ProvenanceEvent[];
+    /** Freshness assessment */
+    freshness: FreshnessAssessment;
+    /** What the cluster could not find or verify */
+    missingContext: MissingContext[];
+    /** Confidence boundaries — what the bundle can and cannot claim */
+    confidenceBoundaries: ConfidenceBoundary[];
 }
 
 interface ResolvedEvidence<T> {
+    /** The resolved owner-store object */
     object: T;
-    sourceUri: string;
-    fresh: boolean;
+    /** The cluster URI for this object */
+    uri: string;
+    /** Owner store name */
+    ownerStore: string;
+    /** Whether this object's index record is stale */
+    indexStale: boolean;
+    /** Provenance event IDs that touch this object */
+    provenanceEventIds: string[];
 }
 ```
+
+Older Phase-3 docs sometimes show invented fields like `confidence: 'high'|'medium'|...`
+or `staleRecords: string[]` — those don't exist on the real type. The
+`scripts/doc-drift.mjs` detector (release-gate stage [8/8]) typechecks every
+`typescript` code block in `docs/` against the actual `src/` types to prevent
+this drift from re-appearing.
 
 ## CLI usage
 
@@ -55,7 +96,18 @@ db-cluster explain-retrieval "database architecture claims"
 const bundle = await sdk.retrieveBundle('database architecture claims');
 
 for (const entity of bundle.resolvedEntities) {
-    console.log(entity.object.name, entity.fresh ? '✓' : 'stale');
+    // entity.object is the Entity from canonical truth
+    // entity.indexStale tells you whether the matching index record is stale
+    console.log(entity.object.name, entity.indexStale ? 'stale' : 'fresh');
+}
+
+// Surface freshness summary
+const stale = bundle.freshness.staleCount;
+const allFresh = bundle.freshness.allFresh;
+
+// Surface what the cluster did NOT find
+for (const missing of bundle.missingContext) {
+    console.log(missing.description, missing.impact);
 }
 
 const explanation = await sdk.explainRetrieval(bundle);

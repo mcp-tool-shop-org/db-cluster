@@ -23,6 +23,13 @@ const ROOT = resolve(import.meta.dirname, '..');
 const LOG_DIR = join(ROOT, '.release-gate-output');
 const TAIL_BYTES = 8000;
 
+// AGG-B1-3: read the package version from package.json so the tarball name
+// stays in sync with bumps. The SURFACE-B-013 family probe stopped at src/
+// and missed scripts/, leaving these hardcoded literals to break the release
+// gate after every version bump.
+const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8'));
+const TGZ_NAME = `${PKG.name}-${PKG.version}.tgz`;
+
 mkdirSync(LOG_DIR, { recursive: true });
 
 // Timestamp shared across this run so all stage logs sort together.
@@ -97,18 +104,18 @@ console.log(`Run stamp: ${RUN_STAMP}`);
 console.log(`Logs: ${LOG_DIR}\n`);
 
 // 1. Build
-console.log('[1/7] Build');
+console.log('[1/8] Build');
 run('tsc --noEmit', 'npx tsc --noEmit', { stageNum: 1 });
 run('npm run build', 'npm run build', { stageNum: 1 });
 
 // 2. Test suite
-console.log('\n[2/7] Tests');
+console.log('\n[2/8] Tests');
 run('vitest run', 'npx vitest run', { stageNum: 2, timeout: 300_000 });
 
 // 3. Pack
-console.log('\n[3/7] Package');
+console.log('\n[3/8] Package');
 run('npm pack', 'npm pack', { stageNum: 3 });
-const tgz = join(ROOT, 'db-cluster-0.1.0.tgz');
+const tgz = join(ROOT, TGZ_NAME);
 if (!existsSync(tgz)) {
   console.log('  FAIL: tarball not found at', tgz);
   writeStageLog(3, 'tarball-presence', '', `expected tarball not found: ${tgz}`, 'FAIL');
@@ -116,7 +123,7 @@ if (!existsSync(tgz)) {
 }
 
 // 4. Fresh install smoke
-console.log('\n[4/7] Fresh install smoke');
+console.log('\n[4/8] Fresh install smoke');
 const smokeDir = mkdtempSync(join(tmpdir(), 'release-gate-'));
 try {
   run('smoke-install', `node ${join(ROOT, 'scripts', 'smoke-install.mjs')} ${tgz}`, { stageNum: 4, cwd: smokeDir });
@@ -125,7 +132,7 @@ try {
 }
 
 // 5. Docs drift check — shipped directories don't import from src/
-console.log('\n[5/7] Docs drift');
+console.log('\n[5/8] Docs drift');
 process.stdout.write('  No src/ imports in shipped dirs... ');
 function scanForDrift(dir) {
   const offenders = [];
@@ -167,7 +174,7 @@ if (offenders.length > 0) {
 }
 
 // 6. Package exports exist in dist
-console.log('\n[6/7] Export paths exist in dist');
+console.log('\n[6/8] Export paths exist in dist');
 const exportPaths = ['dist/index.js', 'dist/sdk/index.js', 'dist/mcp/index.js', 'dist/policy/index.js', 'dist/types/index.js'];
 const exportResults = [];
 let exportFailed = false;
@@ -186,8 +193,15 @@ for (const exp of exportPaths) {
 writeStageLog(6, 'package-exports', exportResults.join('\n') + '\n', '', exportFailed ? 'FAIL' : 'PASS');
 
 // 7. Completeness — mechanical ast-grep gates for known legacy patterns
-console.log('\n[7/7] Completeness');
+console.log('\n[7/8] Completeness');
 run('completeness-checks', `node ${join(ROOT, 'scripts', 'completeness-checks.mjs')}`, { stageNum: 7, timeout: 180_000 });
+
+// 8. Doc-drift detector — typechecks every typescript block in docs/ and
+// verifies every `from 'db-cluster[/sub]'` named import resolves to a real
+// export. Wave B1-Amend §2d (CIDOCS-B-001). The pattern recurred 4 waves
+// in a row before this detector landed.
+console.log('\n[8/8] Doc-drift');
+run('doc-drift', `node ${join(ROOT, 'scripts', 'doc-drift.mjs')}`, { stageNum: 8, timeout: 180_000 });
 
 // Verdict
 console.log('\n=== Verdict ===');

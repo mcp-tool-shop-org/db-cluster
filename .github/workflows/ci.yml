@@ -1,5 +1,12 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit SHA to test (default: HEAD)'
+        required: false
 permissions:
   contents: read
 concurrency:
@@ -8,12 +15,15 @@ concurrency:
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
-        node: [20, 22]
-        os: [ubuntu-latest, windows-latest]
+        node: [20, 22, 24]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}

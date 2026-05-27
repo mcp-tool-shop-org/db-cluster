@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Command, CommandVerb, CommandStatus, ValidationResult, ValidationCheck } from '../types/command.js';
+import { InvalidContentShapeError } from './errors.js';
 
 /**
  * Create a proposed command. Does NOT mutate any store.
@@ -208,6 +209,40 @@ function validatePayloadForVerb(verb: CommandVerb, payload: Record<string, unkno
         }
         case 'ingest_artifact': {
             const hasFilename = typeof payload.filename === 'string' || typeof payload.artifactId === 'string';
+            // V2-004 follow-up (KERNEL-B-017): probe the SHAPE of
+            // `payload.content` to reject the post-JSON-roundtrip artifact
+            // `{type:'Buffer', data:[byte,...]}` BEFORE the command reaches
+            // the queue. Wave A4 closed the propose-time Buffer side-channel
+            // by hashing + staging, but validateCommand still happily passed
+            // ambiguous payload shapes — so a caller building a command from
+            // a JSON-roundtripped payload reached the queue and the silent-
+            // corruption window opened at commit-time. Reject at validate.
+            //
+            // Accepted shapes for payload.content:
+            //   - Buffer (real Node Buffer instance)
+            //   - string (a contentHash reference for the staging area form,
+            //     OR a base64-encoded body; the kernel doesn't care which —
+            //     a string survives JSON round-trip without losing identity)
+            //   - undefined (artifact propose without content body; the
+            //     payload uses artifactId instead)
+            //
+            // Rejected shapes (this finding's exact target):
+            //   - object with `type === 'Buffer'` AND `data: Array<number>`
+            //     (the JSON-roundtrip artifact)
+            //   - any other object / array / number / boolean / null
+            if (payload.content !== undefined) {
+                const c = payload.content;
+                const isBuffer = Buffer.isBuffer(c);
+                const isString = typeof c === 'string';
+                if (!isBuffer && !isString) {
+                    // Identify the ambiguous-shape error specifically so the
+                    // thrown error in validateCommand carries the typed
+                    // InvalidContentShapeError, not a generic "Validation
+                    // failed" string.
+                    const shape = describeContentShape(c);
+                    throw new InvalidContentShapeError(shape);
+                }
+            }
             return {
                 name: 'payload_shape',
                 passed: hasFilename,
@@ -237,4 +272,24 @@ function validatePayloadForVerb(verb: CommandVerb, payload: Record<string, unkno
         default:
             return { name: 'payload_shape', passed: true };
     }
+}
+
+/**
+ * Render a human-readable description of an unsupported payload.content
+ * shape. Used in {@link InvalidContentShapeError} so the rejection
+ * carries actionable diagnostics ("JSON-roundtripped Buffer object" vs
+ * "plain number" vs "array of bytes").
+ */
+function describeContentShape(c: unknown): string {
+    if (c === null) return 'null';
+    if (Array.isArray(c)) return `Array(${c.length})`;
+    if (typeof c === 'object') {
+        // The signature shape of the JSON-roundtrip Buffer artifact.
+        const obj = c as { type?: unknown; data?: unknown };
+        if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
+            return `JSON-roundtripped Buffer object {type:'Buffer', data:[${(obj.data as unknown[]).length} bytes]}`;
+        }
+        return `object (${Object.keys(c as Record<string, unknown>).slice(0, 3).join(', ')}...)`;
+    }
+    return typeof c;
 }

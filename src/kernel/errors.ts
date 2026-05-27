@@ -197,3 +197,30 @@ export class BufferSideChannelNotSupportedError extends ClusterError {
         this.adapterName = adapterName;
     }
 }
+
+/**
+ * Raised at validate-time (`validatePayloadForVerb`) when an
+ * `ingest_artifact` command's `payload.content` is neither a `Buffer`
+ * instance nor a `string`. Catches the post-JSON-roundtrip shape
+ * `{type:'Buffer', data:[...]}` BEFORE the command reaches the queue and
+ * the silent-corruption window opens. V2-004 follow-up — closes the
+ * "validate doesn't probe content shape" gap (KERNEL-B-017 carry-over).
+ *
+ * Recovery: caller re-issues the command with `payload.content` as either
+ * a real `Buffer` (when the caller holds the bytes) or the persisted
+ * `contentHash` string (when re-driving a previously-staged ingest).
+ */
+export class InvalidContentShapeError extends ClusterError {
+    public readonly actualShape: string;
+    constructor(actualShape: string) {
+        super(
+            `ingest_artifact payload.content has unsupported shape: ${actualShape}. ` +
+                `Accepted shapes are: Buffer instance, string (contentHash reference). ` +
+                `The post-JSON-roundtrip object form {type:'Buffer', data:[byte,...]} ` +
+                `is rejected at validate-time to prevent silent content corruption.`,
+            'INVALID_CONTENT_SHAPE',
+        );
+        this.name = 'InvalidContentShapeError';
+        this.actualShape = actualShape;
+    }
+}

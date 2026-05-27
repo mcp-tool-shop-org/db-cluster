@@ -16,6 +16,20 @@
  * 12. At least one product improvement is surfaced from real friction.
  */
 
+/**
+ * TESTS-B-008 (Wave B1-Amend) — doctrine for this file's hook strategy.
+ *
+ * Proofs 1-8, 10-12 are READ-ONLY against the shared dogfood cluster, OR
+ * use their own freshDir for write tests (Proofs 5-7 already do this for
+ * PolicyEnforcedKernel paths). They keep beforeAll because rehydrating
+ * the ~25-artifact dogfood cluster per test would be ~12× the read cost
+ * for zero correctness gain.
+ *
+ * Proof 9 (`Deleted index is detected and rebuilt`) was the load-bearing
+ * mutation site — it called `await stores.index.clear()` on the SHARED
+ * cluster.dataDir, wiping the index for Proofs 1-3 if it ran first. It
+ * has been isolated to a per-test fresh dir.
+ */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { rmSync, existsSync, readFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -183,21 +197,31 @@ describe('Phase 11 proof suite', () => {
         expect(graph.edges).toBeDefined();
     });
 
+    // TESTS-B-008 (Wave B1-Amend): isolated to per-test fresh dir.
+    // Pre-fix: this proof called `await stores.index.clear()` on the
+    // SHARED cluster.dataDir, wiping the index for Proofs 1-3 if it ran
+    // first. Post-fix: rehydrate a fresh dogfood cluster into its own
+    // dir so the mutation does not leak.
     it('Proof 9: Deleted index is detected and rebuilt', async () => {
-        const stores = createLocalCluster(cluster.dataDir);
+        const isolated = await createDogfoodCluster();
+        try {
+            const stores = createLocalCluster(isolated.dataDir);
 
-        // Clear index
-        await stores.index.clear();
-        const health = await doctor(stores);
-        expect(['degraded', 'stale', 'unhealthy']).toContain(health.status);
+            // Clear index
+            await stores.index.clear();
+            const health = await doctor(stores);
+            expect(['degraded', 'stale', 'unhealthy']).toContain(health.status);
 
-        // Rebuild
-        const result = await rebuildIndex(stores);
-        expect(result.rebuilt).toBeGreaterThan(0);
+            // Rebuild
+            const result = await rebuildIndex(stores);
+            expect(result.rebuilt).toBeGreaterThan(0);
 
-        // Verify restored
-        const afterSearch = await stores.index.search({ text: 'Phase' });
-        expect(afterSearch.length).toBeGreaterThan(0);
+            // Verify restored
+            const afterSearch = await stores.index.search({ text: 'Phase' });
+            expect(afterSearch.length).toBeGreaterThan(0);
+        } finally {
+            try { rmSync(isolated.dataDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+        }
     });
 
     it('Proof 10: Backup/restore preserves dogfood memory', async () => {

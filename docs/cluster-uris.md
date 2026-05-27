@@ -35,6 +35,8 @@ db-cluster resolve cluster://canonical/<id>
 ```
 
 ```typescript
+import { ClusterSDK } from 'db-cluster/sdk';
+
 const sdk = new ClusterSDK({ clusterDir: '.db-cluster' });
 const { store, object } = await sdk.resolve('cluster://canonical/<id>');
 // store === 'canonical'

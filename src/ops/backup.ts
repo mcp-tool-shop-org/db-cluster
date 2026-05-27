@@ -4,6 +4,8 @@
  */
 
 import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ClusterStores } from '../contracts/index.js';
 import type { Entity } from '../types/entity.js';
 import type { Artifact } from '../types/artifact.js';
@@ -55,6 +57,26 @@ export interface ClusterBackup {
     receipts: Receipt[];
     /** Command queue state (if kernel uses persistent commands). */
     commands?: Command[];
+    /**
+     * Pending-content staging files (V1-A4-004). Each entry is a base64-
+     * encoded file from `<dataDir>/pending-content/`. Restored by
+     * `restore()` into the target cluster's pending-content directory so
+     * an in-flight ingest_artifact command's staged Buffer survives a
+     * full backup→restore roundtrip.
+     *
+     * Optional: older backups (pre-Wave-B1-Amend) do not carry this
+     * field; restore() treats its absence as "no staging files."
+     */
+    staging?: StagingSnapshot[];
+}
+
+/**
+ * One staging file from `<dataDir>/pending-content/`. `contentHash` is the
+ * filename (sha256 hex); `content` is the raw bytes base64-encoded.
+ */
+export interface StagingSnapshot {
+    contentHash: string;
+    content: string;
 }
 
 export interface BackupOptions {
@@ -62,6 +84,12 @@ export interface BackupOptions {
     includeContent?: boolean;
     /** CommandQueue instance to include in backup. */
     commandQueue?: { list(): Command[] };
+    /**
+     * Cluster data directory — required to include staging files
+     * (V1-A4-004). Without it the staging snapshot is omitted. Most
+     * call sites pass the same path used to construct the cluster.
+     */
+    dataDir?: string;
 }
 
 export interface RestoreResult {
@@ -70,11 +98,23 @@ export interface RestoreResult {
     events: { created: number; skipped: number; errors: string[] };
     receipts: { created: number; skipped: number; errors: string[] };
     commands?: { restored: number };
+    /**
+     * Staging-file restore counts (V1-A4-004). `restored` is the number of
+     * staging files written into `<dataDir>/pending-content/`. `errors`
+     * accumulates per-file failures (e.g., contentHash mismatch).
+     */
+    staging?: { restored: number; skipped: number; errors: string[] };
 }
 
 export interface RestoreOptions {
     /** CommandQueue instance to restore commands into. */
     commandQueue?: { save(command: Command): void; list(): Command[] };
+    /**
+     * Cluster data directory — required to restore staging files
+     * (V1-A4-004). Without it the staging snapshot is ignored. Most
+     * call sites pass the same path used to construct the cluster.
+     */
+    dataDir?: string;
 }
 
 /**
@@ -102,6 +142,39 @@ export async function backup(stores: ClusterStores, options?: BackupOptions): Pr
 
     const commands = options?.commandQueue ? options.commandQueue.list() : undefined;
 
+    // V1-A4-004: collect staging files from <dataDir>/pending-content/.
+    // Each file's name is its sha256 hex contentHash; we keep that as the
+    // entry id and base64-encode the bytes for transport. Tmp files
+    // (`<hash>.<pid>-<rand>.tmp`) are NOT backed up — those are propose
+    // in-flight noise that doctor's no_orphan_staging check sweeps away.
+    let staging: StagingSnapshot[] | undefined;
+    if (options?.dataDir) {
+        const stagingDir = join(options.dataDir, 'pending-content');
+        if (existsSync(stagingDir)) {
+            staging = [];
+            let entries: string[];
+            try {
+                entries = readdirSync(stagingDir);
+            } catch {
+                entries = [];
+            }
+            for (const entry of entries) {
+                if (!/^[a-f0-9]{64}$/.test(entry)) continue;
+                try {
+                    const buf = readFileSync(join(stagingDir, entry));
+                    staging.push({
+                        contentHash: entry,
+                        content: buf.toString('base64'),
+                    });
+                } catch {
+                    // Best-effort: a transient read failure on one file
+                    // should not fail the entire backup.
+                }
+            }
+            if (staging.length === 0) staging = undefined;
+        }
+    }
+
     return {
         version: 1,
         createdAt: new Date().toISOString(),
@@ -111,6 +184,7 @@ export async function backup(stores: ClusterStores, options?: BackupOptions): Pr
         events,
         receipts,
         commands,
+        staging,
     };
 }
 
@@ -289,6 +363,49 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
             options.commandQueue.save(command);
         }
         result.commands = { restored: data.commands.length };
+    }
+
+    // V1-A4-004: restore staging files into <dataDir>/pending-content/.
+    // Each staging entry's contentHash field must match sha256(content) — a
+    // mismatch indicates tampering and the entry is rejected per-file rather
+    // than aborting the whole restore. Missing `data.staging` (older backup
+    // format) is a no-op — silently treated as "no staging files."
+    if (options?.dataDir && Array.isArray(data.staging) && data.staging.length > 0) {
+        const stagingDir = join(options.dataDir, 'pending-content');
+        try {
+            mkdirSync(stagingDir, { recursive: true });
+        } catch {
+            // Defer error surfacing to the per-entry loop.
+        }
+        const stagingResult = { restored: 0, skipped: 0, errors: [] as string[] };
+        for (const entry of data.staging) {
+            try {
+                if (!/^[a-f0-9]{64}$/.test(entry.contentHash)) {
+                    stagingResult.errors.push(
+                        `Staging entry rejected: invalid contentHash shape (${entry.contentHash.slice(0, 16)}...)`,
+                    );
+                    continue;
+                }
+                const buf = Buffer.from(entry.content, 'base64');
+                const actualHash = createHash('sha256').update(buf).digest('hex');
+                if (actualHash !== entry.contentHash) {
+                    stagingResult.errors.push(
+                        `Staging entry ${entry.contentHash}: content hash mismatch (got ${actualHash})`,
+                    );
+                    continue;
+                }
+                const targetPath = join(stagingDir, entry.contentHash);
+                if (existsSync(targetPath)) {
+                    stagingResult.skipped++;
+                    continue;
+                }
+                writeFileSync(targetPath, buf);
+                stagingResult.restored++;
+            } catch (err: any) {
+                stagingResult.errors.push(`Staging entry ${entry.contentHash}: ${err.message}`);
+            }
+        }
+        result.staging = stagingResult;
     }
 
     return result;

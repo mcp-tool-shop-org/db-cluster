@@ -150,3 +150,64 @@ export class LedgerCycleDetectedError extends Error {
         this.eventIds = eventIds;
     }
 }
+
+/**
+ * Thrown by `LocalLedgerStore.rotate(beforeTimestamp)` when the
+ * `beforeTimestamp` argument fails the ISO-8601 / `Date.parse` shape check.
+ *
+ * Closes AGG-B1-2b (Wave B1-Amend). Pre-fix `rotate('')` and
+ * `rotate('not-a-date')` produced silent no-ops or lexicographic surprises
+ * because the boundary comparison is a plain `event.timestamp <
+ * beforeTimestamp` string compare. The typed error gives operator-facing
+ * tooling (CLI / MCP / SDK) a stable code to branch on rather than a quiet
+ * `{archived: 0}` result.
+ *
+ * Carries a stable `code: 'INVALID_ROTATE_TIMESTAMP'` for the MCP boundary
+ * — the `BUILTIN_ERROR_CODES` map in `src/mcp/sanitize.ts` includes the
+ * constructor name so the error surfaces to MCP hosts with the same code.
+ */
+export class InvalidRotateTimestampError extends Error {
+    public readonly code = 'INVALID_ROTATE_TIMESTAMP';
+    public readonly beforeTimestamp: string;
+    constructor(beforeTimestamp: string) {
+        super(
+            `Invalid rotate boundary timestamp: ${JSON.stringify(beforeTimestamp)}. ` +
+                `Expected an ISO-8601 datetime string parseable by Date.parse(). ` +
+                `Rotation is refused rather than risk a lexicographic-string surprise that ` +
+                `archives the wrong slice of the ledger.`,
+        );
+        this.name = 'InvalidRotateTimestampError';
+        this.beforeTimestamp = beforeTimestamp;
+    }
+}
+
+/**
+ * Thrown by `LocalLedgerStore.rotate(beforeTimestamp)` when the boundary is
+ * in the future.
+ *
+ * Closes AGG-B1-2d (Wave B1-Amend). Pre-fix the safeguard returned a silent
+ * `{archived: 0, retained: N}` result — indistinguishable from "nothing to
+ * archive." The typed error surfaces the operator-intent mismatch so a
+ * mistakenly future-dated rotate doesn't quietly succeed.
+ *
+ * Carries a stable `code: 'ROTATE_BOUNDARY_IN_FUTURE'` (mirrored in
+ * `BUILTIN_ERROR_CODES` for the MCP boundary).
+ */
+export class RotateBoundaryInFutureError extends Error {
+    public readonly code = 'ROTATE_BOUNDARY_IN_FUTURE';
+    public readonly beforeTimestamp: string;
+    public readonly nowIso: string;
+    constructor(beforeTimestamp: string, nowIso?: string) {
+        const now = nowIso ?? new Date().toISOString();
+        super(
+            `rotate() refused: boundary timestamp ${beforeTimestamp} is in the future ` +
+                `(current: ${now}). Archiving "everything up to a future date" is almost ` +
+                `always a typo — refusing rather than silently archive the entire active ` +
+                `ledger. To archive everything, pass a boundary at or just after the newest ` +
+                `event's timestamp.`,
+        );
+        this.name = 'RotateBoundaryInFutureError';
+        this.beforeTimestamp = beforeTimestamp;
+        this.nowIso = now;
+    }
+}

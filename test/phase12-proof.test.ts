@@ -35,6 +35,12 @@ import { runDogfoodReplay } from '../scripts/dogfood-replay.js';
 import { ClusterSDK } from '../src/sdk/cluster-sdk.js';
 import type { Principal } from '../src/types/policy.js';
 
+// TESTS-B-008 (Wave B1-Amend) — doctrine for this file's hook strategy.
+// Proofs 1-3, 9, 11-14 are READ-ONLY against the shared dataDir, OR they
+// use their own freshDir (most write tests already do). Proof 10
+// (`Rebuilt index preserves improved search behavior`) was the load-bearing
+// mutation site — it called `stores.index.clear()` on the SHARED dataDir.
+// It has been isolated to a per-test fresh dir below.
 let dataDir: string;
 let kernel: ClusterKernel;
 
@@ -255,14 +261,37 @@ describe('Phase 12 proof suite', () => {
         expect(mutResults.some((r) => r.text.includes('phase-5'))).toBe(true);
     });
 
+    // TESTS-B-008 (Wave B1-Amend): isolated to per-test fresh dir.
+    // Pre-fix: called `stores.index.clear()` on shared dataDir, which would
+    // break Proof 9 (`Content-aware index finds dogfood docs by body
+    // content`) if Proof 10 ran first. Post-fix: rehydrate a fresh small
+    // cluster inline, seeded with the same Phase-6 doc.
     it('Proof 10: Rebuilt index preserves improved search behavior', async () => {
-        const stores = createLocalCluster(dataDir);
-        await stores.index.clear();
-        await rebuildIndex(stores);
+        const isolatedDir = mkdtempSync(join(tmpdir(), 'p12-p10-isolated-'));
+        try {
+            const isolatedStores = createLocalCluster(isolatedDir);
+            const isolatedKernel = new ClusterKernel(isolatedStores, { dataDir: isolatedDir });
 
-        const results = await stores.index.search({ text: 'MCP' });
-        expect(results.length).toBeGreaterThan(0);
-        expect(results.some((r) => r.sourceStore === 'artifact')).toBe(true);
+            // Minimal seed — must produce a searchable 'MCP' term after
+            // rebuild, and have at least one artifact-sourced index record.
+            await isolatedKernel.ingestArtifact({
+                filename: 'docs/phase-6-isolated.md',
+                content: Buffer.from('# Phase 6 — MCP and SDK\nMCP tools expose cluster thesis.'),
+                mimeType: 'text/markdown',
+                actorId: 'operator',
+            });
+            await rebuildIndex(isolatedStores);
+
+            // Now exercise the actual invariant: clear then rebuild.
+            await isolatedStores.index.clear();
+            await rebuildIndex(isolatedStores);
+
+            const results = await isolatedStores.index.search({ text: 'MCP' });
+            expect(results.length).toBeGreaterThan(0);
+            expect(results.some((r) => r.sourceStore === 'artifact')).toBe(true);
+        } finally {
+            try { rmSync(isolatedDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+        }
     });
 
     it('Proof 11: Dogfood replay no longer reproduces the four Phase 11 findings', async () => {

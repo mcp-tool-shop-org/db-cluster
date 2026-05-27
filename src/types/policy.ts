@@ -184,12 +184,14 @@ export interface RedactionRule {
 }
 
 export type RedactionTarget =
-    | 'artifact_content'     // strip raw artifact content
-    | 'entity_attributes'    // strip entity attribute values
-    | 'command_payload'      // strip mutation payload from receipts/inspection
-    | 'provenance_actors'    // mask actor IDs in provenance
-    | 'receipt_details'      // redact receipt payload but keep audit shape
-    | 'index_source_uri';    // hide original source path in index records
+    | 'artifact_content'      // strip raw artifact content
+    | 'entity_attributes'     // strip entity attribute values
+    | 'entity_name'           // strip entity name from labels (KERNEL-B-006)
+    | 'artifact_filename'     // strip artifact filename from labels (KERNEL-B-006)
+    | 'command_payload'       // strip mutation payload from receipts/inspection
+    | 'provenance_actors'     // mask actor IDs in provenance
+    | 'receipt_details'       // redact receipt payload but keep audit shape
+    | 'index_source_uri';     // hide original source path in index records
 
 // ─── Visibility Rules ──────────────────────────────────────────────────────
 

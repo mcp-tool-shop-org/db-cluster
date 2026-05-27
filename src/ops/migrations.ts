@@ -1,6 +1,13 @@
 /**
  * Migration status — checks schema state of physical backends.
+ *
+ * STORES-B-018: the list of required Postgres tables comes from
+ * `src/adapters/postgres/schema.ts::getRequiredTables()`. Pre-fix this
+ * file inlined the canonical-entities table name directly; if a future
+ * migration adds a new required table, only the registry need change.
  */
+
+import { CANONICAL_TABLE, getRequiredTables } from '../adapters/postgres/schema.js';
 
 export interface MigrationStatus {
     backend: string;
@@ -22,7 +29,7 @@ export async function checkMigrationStatus(pool: MigrationPool): Promise<Migrati
             `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`,
         );
         const tables = result.rows.map((r: any) => r.table_name as string);
-        const required = ['canonical_entities'];
+        const required = Array.from(getRequiredTables());
         const missing = required.filter((t) => !tables.includes(t));
 
         if (missing.length === 0) {
@@ -57,9 +64,12 @@ export async function verifySchema(pool: MigrationPool): Promise<{ valid: boolea
     const issues: string[] = [];
 
     try {
-        // Check canonical_entities columns
+        // Check canonical-table columns. The table name comes from the
+        // schema registry (CANONICAL_TABLE) so a rename in schema.ts
+        // doesn't leave this verification quietly probing a vanished table.
         const cols = await pool.query(
-            `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'canonical_entities' ORDER BY ordinal_position`,
+            `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
+            [CANONICAL_TABLE],
         );
 
         const expectedColumns = ['id', 'kind', 'name', 'attributes', 'created_at', 'updated_at'];
@@ -67,7 +77,7 @@ export async function verifySchema(pool: MigrationPool): Promise<{ valid: boolea
 
         for (const col of expectedColumns) {
             if (!actual.includes(col)) {
-                issues.push(`canonical_entities: missing column '${col}'`);
+                issues.push(`${CANONICAL_TABLE}: missing column '${col}'`);
             }
         }
     } catch (err: any) {

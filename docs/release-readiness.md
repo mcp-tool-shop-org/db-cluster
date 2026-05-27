@@ -130,9 +130,82 @@ rm -rf .release-gate-output
 Remove-Item -Recurse -Force .release-gate-output
 ```
 
+## Known flake patterns (post-Wave-A4)
+
+The full test suite is **deterministic at 778/55/0** across 3 consecutive runs
+after Wave A4 closed TESTS-007 (mass-migration of in-repo TEST_DIR patterns to
+`os.tmpdir()` plus a loud-on-loss `CommandQueue.load()`). Pre-A4 the rate was
+~67% per session on the 5080 rig because:
+
+- `test/wave6-proof.test.ts` used an in-repo TEST_DIR with a nested
+  `.db-cluster` subdir; Windows Defender real-time scanning indexed that path
+  on every test, opening a race window between `writeFileSync` and `renameSync`.
+- `wave6-policy-proof.test.ts` accumulated ~80 uncleaned `mkdtempSync`
+  directories per file run, amplifying the load.
+- `CommandQueue.load()` returned an empty Map silently when the persistence
+  file went missing after a save, masking the lost queue as a confusing
+  "Not found in command store" downstream.
+
+The Wave A4 fix is structural — those exact pre-conditions no longer co-occur.
+Wave B1-Amend reinforces this with:
+
+- `prepublishOnly: node scripts/release-gate.mjs` (Wave A4) — even a
+  workstation `npm publish` runs the full gate.
+- `workflow_dispatch:` on `release-gate.yml` and `ci.yml` so an operator can
+  re-run the gate against a specific SHA without bumping a tag or pushing an
+  empty commit.
+- Per-stage log artifacts in `.release-gate-output/` (Wave A4) so the failing
+  test name is never buried in a 500-byte stdout tail.
+
+### Procedure if the gate is red post-Wave-A4
+
+1. **Open the failed stage log** at `.release-gate-output/stage-N-*.log` —
+   the failing test name is preserved in full.
+2. **Re-run via `workflow_dispatch`** on the same SHA (no tree change needed).
+   The Wave-A4 baseline is deterministic, so a true flake should not recur on
+   re-run; a flake on the second run is a real regression.
+3. **If the gate fails on the second run with the SAME test**, treat as a
+   regression: do not bump version, fix the test or the production code, then
+   re-run on the new SHA.
+4. **If the gate fails on the second run with a DIFFERENT test**, you have
+   uncovered a NEW flake pattern. Open a Tests-domain finding and treat as a
+   v0.1.N+1 patch (do not roll forward).
+
+## Stryker mutation testing — current disposition
+
+Stryker is **shipped but not in CI**. The config files (`stryker.conf.json`,
+`vitest.stryker.config.ts`) and the `test:mutation` npm script remain in the
+repo as experimental scaffolding. The advertised "mutation testing on the
+test suite's discrimination power" claim from the Wave A3 CHANGELOG has been
+withdrawn in Wave B1-Amend per the v2 dogfood-swarm protocol's verifier-3
+substitution:
+
+> The v2 dogfood-swarm protocol uses a 3-lens verifier ensemble (contract-
+> completeness / cross-boundary-information-flow / invariant-test-completeness)
+> + family-of-call-sites probe. Verifier-3 (invariant-test-completeness)
+> substitutes for mutation coverage: it audits whether the test suite would
+> catch the lifecycle and per-store invariants that a kernel change could
+> break, which is what mutation testing approximates by mutating production
+> code. See the protocol at
+> `C:/Users/mikey/.claude/projects/F--AI/memory/dogfood-swarm.md`.
+
+The Stryker config files are kept (marked "experimental, not in CI" via a
+top-of-file comment in `vitest.stryker.config.ts`) so an operator who wants
+to run an ad-hoc mutation sweep on a single file still can:
+
+```sh
+npm run test:mutation  # runs against the file list in stryker.conf.json
+```
+
+The 28-hour-wall constraint at `coverageAnalysis: 'off'` makes this
+infeasible for routine CI; if the project decides to bring Stryker back into
+the standing gate, the recommended path is `incremental: true` with
+`coverageAnalysis: 'perTest'` per Stryker 7+ docs.
+
 ## What is NOT blocking release
 
 - Postgres not tested in CI (it's optional, documented as such)
 - Dashboard is reference/demo (documented, shipped intentionally)
 - repo-knowledge integration is internal (not exported)
 - No vector DB, no graph DB, no hosted service
+- Stryker mutation testing is experimental (above)

@@ -82,6 +82,14 @@ const POLICY_KERNEL_EXTRAS = new Set<string>([
     // the method is mechanically on the prototype. No reason to expose
     // through ClusterKernel since ClusterKernel has no policy bundle.
     'hasAnyPerResourceRule',
+    // AGG-B1-1b fix-up (Wave B1-Amend) — `rerenderLabelsWithPolicy` is a
+    // private helper used by `traceObject` / `traceBundle` to re-render
+    // node labels via `renderProvenanceLabel(metadata.labelData,
+    // policyView)`. It applies the `entity_name` / `artifact_filename`
+    // RedactionTargets at the policy boundary. ClusterKernel doesn't
+    // mirror it because ClusterKernel emits the literal label (the
+    // policy boundary is THIS class's responsibility).
+    'rerenderLabelsWithPolicy',
 ]);
 
 /**

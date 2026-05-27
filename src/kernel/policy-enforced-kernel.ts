@@ -20,6 +20,7 @@ import {
     redactGraphNodes,
     sanitizeWarnings,
 } from '../policy/redactor.js';
+import { renderProvenanceLabel, type LabelData } from '../provenance/trace-builder.js';
 import { ClusterKernel, type IngestArtifactInput, type CreateEntityInput, type LinkEvidenceInput, type IndexStatusResult, type IndexExplanation, type StaleRecord } from './cluster-kernel.js';
 import type {
     KernelOptions,
@@ -110,6 +111,31 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
         }
 
         return decision;
+    }
+
+    /**
+     * AGG-B1-1b — re-render every node's `label` through the policy view.
+     *
+     * The bare ClusterKernel produces a literal label
+     * (`renderProvenanceLabel(labelData, [])`). At this trust boundary the
+     * `entity_name` / `artifact_filename` RedactionTargets must actually fire
+     * — otherwise the AGG-008 typed-redaction machinery is dead config.
+     *
+     * Nodes without `metadata.labelData` (the redacted-placeholder nodes
+     * inserted by `redactGraphNodes` carry `label: '[Access restricted]'`
+     * but no structured labelData) are left untouched.
+     */
+    private rerenderLabelsWithPolicy(
+        graph: ProvenanceGraph,
+        policyView: ReadonlyArray<RedactionRule>,
+    ): ProvenanceGraph {
+        if (policyView.length === 0) return graph;
+        const nodes = graph.nodes.map((node) => {
+            const labelData = node.metadata && (node.metadata as Record<string, unknown>).labelData as LabelData | undefined;
+            if (!labelData) return node;
+            return { ...node, label: renderProvenanceLabel(labelData, policyView) };
+        });
+        return { ...graph, nodes };
     }
 
     // ─── Redaction rule collector ────────────────────────────────────
@@ -503,6 +529,11 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
         // Apply actor redaction if rules target provenance_actors
         if (rules.length > 0) {
             redacted = redactProvenanceActors(redacted, rules);
+            // AGG-B1-1b: re-render every visible node's `label` through the
+            // policy view so the `entity_name` / `artifact_filename`
+            // RedactionTargets actually gate the rendered string. Pre-fix
+            // the bare-kernel literal label leaked through.
+            redacted = this.rerenderLabelsWithPolicy(redacted, rules);
         }
 
         // Sanitize warnings to not leak hidden URIs
@@ -820,6 +851,9 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
 
         if (rules.length > 0) {
             redacted = redactProvenanceActors(redacted, rules);
+            // AGG-B1-1b: re-render labels through the policy view (parity
+            // with traceObject above).
+            redacted = this.rerenderLabelsWithPolicy(redacted, rules);
         }
 
         const { warnings, gaps } = sanitizeWarnings(redacted.warnings, redacted.gaps, this.visibilityRules);

@@ -64,6 +64,15 @@
   ],
   "author": "mcp-tool-shop <64996768+mcp-tool-shop@users.noreply.github.com>",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mcp-tool-shop-org/db-cluster.git"
+  },
+  "bugs": "https://github.com/mcp-tool-shop-org/db-cluster/issues",
+  "homepage": "https://github.com/mcp-tool-shop-org/db-cluster#readme",
   "devDependencies": {
     "@ast-grep/cli": "^0.43.0",
     "@stryker-mutator/core": "^9.6.1",

@@ -218,12 +218,14 @@ function Panel({ children, className = '' }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StoreLanesMap({ focal, onPick, sourceOnly }) {
-  // collect the set of objects to plot: focal + related
+  // SURFACE-B-005 (Wave B1-Amend): defensively guard `focal.related ?? []`
+  // so a focal object without a `related` array renders the map without
+  // the related-edges entries instead of throwing.
   const plotted = [
     { uri: focal.uri, owner: focal.owner, label: shortLabel(focal), focal: true, truth: focal.truth },
-    ...focal.related.map((r) => {
+    ...(focal.related ?? []).map((r) => {
       const o = OBJECTS[r.uri];
-      return { uri: r.uri, owner: o.owner, label: shortLabel(o), edge: r.edge, focal: false, truth: o.truth };
+      return { uri: r.uri, owner: o?.owner, label: shortLabel(o ?? { uri: r.uri }), edge: r.edge, focal: false, truth: o?.truth };
     }),
   ];
   // assign x positions per store lane based on appearance order
@@ -447,8 +449,10 @@ function fmtTime(iso) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ExplainIndexPanel({ focal, onClose }) {
-  // Resolve the index record that projects this object, if any
-  const idxRel = focal.related.find((r) => OBJECTS[r.uri]?.owner === 'index');
+  // SURFACE-B-005 (Wave B1-Amend): guard `focal.related ?? []` so an
+  // object that has no `related` array still resolves an idxRel (null)
+  // instead of crashing in `.find`.
+  const idxRel = (focal.related ?? []).find((r) => OBJECTS[r.uri]?.owner === 'index');
   const idx = idxRel ? OBJECTS[idxRel.uri] : focal.owner === 'index' ? focal : null;
   return (
     <div className="border border-index-line/60 bg-index-soft/40 rounded-md">
@@ -606,6 +610,18 @@ function ClusterTruthInspector() {
   const [hoverEdge, setHoverEdge] = React.useState(null);
 
   const focal = OBJECTS[uri];
+  // SURFACE-B-005 (Wave B1-Amend): pre-fix the inspector crashed with
+  // TypeError when given a URI not in OBJECTS (which happens when an
+  // external snapshot is loaded and a relationship URI points to an
+  // object not in the snapshot). The fallback render is non-throwing
+  // and surfaces the unknown URI to the operator.
+  if (!focal) {
+    return (
+      <div className="p-6 mono text-danger border border-danger-line bg-danger-soft/40 rounded-md">
+        Object not found: <code className="text-ink-100">{uri}</code>
+      </div>
+    );
+  }
   const ownerStore = STORES.find((s) => s.id === focal.owner);
   const focalEvents = EVENTS.filter((e) => e.subject === focal.uri);
   const focalReceipts = RECEIPTS.filter((r) =>
@@ -717,9 +733,10 @@ function ClusterTruthInspector() {
           <div>
             <SectionHead hint="cross-store edges">related</SectionHead>
             <ul className="space-y-1">
-              {focal.related.map((r) => {
+              {/* SURFACE-B-005 (Wave B1-Amend): guard related[] with ?? [] */}
+              {(focal.related ?? []).map((r) => {
                 const o = OBJECTS[r.uri];
-                const hidden = sourceOnly && o.owner === 'index';
+                const hidden = sourceOnly && o?.owner === 'index';
                 return (
                   <li key={r.uri}>
                     <button
@@ -780,7 +797,8 @@ function ClusterTruthInspector() {
             </SectionHead>
             <div className="grid grid-cols-2 gap-x-6">
               <div>
-                {focal.type === 'entity' && Object.entries(focal.attributes).map(([k, v]) => (
+                {/* SURFACE-B-005 (Wave B1-Amend): guard focal.attributes ?? {} */}
+                {focal.type === 'entity' && Object.entries(focal.attributes ?? {}).map(([k, v]) => (
                   <KV key={k} k={k} v={String(v)} />
                 ))}
                 {focal.type === 'artifact' && (

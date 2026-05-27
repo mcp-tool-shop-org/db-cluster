@@ -80,10 +80,59 @@ interface LedgerStore {
     append(event: Omit<ProvenanceEvent, 'id' | 'timestamp' | 'owner'>): Promise<ProvenanceEvent>;
     getEvent(id: string): Promise<ProvenanceEvent | null>;
     listEvents(filter?: LedgerFilter): Promise<ProvenanceEvent[]>;
+    /**
+     * Count events matching the filter without materializing them.
+     * REQUIRED on the contract — adapters implement directly, callers
+     * never feature-detect (STORES-B-014). `doctor()` / `verify()` use
+     * the true count as the headline number rather than the silently-
+     * truncated `listEvents({ limit }).length`.
+     */
+    countEvents(filter?: LedgerFilter): Promise<number>;
     trace(eventId: string): Promise<ProvenanceEvent[]>;
+
     appendReceipt(receipt: Omit<Receipt, 'id' | 'committedAt'>): Promise<Receipt>;
     getReceipt(id: string): Promise<Receipt | null>;
     listReceipts(filter?: ReceiptFilter): Promise<Receipt[]>;
+
+    /**
+     * Import an event preserving the original `id` and `timestamp`.
+     * Used by backup/restore so re-runs are idempotent (STORES-002 /
+     * STORES-B-003). Throws `ImportConflictError` when an existing
+     * record with the same id has different content. REQUIRED on the
+     * contract (STORES-R2-002).
+     */
+    importEvent(event: ProvenanceEvent): Promise<ProvenanceEvent>;
+    /**
+     * Import a receipt preserving original `id` and `committedAt`. Same
+     * idempotence + conflict semantics as {@link importEvent}.
+     * REQUIRED on the contract.
+     */
+    importReceipt(receipt: Receipt): Promise<Receipt>;
+
+    /**
+     * Archive events whose `timestamp < beforeTimestamp` into a sibling
+     * `<dataDir>/ledger-archive/` file. Receipts archive likewise via
+     * `committedAt`. STORES-B-013: gives operators a recovery valve
+     * before the active ledger grows unbounded.
+     *
+     * Throws:
+     *  - `InvalidRotateTimestampError` — boundary is not a parseable
+     *    ISO-8601 datetime (AGG-B1-2b).
+     *  - `RotateBoundaryInFutureError` — boundary is in the future;
+     *    archiving "everything up to a future date" is almost always
+     *    a typo (AGG-B1-2d).
+     *
+     * `trace()` does NOT read archived events — provenance chains that
+     * crossed the boundary truncate at the youngest unarchived event.
+     */
+    rotate(beforeTimestamp: string): Promise<RotateResult>;
+}
+
+interface RotateResult {
+    archived: number;
+    retained: number;
+    /** Absolute path of the archive file (omitted when nothing archived). */
+    archiveFile?: string;
 }
 
 interface LedgerFilter {
@@ -94,7 +143,7 @@ interface LedgerFilter {
 }
 ```
 
-**Ownership law:** The ledger is append-only. Events are never deleted or modified. Receipts prove that mutations occurred. Provenance traces walk the event chain to explain why any object exists.
+**Ownership law:** The ledger is append-only. Events are never deleted or modified except via {@link rotate}. Receipts prove that mutations occurred. Provenance traces walk the event chain to explain why any object exists.
 
 ## ClusterStores
 

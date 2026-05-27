@@ -1,6 +1,20 @@
 import { defineConfig } from 'vitest/config';
 
 /**
+ * EXPERIMENTAL — NOT IN CI as of Wave B1-Amend.
+ *
+ * Stryker mutation testing is kept in the repo as an ad-hoc tool — operators
+ * who want to spot-check the test suite's discrimination on a specific file
+ * may run `npm run test:mutation` locally. The 28-hour wall at
+ * `coverageAnalysis: 'off'` (current setting) makes this infeasible in the
+ * standing release-gate.
+ *
+ * Per the v2 dogfood-swarm protocol's verifier-3 doctrine
+ * (`C:/Users/mikey/.claude/projects/F--AI/memory/dogfood-swarm.md`), the
+ * invariant-test-completeness lens substitutes for mutation coverage in the
+ * standing gate. See `docs/release-readiness.md` "Stryker mutation testing
+ * — current disposition" for the full rationale.
+ *
  * Mutation-testing-only vitest config (used by Stryker via
  * `npm run test:mutation`). Excludes test files that spawn `dist/cli.js`
  * subprocesses because Stryker's vitest-runner sandbox does not include the

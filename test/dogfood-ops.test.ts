@@ -1,8 +1,21 @@
 /**
  * Dogfood operations tests — verify ops/recovery work on project memory.
+ *
+ * TESTS-B-008 (Wave B1-Amend): MIGRATED beforeAll → beforeEach.
+ * Pre-fix: every test ran against a SHARED cluster seeded once via beforeAll.
+ * Tests 2 and 3 call `await stores.index.clear()` which WIPES the shared
+ * index. If test 1 (doctor healthy on fresh cluster) ran AFTER test 2 or
+ * 3 (which clear the index), it would fail because doctor flags an empty
+ * index as degraded. Today the order is stable so the pass is incidental;
+ * tomorrow a rename/reorder/`.only` cascade breaks it.
+ *
+ * Post-fix: each test rehydrates its own fresh cluster in beforeEach. Cost
+ * is ~25-artifact ingest per test (~7 tests × ~2-3s setup = ~14-21s extra
+ * per file run). Cost is acceptable; the ordering-independence pin is
+ * load-bearing for the dogfood-* family this file canaries.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,12 +30,12 @@ import type { Principal } from '../src/types/policy.js';
 
 let cluster: DogfoodCluster;
 
-beforeAll(async () => {
+beforeEach(async () => {
     cluster = await createDogfoodCluster();
 });
 
-afterAll(() => {
-    rmSync(cluster.dataDir, { recursive: true, force: true });
+afterEach(() => {
+    try { rmSync(cluster.dataDir, { recursive: true, force: true }); } catch { /* best-effort */ }
 });
 
 describe('Dogfood operations', () => {

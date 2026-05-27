@@ -30,6 +30,7 @@ import {
     ContentHashMismatchError,
     StagedContentTamperedError,
 } from './errors.js';
+import { redactErrorMessage } from '../policy/redactor.js';
 import { CommandQueue } from './command-queue.js';
 import { RetrievalPlanner } from '../retrieval/retrieval-planner.js';
 import { TraceBuilder } from '../provenance/trace-builder.js';
@@ -246,7 +247,19 @@ export class ClusterKernel implements ClusterKernelInterface {
                 {
                     ...detail,
                     commandId,
-                    error: cause.message,
+                    // KERNEL-B-005: scrub absolute filesystem paths from
+                    // cause.message before persisting to the ledger. The
+                    // ledger surfaces this detail through retrieveBundle /
+                    // traceProvenance / inspectCommand for AI-facing trust
+                    // zones; an un-scrubbed path persists forever and
+                    // re-surfaces on every read. The redactErrorMessage
+                    // helper lives in src/policy/redactor.ts (kernel
+                    // domain) — the MCP-side redactError can re-import it
+                    // in a future wave. The typed cause object preserves
+                    // the original cause.message for operator-side
+                    // diagnostics in the throw path below; only the
+                    // PERSISTED form is scrubbed.
+                    error: redactErrorMessage(cause),
                     errorName: cause.name,
                 },
             );
@@ -259,12 +272,20 @@ export class ClusterKernel implements ClusterKernelInterface {
             //  2. Attach the secondary failure to the primary cause so any
             //     downstream `(err as ReceiptFailedError).cause` inspection
             //     can also reach the orphan-write failure.
-            const message = orphanErr instanceof Error ? orphanErr.message : String(orphanErr);
+            // V1-B1-010 (Wave B1-Amend fix-up): scrub the secondary
+            // failure's message before writing to stderr. Pre-fix the
+            // persisted ledger detail was scrubbed via `redactErrorMessage`
+            // (see the persist branch above), but the stderr branch wrote
+            // the raw `orphanErr.message` — asymmetric. Filesystem-path-
+            // bearing errors leaked through operator log shippers.
+            const scrubbed = orphanErr instanceof Error
+                ? redactErrorMessage(orphanErr)
+                : redactErrorMessage(new Error(String(orphanErr)));
             // eslint-disable-next-line no-console
             console.error(
                 `[db-cluster] Failed to record orphan mutation for ` +
                     `${subjectStore}/${subjectId}` +
-                    `${commandId ? ` (command ${commandId})` : ''}: ${message}`,
+                    `${commandId ? ` (command ${commandId})` : ''}: ${scrubbed}`,
             );
             try {
                 (cause as Error & { secondaryError?: Error }).secondaryError =

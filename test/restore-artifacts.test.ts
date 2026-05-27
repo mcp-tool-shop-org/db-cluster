@@ -1,4 +1,14 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+/**
+ * TESTS-B-008 (Wave B1-Amend): MIGRATED beforeAll → beforeEach with seed.
+ * Pre-fix: tests 2-5 SILENTLY DEPENDED on test 1 (`backup captures artifact
+ * payload`) having ingested the test-doc.md artifact into the shared
+ * sourceDir. If test 1 was renamed, reordered, `.only`d-out, or skipped,
+ * tests 2-5 broke with "no artifacts found." The ordering-dependence was
+ * INVISIBLE to readers and only fault-shielded by vitest's stable in-file
+ * order. Post-fix: each test re-ingests its own seed into a per-test fresh
+ * sourceDir, eliminating the implicit dependency.
+ */
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,17 +20,15 @@ describe('Wave 2: Restore artifacts', () => {
     let sourceDir: string;
     let targetDir: string;
 
-    beforeAll(() => {
+    beforeEach(async () => {
         sourceDir = mkdtempSync(join(tmpdir(), 'restore-art-src-'));
         targetDir = mkdtempSync(join(tmpdir(), 'restore-art-tgt-'));
-    });
 
-    afterAll(() => {
-        rmSync(sourceDir, { recursive: true, force: true });
-        rmSync(targetDir, { recursive: true, force: true });
-    });
-
-    it('backup captures artifact payload, metadata, and checksum', async () => {
+        // Seed: every test starts with the test-doc.md artifact ingested
+        // into sourceDir. This replicates the pre-fix `beforeAll` seed from
+        // the original "test 1" body so all downstream tests have an
+        // artifact to back up / restore / corrupt without depending on the
+        // ordering of test 1.
         const stores = createLocalCluster(sourceDir);
         const kernel = new ClusterKernel(stores);
         await kernel.ingestArtifact({
@@ -29,6 +37,17 @@ describe('Wave 2: Restore artifacts', () => {
             mimeType: 'text/markdown',
             actorId: 'operator',
         });
+    });
+
+    afterEach(() => {
+        try { rmSync(sourceDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+        try { rmSync(targetDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+    });
+
+    it('backup captures artifact payload, metadata, and checksum', async () => {
+        // Seed is already in sourceDir (see beforeEach). Just back it up
+        // and verify the captured shape.
+        const stores = createLocalCluster(sourceDir);
 
         const data = await backup(stores);
         expect(data.artifactSnapshots).toBeDefined();

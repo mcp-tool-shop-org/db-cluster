@@ -15,13 +15,19 @@ function OperationsPanel({ opsData, onClose }) {
         unknown: 'text-ink-400',
     };
 
+    // AGG-B1-5: reads the actual OpsModel shape — `opsData.overall` (top-
+    // level, not nested under a doctor field), `opsData.stores` (the array
+    // of per-store health), and `provenanceHealth.totalReceipts` /
+    // `.totalEvents` (not `.receipts` / `.events`). The pre-fix references
+    // read fields that don't exist on the OpsModel interface declared in
+    // `src/dashboard/ops-model.ts`, so the panel rendered '—' everywhere.
     return (
         <div className="border border-ledger-line/60 bg-ledger-soft/30 rounded-md">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-ledger-line/50">
                 <div className="flex items-center gap-2">
                     <span className="mono text-[10.5px] uppercase tracking-[0.12em] text-ledger">operations</span>
-                    <span className={`mono text-[11px] ${overallColor[opsData.doctor?.overall || 'unknown']}`}>
-                        {opsData.doctor?.overall || 'unknown'}
+                    <span className={`mono text-[11px] ${overallColor[opsData.overall || 'unknown']}`}>
+                        {opsData.overall || 'unknown'}
                     </span>
                 </div>
                 {onClose && (
@@ -34,10 +40,10 @@ function OperationsPanel({ opsData, onClose }) {
                 <div>
                     <div className="mono text-[10px] uppercase tracking-[0.12em] text-ink-500 mb-2">store health</div>
                     <div className="space-y-1.5">
-                        {(opsData.doctor?.checks || []).map((check) => (
-                            <div key={check.name} className="flex items-center gap-2 mono text-[11px]">
+                        {(opsData.stores || []).map((check) => (
+                            <div key={check.store} className="flex items-center gap-2 mono text-[11px]">
                                 <span className={`w-1.5 h-1.5 rounded-full ${check.status === 'healthy' ? 'bg-ok' : 'bg-danger'}`}></span>
-                                <span className="text-ink-300">{check.store || check.name}</span>
+                                <span className="text-ink-300">{check.store}</span>
                                 <span className="text-ink-500 ml-auto">{check.status}</span>
                             </div>
                         ))}
@@ -73,12 +79,50 @@ function OperationsPanel({ opsData, onClose }) {
                     <div className="space-y-1.5 mono text-[11px]">
                         <div className="flex justify-between">
                             <span className="text-ink-400">receipts</span>
-                            <span className="text-ink-200">{opsData.provenanceHealth?.receipts ?? '—'}</span>
+                            <span className="text-ink-200">{opsData.provenanceHealth?.totalReceipts ?? '—'}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-ink-400">events</span>
-                            <span className="text-ink-200">{opsData.provenanceHealth?.events ?? '—'}</span>
+                            <span className="text-ink-200">{opsData.provenanceHealth?.totalEvents ?? '—'}</span>
                         </div>
+                        {/*
+                          SURFACE-B-011 (Wave B1-Amend): render the
+                          mutation_orphaned count. Wave A3 wired the
+                          orphan-event family into verify()/doctor() but
+                          the dashboard view-layer was blind. The row
+                          colors warn when > 0 to signal investigation
+                          is needed.
+                        */}
+                        <div className="flex justify-between">
+                            <span className={
+                                opsData.provenanceHealth?.orphanEvents === null
+                                    ? "text-warn"
+                                    : (opsData.provenanceHealth?.orphanEvents ?? 0) > 0
+                                        ? "text-warn"
+                                        : "text-ink-400"
+                            }>
+                                orphaned
+                            </span>
+                            <span className="text-ink-200">
+                                {/* V1-B1-007: render '?' when null (count
+                                  unavailable — runtime error in countEvents).
+                                  Distinguishes degraded ("we don't know")
+                                  from healthy ("we know there are zero"). */}
+                                {opsData.provenanceHealth?.orphanEvents === null
+                                    ? '?'
+                                    : (opsData.provenanceHealth?.orphanEvents ?? 0)}
+                            </span>
+                        </div>
+                        {opsData.provenanceHealth?.degradedReason && (
+                            <div className="text-warn text-[10.5px] leading-tight pt-1">
+                                {opsData.provenanceHealth.degradedReason}
+                            </div>
+                        )}
+                        {(opsData.provenanceHealth?.orphanEvents ?? 0) > 0 && !opsData.provenanceHealth?.degradedReason && (
+                            <div className="text-warn text-[10.5px] leading-tight pt-1">
+                                Investigate <code>mutation_orphaned</code> events — receipt write failed; entity state may be out of sync with ledger.
+                            </div>
+                        )}
                     </div>
                 </div>
 

@@ -105,10 +105,10 @@ These tools write to truth stores. They produce receipts and provenance events.
 Tools carry `annotations` that declare their behavior:
 
 ```typescript
-{
-    readOnlyHint: true | false,
-    destructiveHint: true | false,
-    idempotentHint: true | false,
+interface ToolAnnotations {
+    readOnlyHint: boolean;
+    destructiveHint: boolean;
+    idempotentHint: boolean;
 }
 ```
 

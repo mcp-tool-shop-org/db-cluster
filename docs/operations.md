@@ -80,9 +80,12 @@ db-cluster backup -o ./backup.json
 
 The backup includes:
 - All canonical entities
-- All artifacts (metadata, not raw content)
+- All artifacts (with content, base64-encoded + SHA-256 checksum)
 - All provenance events
 - All mutation receipts
+- Command queue state
+
+See `docs/handbook.md` §9.5 for the doctrine.
 
 ## Restore
 
@@ -117,23 +120,30 @@ db-cluster verify-schema
 
 ## Programmatic access
 
-All operations are available as functions:
+All operations are available as functions from the package root:
 
 ```typescript
-import { doctor } from 'db-cluster/ops/doctor';
-import { verify } from 'db-cluster/ops/verify';
-import { rebuildIndex, checkStale } from 'db-cluster/ops/rebuild';
-import { backup, restore } from 'db-cluster/ops/backup';
-import { checkProvenance } from 'db-cluster/ops/provenance-check';
-import { checkReceipts } from 'db-cluster/ops/receipt-check';
-import { checkMigrationStatus, verifySchema } from 'db-cluster/ops/migrations';
+import { doctor, verify, backup, restore } from 'db-cluster';
 
 const health = await doctor(stores);
 const verified = await verify(stores);
-const rebuilt = await rebuildIndex(stores);
-const stale = await checkStale(stores);
 const data = await backup(stores);
 await restore(freshStores, data);
+```
+
+Index rebuild + stale-check live on `PolicyEnforcedKernel`. Use the policy
+subpath if you need to drive these in-process; otherwise the CLI surface
+(`db-cluster rebuild index`, `db-cluster rebuild check`) covers the same
+verbs:
+
+```typescript
+import { PolicyEnforcedKernel } from 'db-cluster/policy';
+
+declare const kernel: PolicyEnforcedKernel; // see SDK + adapter docs for setup
+await kernel.rebuildIndex('operator');
+const stale = await kernel.listStaleRecords();
+// Postgres migration status: `db-cluster stores migrate` (CLI) — there is
+// no public SDK surface for migration management today.
 ```
 
 ## Ownership law

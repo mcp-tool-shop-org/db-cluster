@@ -193,16 +193,29 @@
   <script type="text/babel" data-presets="react" src="demo-data.js"></script>
   <script type="text/babel" data-presets="react" src="ClusterTruthInspector.jsx"></script>
   <script type="text/babel" data-presets="react">
-    // small wait loop in case the external babel script hasn't finished transforming yet
+    /*
+      SURFACE-B-015 (Wave B1-Amend) — Dashboard JSDOM-ESM race remediation.
+
+      Pre-fix the readiness loop only checked window.ClusterTruthInspector.
+      The `<script type="module">` above that assigns window.applyRedaction
+      is asynchronous (modules are deferred + executed after the parser
+      finishes), so consumers that load PolicyViewToggle (which expects
+      window.applyRedaction) hit an intermittent race when the redaction
+      global wasn't installed before the toggle's first render.
+
+      The loop now polls for BOTH window.ClusterTruthInspector AND
+      window.applyRedaction before mounting, closing the race for any
+      future component that depends on the shared redaction lib.
+    */
     (function mount(tries) {
-      if (typeof window.ClusterTruthInspector === 'function') {
+      if (typeof window.ClusterTruthInspector === 'function' && typeof window.applyRedaction === 'function') {
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<ClusterTruthInspector />);
       } else if (tries < 50) {
         setTimeout(() => mount(tries + 1), 50);
       } else {
         document.getElementById('root').innerHTML =
-          '<pre style="color:#ef6c6c;font-family:JetBrains Mono;padding:1rem">Failed to load ClusterTruthInspector.jsx</pre>';
+          '<pre style="color:#ef6c6c;font-family:JetBrains Mono;padding:1rem">Failed to load ClusterTruthInspector.jsx or applyRedaction</pre>';
       }
     })(0);
   </script>

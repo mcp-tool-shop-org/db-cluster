@@ -154,17 +154,33 @@ export async function verify(stores: ClusterStores, options?: VerifyOptions): Pr
     // Wave A2 added mutation_orphaned events on receipt failure (KERNEL-R009)
     // but verify()/doctor() had no consumer for that signal. A cluster with
     // orphaned mutations reported healthy. This check surfaces the orphans.
+    //
+    // STORES-B-014: pre-fix this used the `limit` option (default 100) to
+    // bound listEvents AND to derive the orphan count via
+    // `orphanedEvents.length`. The cap silently truncated the headline
+    // number; ops dashboards reported "100 orphaned" even at 500. Post-fix
+    // we use `countEvents` for the true number and only sample for the
+    // (unused-today, but bounded) display set.
     try {
-        const orphanedEvents = await stores.ledger.listEvents({ action: 'mutation_orphaned', limit });
-        const orphanCount = orphanedEvents.length;
+        const orphanCount = await stores.ledger.countEvents({
+            action: 'mutation_orphaned',
+        });
+        // Keep the sample-fetch bounded so callers that override `limit`
+        // still control memory pressure during verify().
+        await stores.ledger.listEvents({
+            action: 'mutation_orphaned',
+            limit,
+        });
 
         if (orphanCount > 0) {
+            const capped = orphanCount > limit;
+            const suffix = capped ? ` (showing first ${limit})` : '';
             checks.push({
                 name: 'no_orphaned_mutations',
                 store: 'ledger',
                 status: 'degraded',
                 severity: 'warning',
-                message: `${orphanCount} orphaned mutation event(s) recorded. A mutation completed against a store but its receipt write failed — the cluster has uninspectable state.`,
+                message: `${orphanCount} orphaned mutation event(s) recorded${suffix}. A mutation completed against a store but its receipt write failed — the cluster has uninspectable state.`,
                 repairAvailable: false,
             });
         } else {
