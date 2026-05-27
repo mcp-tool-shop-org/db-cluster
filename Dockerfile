@@ -4,9 +4,14 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-# Install build dependencies
+# Install build dependencies. `--ignore-scripts` skips devDep postinstall
+# hooks like `@ast-grep/cli`'s native-binary fetch — that package only ships
+# glibc binaries, so its postinstall fails on Alpine (musl). The dev tooling
+# we actually need at build time (`tsc`, `vitest`) doesn't rely on postinstall
+# side effects, and `@ast-grep/cli` itself is pruned by the `npm prune` below
+# before anything reaches the runtime stage.
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 # Copy source + build config
 COPY tsconfig.json ./

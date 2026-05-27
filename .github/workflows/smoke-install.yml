@@ -18,4 +18,5 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build
+      - run: npm pack       # creates mcptoolshop-db-cluster-<version>.tgz for the smoke script
       - run: node scripts/smoke-install.mjs

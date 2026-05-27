@@ -1,0 +1,88 @@
+name: Docker Publish
+
+# Decoupled from `release.yml` (npm publish + GitHub Release) so the Docker
+# image can be (re)built for any version independent of the npm publish step.
+# - Fires automatically on every `v*` tag push (after main release is cut).
+# - Exposes workflow_dispatch with an optional `version` input so a maintainer
+#   can rebuild the image for an existing tag (e.g. after a Dockerfile fix
+#   that doesn't warrant a new npm version).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Override the image version tag (e.g. 1.0.0). Blank → reads from git tag or package.json.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker:
+    name: Build + publish multi-arch Docker image to GHCR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VER="${{ inputs.version }}"
+            echo "Source: workflow_dispatch input"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VER="${GITHUB_REF_NAME#v}"
+            echo "Source: git tag (${GITHUB_REF_NAME})"
+          else
+            VER=$(node -p "require('./package.json').version")
+            echo "Source: package.json"
+          fi
+          MAJOR="${VER%%.*}"
+          REST="${VER#*.}"
+          MINOR="${REST%%.*}"
+          {
+            echo "version=${VER}"
+            echo "major_minor=${MAJOR}.${MINOR}"
+            echo "major=${MAJOR}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Image will tag: ${VER}, ${MAJOR}.${MINOR}, ${MAJOR}, latest"
+
+      - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3  # v4
+
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build + push (linux/amd64, linux/arm64)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/mcp-tool-shop-org/db-cluster:${{ steps.ver.outputs.version }}
+            ghcr.io/mcp-tool-shop-org/db-cluster:${{ steps.ver.outputs.major_minor }}
+            ghcr.io/mcp-tool-shop-org/db-cluster:${{ steps.ver.outputs.major }}
+            ghcr.io/mcp-tool-shop-org/db-cluster:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/mcp-tool-shop-org/db-cluster
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.ver.outputs.version }}
+            org.opencontainers.image.title=db-cluster
+            org.opencontainers.image.description=AI-native federated database cluster — CLI + MCP server.
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.url=https://mcp-tool-shop-org.github.io/db-cluster/
+            org.opencontainers.image.documentation=https://mcp-tool-shop-org.github.io/db-cluster/handbook/
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
