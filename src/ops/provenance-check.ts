@@ -15,6 +15,21 @@ export interface ProvenanceCheckResult {
 
 /**
  * Verify provenance events reference valid objects and form valid chains.
+ *
+ * @param stores  ClusterStores bundle. Reads ledger.listEvents + canonical.exists
+ *                + artifact.exists. Never mutates state.
+ * @param options Optional knobs. `limit` caps how many events are sampled
+ *                (default 200).
+ * @returns       {@link ProvenanceCheckResult} carrying total/valid/orphans
+ *                counts plus per-orphan error strings and a structured
+ *                HealthCheck[] surface.
+ * @throws        Adapter-level exceptions from ledger.listEvents propagate.
+ *
+ * @example
+ *   const result = await checkProvenance(stores);
+ *   if (result.orphans > 0) {
+ *       for (const e of result.errors) console.error(e);
+ *   }
  */
 export async function checkProvenance(stores: ClusterStores, options?: { limit?: number }): Promise<ProvenanceCheckResult> {
     const limit = options?.limit ?? 200;
@@ -58,6 +73,13 @@ export async function checkProvenance(stores: ClusterStores, options?: { limit?:
             severity: 'warning',
             message: `${orphans}/${events.length} provenance event(s) reference missing subjects.`,
             repairAvailable: false,
+            // Wave C1-Amend fix-up (V1-C1-005): suggestedCommand for
+            // doctor footer "Top fix" surfacing.
+            suggestedCommand: 'db-cluster verify --json',
+            nextSteps: [
+                'Run `db-cluster trace <subjectId>` for the affected events to inspect lineage.',
+                'Reconcile by either restoring the missing canonical/artifact records or removing the stale provenance events.',
+            ],
         });
     }
 

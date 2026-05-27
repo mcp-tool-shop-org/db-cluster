@@ -126,7 +126,45 @@
           <rect x="12.5" y="12.5" width="8" height="8" rx="1" fill="none" stroke="#7fcf9f" stroke-width="1.4" />
         </svg>
         <span class="mono text-[13px] font-semibold tracking-tight text-ink-100">db-cluster</span>
-        <span class="mono text-[11px] text-ink-500">v0.1.0 · phase-1</span>
+        <!--
+          SHA-SURFACE-LEAK-4 (Wave C1-Amend): version was hardcoded as
+          a literal string here (mirrored the pre-SURFACE-B-013 CLI/MCP
+          bug). Now read from ../package.json at page
+          load (the dashboard ships alongside the package, so a relative
+          fetch resolves both in dev and when consumed from npm). When the
+          fetch fails (offline, file:// without server), the span surfaces
+          `version unavailable` instead of stale literal — operators see
+          "we don't know" rather than misinformation.
+        -->
+        <span id="db-cluster-version-badge" class="mono text-[11px] text-ink-500">v… · loading</span>
+        <script>
+          (function loadVersionBadge() {
+            // Try a few common locations: when bundled in the npm tarball,
+            // package.json sits one directory up from dashboard/. When
+            // running from a dev checkout, that path also resolves.
+            var candidates = ['../package.json', './package.json', '../../package.json'];
+            var span = document.getElementById('db-cluster-version-badge');
+            var tried = 0;
+            function tryNext() {
+              if (tried >= candidates.length) {
+                if (span) span.textContent = 'version unavailable';
+                return;
+              }
+              var url = candidates[tried++];
+              fetch(url, { cache: 'no-cache' })
+                .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)); })
+                .then(function (pkg) {
+                  if (span && pkg && pkg.version) {
+                    span.textContent = 'v' + pkg.version;
+                  } else if (span) {
+                    span.textContent = 'version unavailable';
+                  }
+                })
+                .catch(tryNext);
+            }
+            tryNext();
+          })();
+        </script>
       </div>
       <nav class="ml-auto flex items-center gap-5 text-[12.5px] text-ink-400">
         <a class="hover:text-ink-100 transition" href="#">cluster</a>
@@ -191,6 +229,12 @@
   </script>
 
   <script type="text/babel" data-presets="react" src="demo-data.js"></script>
+  <!-- Wave C1-Amend §2d (SURFACE-C-017/018/019/020): StateBoundary helper
+       must load before components that consume ComponentState. -->
+  <script type="text/babel" data-presets="react" src="lib/state-boundary.jsx"></script>
+  <script type="text/babel" data-presets="react" src="components/OperationsPanel.jsx"></script>
+  <script type="text/babel" data-presets="react" src="components/CommandPreviewPanel.jsx"></script>
+  <script type="text/babel" data-presets="react" src="components/PolicyViewToggle.jsx"></script>
   <script type="text/babel" data-presets="react" src="ClusterTruthInspector.jsx"></script>
   <script type="text/babel" data-presets="react">
     /*
@@ -208,14 +252,31 @@
       future component that depends on the shared redaction lib.
     */
     (function mount(tries) {
-      if (typeof window.ClusterTruthInspector === 'function' && typeof window.applyRedaction === 'function') {
+      // Wave C1-Amend fix-up (V3-C1-008 — sibling-pattern of
+      // SURFACE-B-015 race fix): SURFACE-C-017/018/019/020 added four
+      // new global components (StateBoundary, ComponentState,
+      // CommandPreviewPanel, OperationsPanel, renderRedactionMarkers)
+      // but the mount-loop only polled the SURFACE-B-015 pair. If any
+      // of the new globals's <script> hasn't loaded by the time
+      // ClusterTruthInspector resolves, the first render against a
+      // sub-panel that depends on the new global crashes. The loop now
+      // polls the full set so the parent never mounts before its
+      // dependencies finish.
+      const allReady =
+        typeof window.ClusterTruthInspector === 'function'
+        && typeof window.applyRedaction === 'function'
+        && typeof window.StateBoundary === 'function'
+        && typeof window.CommandPreviewPanel === 'function'
+        && typeof window.OperationsPanel === 'function'
+        && typeof window.renderRedactionMarkers === 'function';
+      if (allReady) {
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<ClusterTruthInspector />);
       } else if (tries < 50) {
         setTimeout(() => mount(tries + 1), 50);
       } else {
         document.getElementById('root').innerHTML =
-          '<pre style="color:#ef6c6c;font-family:JetBrains Mono;padding:1rem">Failed to load ClusterTruthInspector.jsx or applyRedaction</pre>';
+          '<pre style="color:#ef6c6c;font-family:JetBrains Mono;padding:1rem">Failed to load one or more dashboard globals (ClusterTruthInspector, applyRedaction, StateBoundary, CommandPreviewPanel, OperationsPanel, renderRedactionMarkers)</pre>';
       }
     })(0);
   </script>

@@ -1,6 +1,34 @@
 import { randomUUID } from 'node:crypto';
 import type { Command, CommandVerb, CommandStatus, ValidationResult, ValidationCheck } from '../types/command.js';
-import { InvalidContentShapeError } from './errors.js';
+import { InvalidContentShapeError, InvalidStateTransitionError } from './errors.js';
+
+/**
+ * SHA-KERNEL-C-001 helper: build a typed `Error` carrying validation
+ * failure detail. Used by {@link validateCommand} to throw a typed
+ * shape instead of the bare `new Error(...)` (should-have-been-A from
+ * Stage A; closed in Wave C1-Amend).
+ *
+ * The validation-failure path is distinct from `InvalidStateTransitionError`
+ * — those are status-transition guards; this is "the payload didn't pass
+ * the per-verb shape check." We extend `Error` with an attached `code`
+ * so MCP / CLI consumers can still branch.
+ */
+export class CommandValidationFailedError extends Error {
+    public readonly code = 'COMMAND_VALIDATION_FAILED';
+    public readonly remediationHint: string =
+        'The command failed structural validation. Inspect ' +
+        '`command.validation.checks` to see which check failed; fix the ' +
+        'payload and re-propose. Common causes: missing required fields ' +
+        '(name/kind on create_entity; filename or artifactId on ' +
+        'ingest_artifact); invalid targetStore.';
+    public readonly retryable: boolean = false;
+    public readonly failures: string;
+    constructor(failures: string) {
+        super(`Validation failed: ${failures}`);
+        this.name = 'CommandValidationFailedError';
+        this.failures = failures;
+    }
+}
 
 /**
  * Create a proposed command. Does NOT mutate any store.
@@ -74,7 +102,9 @@ export function validateCommand(command: Command): Command {
 
     if (!allPassed) {
         const failures = checks.filter((c) => !c.passed).map((c) => c.message).join('; ');
-        throw new Error(`Validation failed: ${failures}`);
+        // SHA-KERNEL-C-001: was `throw new Error(...)` — typed now so
+        // consumers can branch and the error carries a remediationHint.
+        throw new CommandValidationFailedError(failures);
     }
 
     return { ...command, status: 'validated', validation };
@@ -85,7 +115,8 @@ export function validateCommand(command: Command): Command {
  */
 export function approveCommand(command: Command, approvedBy: string, note?: string): Command {
     if (command.status !== 'validated') {
-        throw new Error(`Cannot approve command in status: ${command.status}. Must be 'validated'.`);
+        // SHA-KERNEL-C-001: was bare `new Error(...)` — typed now.
+        throw new InvalidStateTransitionError(command.status, 'approved', command.id);
     }
     return {
         ...command,
@@ -104,7 +135,8 @@ export function approveCommand(command: Command, approvedBy: string, note?: stri
  */
 export function rejectCommand(command: Command, rejectedBy: string, reason: string): Command {
     if (!isValidTransition(command.status, 'rejected')) {
-        throw new Error(`Cannot reject command in status: ${command.status}. Must be one of: ${REJECTABLE_FROM.join(', ')}.`);
+        // SHA-KERNEL-C-001: was bare `new Error(...)` — typed now.
+        throw new InvalidStateTransitionError(command.status, 'rejected', command.id);
     }
     return {
         ...command,
@@ -119,7 +151,8 @@ const REJECTABLE_FROM: CommandStatus[] = ['proposed', 'validated', 'approved'];
 
 export function markCommitted(command: Command, committedBy?: string): Command {
     if (command.status !== 'validated' && command.status !== 'approved') {
-        throw new Error(`Cannot commit command in status: ${command.status}. Must be 'validated' or 'approved'.`);
+        // SHA-KERNEL-C-001: was bare `new Error(...)` — typed now.
+        throw new InvalidStateTransitionError(command.status, 'committed', command.id);
     }
     return {
         ...command,
@@ -153,7 +186,8 @@ export function markRejected(command: Command, rejectedBy: string, reason: strin
  */
 export function markCompensated(command: Command, compensatingCommandId: string, compensatedBy: string): Command {
     if (command.status !== 'committed') {
-        throw new Error(`Cannot compensate command in status: ${command.status}. Must be 'committed'.`);
+        // SHA-KERNEL-C-001: was bare `new Error(...)` — typed now.
+        throw new InvalidStateTransitionError(command.status, 'compensated', command.id);
     }
     return {
         ...command,

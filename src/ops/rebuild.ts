@@ -14,11 +14,30 @@ export interface RebuildResult {
     dryRun: boolean;
 }
 
+export interface RebuildOptions {
+    /** Stage + show plan without mutating. Default: false. */
+    dryRun?: boolean;
+    /**
+     * Progress callback fired between records as they are staged + after the
+     * atomic swap completes (STORES-C-002). `current` is the count of records
+     * staged so far, `total` is the count of canonical entities plus artifacts
+     * the rebuild will walk. Optional — CLI subscribes for a progress bar.
+     */
+    onProgress?: (current: number, total: number, message?: string) => void;
+}
+
 export interface StaleRecord {
     type: 'missing_from_index' | 'orphan_index_record';
     sourceId: string;
     sourceStore: string;
     message: string;
+    /**
+     * Operator-facing remediation hint (STORES-C-008). Always names the
+     * `db-cluster rebuild index` command so a stale-records render at the
+     * CLI / dashboard can append `→ fix: db-cluster rebuild index` without
+     * the consumer knowing the remediation surface.
+     */
+    suggestedCommand: string;
 }
 
 /** A staged index record — same shape as IndexStore.index() input. */
@@ -26,19 +45,41 @@ type StagedRecord = Omit<IndexRecord, 'id' | 'indexedAt' | 'owner'>;
 
 /**
  * Rebuild the index from canonical + artifact owner truth.
- * Uses content-aware indexing for artifacts.
- * Does NOT mutate canonical, artifact, or ledger.
  *
- * Strategy (STORES-008 / STORES-R003): build the full list of replacement records
- * in memory BEFORE touching the live index, then atomically swap them in via
- * `IndexStore.replaceAll` — a method that is now required on the contract
- * (was previously duck-typed). The empty-index window collapses to a single
- * filesystem rename on the local adapter. Pre-STORES-R003 the function
- * fell back to clear() + index() if the method was missing; that fallback is
- * gone now that the contract guarantees the method exists.
+ * Strategy (STORES-008 / STORES-R003): build the full list of replacement
+ * records in memory BEFORE touching the live index, then atomically swap them
+ * in via `IndexStore.replaceAll` — a method that is now required on the
+ * contract (was previously duck-typed). The empty-index window collapses to
+ * a single filesystem rename on the local adapter. Pre-STORES-R003 the
+ * function fell back to clear() + index() if the method was missing; that
+ * fallback is gone now that the contract guarantees the method exists.
+ *
+ * Long-running on large clusters: ~1ms per record on warm hardware, ~5ms per
+ * record with content extraction on text artifacts. Callers should pass
+ * `options.onProgress` to render a progress bar (STORES-C-002).
+ *
+ * @param stores   ClusterStores bundle. Reads canonical.list + artifact.list
+ *                 + artifact.getContent. Never mutates canonical/artifact/ledger.
+ * @param options  See {@link RebuildOptions}. `dryRun: true` stages records
+ *                 and returns counts WITHOUT calling `index.replaceAll`.
+ * @returns        {@link RebuildResult} carrying rebuilt count + errors[] +
+ *                 the echoed `dryRun` flag.
+ * @throws         Doesn't normally throw — per-record staging errors are
+ *                 collected in `result.errors[]`. The only path that throws
+ *                 is `index.replaceAll` failure (rendered as an error and
+ *                 surfaced via the result's `errors[]`).
+ *
+ * @example
+ *   const result = await rebuildIndex(stores, {
+ *       onProgress: (current, total, label) => {
+ *           process.stdout.write(`\r${current}/${total} ${label ?? ''}`);
+ *       },
+ *   });
+ *   console.log(`\nRebuilt ${result.rebuilt} records, ${result.errors.length} errors`);
  */
-export async function rebuildIndex(stores: ClusterStores, options?: { dryRun?: boolean }): Promise<RebuildResult> {
+export async function rebuildIndex(stores: ClusterStores, options?: RebuildOptions): Promise<RebuildResult> {
     const dryRun = options?.dryRun ?? false;
+    const onProgress = options?.onProgress;
     const errors: string[] = [];
     let rebuilt = 0;
     const removed = 0;
@@ -46,8 +87,21 @@ export async function rebuildIndex(stores: ClusterStores, options?: { dryRun?: b
     // 1. STAGE — build replacement records without touching the live index.
     const staged: StagedRecord[] = [];
 
-    // Canonical entities
+    // Canonical entities + artifacts make up the total walk. Fetch both lists
+    // up front so we have an honest `total` for progress reporting.
     const entities = await stores.canonical.list({});
+    const artifacts = await stores.artifact.list({});
+    const total = entities.length + artifacts.length;
+    let current = 0;
+    const tick = (label?: string) => {
+        try {
+            onProgress?.(current, total, label);
+        } catch {
+            // Best-effort.
+        }
+    };
+
+    // Canonical entities
     for (const entity of entities) {
         try {
             staged.push({
@@ -60,10 +114,11 @@ export async function rebuildIndex(stores: ClusterStores, options?: { dryRun?: b
         } catch (err: any) {
             errors.push(`Failed to stage entity ${entity.id}: ${err.message}`);
         }
+        current++;
+        tick(`staging entity ${entity.id}`);
     }
 
     // Artifacts (content-aware text extraction)
-    const artifacts = await stores.artifact.list({});
     for (const artifact of artifacts) {
         try {
             const contentBuf = await stores.artifact.getContent(artifact.id);
@@ -93,9 +148,12 @@ export async function rebuildIndex(stores: ClusterStores, options?: { dryRun?: b
         } catch (err: any) {
             errors.push(`Failed to stage artifact ${artifact.id}: ${err.message}`);
         }
+        current++;
+        tick(`staging artifact ${artifact.id}`);
     }
 
     if (dryRun) {
+        tick('dry-run complete');
         return { rebuilt, removed, errors, dryRun };
     }
 
@@ -103,6 +161,7 @@ export async function rebuildIndex(stores: ClusterStores, options?: { dryRun?: b
     //    is one filesystem rename on the local adapter.
     try {
         await stores.index.replaceAll(staged);
+        tick('atomic swap complete');
     } catch (err: any) {
         errors.push(`Atomic index swap failed: ${err.message}`);
     }
@@ -112,9 +171,31 @@ export async function rebuildIndex(stores: ClusterStores, options?: { dryRun?: b
 
 /**
  * Check for stale index records — orphan pointers or missing entries.
+ *
+ * Returns a list of {@link StaleRecord} entries; each carries
+ * `suggestedCommand: 'db-cluster rebuild index'` so CLI/dashboard surfaces
+ * can render `→ fix: ${suggestedCommand}` without conditional branching
+ * (STORES-C-008).
+ *
+ * @param stores  ClusterStores bundle. Reads index.search + canonical.list /
+ *                .exists + artifact.exists. Never mutates state.
+ * @returns       List of stale records. Empty array means the index is in
+ *                sync with owner truth.
+ * @throws        Adapter-level exceptions from index.search / canonical.list
+ *                propagate; callers should catch and route to the doctor /
+ *                verify surface as a check failure.
+ *
+ * @example
+ *   const stale = await checkStale(stores);
+ *   if (stale.length > 0) {
+ *       console.error(`${stale.length} stale records`);
+ *       // Same fix command for every entry; render once at the bottom:
+ *       console.error(`→ fix: ${stale[0].suggestedCommand}`);
+ *   }
  */
 export async function checkStale(stores: ClusterStores): Promise<StaleRecord[]> {
     const stale: StaleRecord[] = [];
+    const FIX = 'db-cluster rebuild index';
 
     // Check index records pointing to non-existent sources
     const indexRecords = await stores.index.search({});
@@ -127,6 +208,7 @@ export async function checkStale(stores: ClusterStores): Promise<StaleRecord[]> 
                     sourceId: record.sourceId,
                     sourceStore: 'canonical',
                     message: `Index record references non-existent canonical entity ${record.sourceId}`,
+                    suggestedCommand: FIX,
                 });
             }
         } else if (record.sourceStore === 'artifact') {
@@ -137,6 +219,7 @@ export async function checkStale(stores: ClusterStores): Promise<StaleRecord[]> 
                     sourceId: record.sourceId,
                     sourceStore: 'artifact',
                     message: `Index record references non-existent artifact ${record.sourceId}`,
+                    suggestedCommand: FIX,
                 });
             }
         }
@@ -153,6 +236,7 @@ export async function checkStale(stores: ClusterStores): Promise<StaleRecord[]> 
                 sourceId: entity.id,
                 sourceStore: 'canonical',
                 message: `Entity ${entity.id} (${entity.kind}: ${entity.name}) not indexed`,
+                suggestedCommand: FIX,
             });
         }
     }

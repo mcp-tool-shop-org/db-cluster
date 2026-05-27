@@ -61,7 +61,35 @@ export type {
     FindSourcesResult,
     ProposeMutationInput,
     CommitMutationResult,
+    CommandLifecycleEnvelope,
 } from './kernel/cluster-kernel.js';
+
+// --- Kernel typed-error hierarchy (Wave C1-Amend KERNEL-C-006) ---
+// All 14 typed-error classes + the ClusterErrorCode union surface here so
+// consumers can `import { ContentHashMismatchError } from 'db-cluster'`
+// without deep-importing through the kernel barrel.
+export {
+    ClusterError,
+    type ClusterErrorCode,
+    CLUSTER_ERROR_CODES,
+    NotFoundError,
+    ProvenanceMissingError,
+    CommandNotValidatedError,
+    CommandNotFoundError,
+    CommandAlreadyTerminalError,
+    CommandRejectedError,
+    InvalidStateTransitionError,
+    ReceiptFailedError,
+    CommandQueueCorruptError,
+    CommandQueuePersistenceLostError,
+    ContentHashMismatchError,
+    StagedContentTamperedError,
+    BufferSideChannelNotSupportedError,
+    InvalidContentShapeError,
+} from './kernel/errors.js';
+export { PolicyDeniedError } from './kernel/policy-enforced-kernel.js';
+export type { AiErrorEnvelope, EmptyResultMeta, ComponentState } from './types/index.js';
+export { formatForUser, errorToAiEnvelope } from './policy/error-formatter.js';
 
 // --- Store factory ---
 export { createCluster, createClusterFromEnv } from './adapters/factory.js';

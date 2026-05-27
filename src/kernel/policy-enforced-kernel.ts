@@ -28,20 +28,41 @@ import type {
     FindSourcesResult,
     ProposeMutationInput,
     CommitMutationResult,
+    CommandLifecycleEnvelope,
 } from './cluster-kernel.js';
 import type { ClusterKernelInterface } from './cluster-kernel-interface.js';
-import { ClusterError, NotFoundError } from './errors.js';
+import { ClusterError, type ClusterErrorCode, NotFoundError } from './errors.js';
 
 // ─── Policy denial error ───────────────────────────────────────────────────
 
+/**
+ * Raised by every policy-gated verb on {@link PolicyEnforcedKernel} when
+ * the configured policy denies the caller's principal.
+ *
+ * The carried `decision` payload includes the matched policy id/name,
+ * the failing capability, and the reason — consumers branch on
+ * `decision.capability` to know WHICH capability would unlock the call.
+ *
+ * Recovery: either acquire the named capability (operator action — grant
+ * the role/scope to the principal) or call a less-privileged sibling
+ * verb that the principal IS authorized for.
+ */
 export class PolicyDeniedError extends ClusterError {
-    constructor(
-        public readonly decision: PolicyDecision,
-    ) {
+    public readonly code: ClusterErrorCode = 'POLICY_DENIED';
+    public readonly remediationHint: string;
+    public readonly decision: PolicyDecision;
+    constructor(decision: PolicyDecision) {
         super(
             `Policy denied: ${decision.capability} — ${decision.reason} (policy: ${decision.matchedPolicyName})`,
-            'POLICY_DENIED',
         );
+        this.decision = decision;
+        // Per-instance remediation pulls the matched capability into the
+        // hint so the AI / operator knows which capability to acquire.
+        this.remediationHint =
+            `Acquire the '${decision.capability}' capability for principal ` +
+            `${decision.principalId} (operator action — grant a role/scope that ` +
+            `includes it), or call a sibling verb that the principal IS authorized ` +
+            `to invoke. Run \`db-cluster policy explain\` to see the active ruleset.`;
         this.name = 'PolicyDeniedError';
     }
 }
@@ -69,12 +90,80 @@ export interface PolicyKernelOptions extends KernelOptions {
  * - If policy allows, the kernel still applies its own validation
  *   (command lifecycle, provenance, owner-store boundaries, etc.).
  * - Policy cannot weaken existing guarantees.
+ *
+ * KERNEL-C-009 (Wave C1-Amend) — **every wrapped verb on this class
+ * can throw {@link PolicyDeniedError}** in addition to whatever the
+ * delegated ClusterKernel method would have thrown. Consumers MUST
+ * catch and branch on `PolicyDeniedError` separately. The carried
+ * `decision.capability` names which capability would unlock the call.
+ *
+ * Method-level JSDoc lives on {@link ClusterKernelInterface} (verb-parity
+ * contract) and on {@link ClusterKernel} (concrete prose). Per-method
+ * JSDoc on this wrapper class is intentionally light — the wrapper's
+ * job is to delegate after a policy gate.
+ *
+ * @example
+ *   const kernel = new PolicyEnforcedKernel(stores, context, {
+ *       policies, dataDir,
+ *   });
+ *   try {
+ *       await kernel.commitMutation(cmd.id, actorId);
+ *   } catch (err) {
+ *       if (err instanceof PolicyDeniedError) {
+ *           console.log('denied:', err.decision.capability);
+ *       }
+ *   }
  */
 export class PolicyEnforcedKernel implements ClusterKernelInterface {
     private readonly kernel: ClusterKernel;
     private readonly policyOptions: PolicyEngineOptions;
     private readonly visibilityRules: VisibilityRule[];
 
+    /**
+     * Construct a policy-enforced kernel.
+     *
+     * KERNEL-C-009 (Wave C1-Amend) — load-bearing side-effects this
+     * constructor performs:
+     *
+     *   1. **Builds its own ClusterKernel** internally
+     *      (`new ClusterKernel(stores, policyOptions)`). The
+     *      ClusterKernel constructor in turn:
+     *      - If `policyOptions.dataDir` is set, instantiates
+     *        {@link CommandQueue} which performs filesystem reads
+     *        (loading any existing pending-commands.json) and may
+     *        throw {@link CommandQueueCorruptError} or
+     *        {@link CommandQueuePersistenceLostError}.
+     *      - Plans the staging directory at
+     *        `${dataDir}/pending-content/` (lazy mkdir on first
+     *        proposeMutation call).
+     *      - Plans a one-shot orphan-tmp sweep on first staging
+     *        access.
+     *
+     *   2. **Stores the policy bundle** for use by every verb's
+     *      `enforce()` call. Every wrapped method can throw
+     *      {@link PolicyDeniedError} based on this bundle.
+     *
+     *   3. **Stores the visibility rules** for the visibility-check
+     *      pass on every read verb.
+     *
+     * Every method on this class (apart from the pure-helper
+     * {@link withNextValidActions}) can throw
+     * {@link PolicyDeniedError} when the configured policy denies the
+     * principal.
+     *
+     * @param stores - The underlying truth stores.
+     * @param context - The {@link PolicyContext} for this kernel
+     *                  instance (principal + trust zone).
+     * @param policyOptions - {@link PolicyKernelOptions} — policies,
+     *                        trust zones, visibility rules, plus the
+     *                        inherited {@link KernelOptions.dataDir}.
+     * @throws {CommandQueueCorruptError} - via the inner ClusterKernel
+     *         constructor when an existing pending-commands.json is
+     *         unreadable.
+     * @throws {CommandQueuePersistenceLostError} - via the inner
+     *         ClusterKernel when the marker file is present but the
+     *         pending-commands file is missing.
+     */
     constructor(
         stores: ClusterStores,
         private readonly context: PolicyContext,
@@ -367,6 +456,55 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
             if (!vis.existenceVisible) continue;
 
             filteredIndexRecords.push(record);
+        }
+
+        // KERNEL-C-003 (Wave C1-Amend): if the underlying findSources
+        // surfaced data but the policy-filter dropped EVERYTHING, signal
+        // `all_filtered_by_policy` rather than the bare-kernel
+        // `no_match`. The AI then knows it's a capability gap, not a
+        // query miss. We compute the unfiltered count BEFORE the policy
+        // pass — if any of the underlying result's three arrays were
+        // non-empty, we had matches but lost them.
+        const unfilteredCount =
+            result.indexRecords.length +
+            result.resolvedEntities.length +
+            result.resolvedArtifacts.length;
+        if (
+            filteredIndexRecords.length === 0 &&
+            filteredEntities.length === 0 &&
+            filteredArtifacts.length === 0 &&
+            unfilteredCount > 0
+        ) {
+            return {
+                indexRecords: filteredIndexRecords,
+                resolvedEntities: filteredEntities,
+                resolvedArtifacts: filteredArtifacts,
+                _meta: {
+                    empty_reason: 'all_filtered_by_policy',
+                    remediation_hint:
+                        `${unfilteredCount} record(s) matched the query but were filtered ` +
+                        `out by policy. The principal lacks 'read_owner_truth' or ` +
+                        `'read_derivative' for the matching records. Request the ` +
+                        `capability (operator action — grant the role/scope), or ` +
+                        `accept the empty result.`,
+                    filteredCount: unfilteredCount,
+                },
+            };
+        }
+        // If the underlying result was already empty, preserve its _meta
+        // (no_data / no_match) — the bare kernel populated it.
+        if (
+            filteredIndexRecords.length === 0 &&
+            filteredEntities.length === 0 &&
+            filteredArtifacts.length === 0 &&
+            result._meta
+        ) {
+            return {
+                indexRecords: filteredIndexRecords,
+                resolvedEntities: filteredEntities,
+                resolvedArtifacts: filteredArtifacts,
+                _meta: result._meta,
+            };
         }
 
         return {
@@ -875,6 +1013,21 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
 
     checkVisibility(resourceUri: string | undefined, ownerStore: string | undefined) {
         return checkVisibility(resourceUri, ownerStore, this.visibilityRules);
+    }
+
+    /**
+     * KERNEL-C-002 wrapper (Wave C1-Amend) — surface legal next-state
+     * moves on a `Command` from `validTransitions(command.status)`.
+     *
+     * Mirrors {@link ClusterKernel.withNextValidActions}. Pure function
+     * — no policy gate needed since the legal-transition table is
+     * public knowledge (it's documented in CLI / SDK / MCP surfaces).
+     *
+     * @param command - A `Command` in any lifecycle status.
+     * @returns Envelope with `command` and `nextValidActions`.
+     */
+    withNextValidActions(command: import('../types/command.js').Command): CommandLifecycleEnvelope {
+        return this.kernel.withNextValidActions(command);
     }
 
     // KERNEL-R003 ≡ SURFACE-R001: the `_kernel` getter was deleted. Every

@@ -19,16 +19,19 @@ import type { Command } from '../types/command.js';
 import type { Receipt } from '../types/receipt.js';
 import type { EvidenceBundle } from '../types/evidence-bundle.js';
 import type { ProvenanceGraph, TraceOptions, TraceSummary } from '../types/provenance-graph.js';
-import { proposeCommand, validateCommand, approveCommand, rejectCommand, markCommitted, markRejected, markCompensated } from './commands.js';
+import { proposeCommand, validateCommand, approveCommand, rejectCommand, markCommitted, markRejected, markCompensated, validTransitions } from './commands.js';
 import { recordProvenance, traceSubjectProvenance } from './provenance.js';
 import { emitReceipt } from './receipts.js';
 import {
     NotFoundError,
     CommandNotValidatedError,
+    CommandNotFoundError,
+    CommandAlreadyTerminalError,
     CommandRejectedError,
     ReceiptFailedError,
     ContentHashMismatchError,
     StagedContentTamperedError,
+    InvalidStateTransitionError,
 } from './errors.js';
 import { redactErrorMessage } from '../policy/redactor.js';
 import { CommandQueue } from './command-queue.js';
@@ -37,7 +40,45 @@ import { TraceBuilder } from '../provenance/trace-builder.js';
 import type { ClusterKernelInterface } from './cluster-kernel-interface.js';
 
 export interface KernelOptions {
-    /** Directory for kernel working state (command queue). If omitted, commands live in-memory only. */
+    /**
+     * Directory for kernel working state. If omitted, the kernel runs
+     * in-memory and Buffer payloads on `ingest_artifact` survive intact
+     * through the in-memory command map (no JSON round-trip, no staging
+     * area, no orphan-sweep).
+     *
+     * KERNEL-C-011 (Wave C1-Amend): when `dataDir` is set, the kernel
+     * constructor performs several side-effects on the filesystem:
+     *
+     *   1. **Recursive mkdir** of the directory at first use
+     *      ({@link CommandQueue} constructor + `getStagingDir`).
+     *
+     *   2. **CommandQueue persistence**: the queue persists pending
+     *      commands at `${dataDir}/pending-commands.json` with an atomic
+     *      tmp+rename write. Reads/writes happen on every save. A
+     *      partner `command-queue-marker` file records whether the
+     *      queue has ever held persisted state — used to distinguish
+     *      genuinely-empty queues from lost-persistence (which throws
+     *      {@link CommandQueuePersistenceLostError}).
+     *
+     *   3. **Staging directory** at `${dataDir}/pending-content/` for
+     *      `ingest_artifact` Buffer payloads (KERNEL-B-007). The
+     *      propose-time arm writes the buffer to
+     *      `${dataDir}/pending-content/${contentHash}` via
+     *      tmp-then-rename for atomicity, and commit-time reads it back
+     *      with hash re-validation (catches
+     *      {@link StagedContentTamperedError}).
+     *
+     *   4. **One-shot orphan-tmp sweep** of the staging directory on
+     *      first call to `getStagingDir` (AGG-A4-2 / Wave A4 fix-up).
+     *      Removes `<sha256>.<pid>-<rand>.tmp` orphans older than 5
+     *      minutes left behind by a previously-crashed kernel process.
+     *      Best-effort — filesystem errors are swallowed.
+     *
+     * The directory is shared between processes by convention; concurrent
+     * access is filesystem-mediated (atomic rename) but the kernel does
+     * not enforce single-writer at the process level. Callers wanting
+     * single-writer guarantees should layer their own locking above.
+     */
     dataDir?: string;
 }
 
@@ -71,6 +112,30 @@ export interface FindSourcesResult {
     indexRecords: IndexRecord[];
     resolvedEntities: Entity[];
     resolvedArtifacts: Artifact[];
+    /**
+     * KERNEL-C-003 (Wave C1-Amend): empty-result diagnostics for AI
+     * consumers. Populated only when the result set is empty (all three
+     * arrays length 0). Distinguishes:
+     *   - `no_data` — the cluster genuinely has no data for this query
+     *     domain (e.g. fresh cluster).
+     *   - `no_match` — the cluster has data but nothing matched the
+     *     query text.
+     *   - `all_filtered_by_policy` — the underlying find returned
+     *     matches but `PolicyEnforcedKernel` filtered every record out
+     *     (insufficient `read_owner_truth`). The AI should request the
+     *     missing capability rather than widen the query.
+     *
+     * Omitted on non-empty results (every consumer reads
+     * `result.indexRecords.length === 0` to decide whether to inspect
+     * `_meta`). See {@link EmptyResultMeta} in `src/types/ai-envelope.ts`
+     * for the cross-surface contract.
+     */
+    _meta?: {
+        empty_reason: 'no_data' | 'no_match' | 'all_filtered_by_policy';
+        remediation_hint: string;
+        /** For `all_filtered_by_policy`: matches before policy filter. */
+        filteredCount?: number;
+    };
 }
 
 export interface ProposeMutationInput {
@@ -83,13 +148,81 @@ export interface ProposeMutationInput {
 export interface CommitMutationResult {
     command: Command;
     receipt: Receipt;
+    /**
+     * KERNEL-C-002 (Wave C1-Amend): the legal next states out of
+     * `command.status`. After a successful commit the status is
+     * 'committed' → `['compensated']`. Surfaced so AI consumers can
+     * branch on what lifecycle moves are available without
+     * re-implementing the state-transition table.
+     *
+     * Mirrors `validTransitions(command.status)` from
+     * `src/kernel/commands.ts`. Always non-null on success; never
+     * lying (the kernel computes it from the status it just set).
+     */
+    nextValidActions: import('../types/command.js').CommandStatus[];
+}
+
+/**
+ * KERNEL-C-002 (Wave C1-Amend): the envelope shape every command-lifecycle
+ * verb COULD return to surface the legal next-state moves.
+ *
+ * Wraps a {@link Command} with the legal next-state moves out of its
+ * current status. Pre-fix consumers had to re-implement the
+ * state-transition table (or call `validTransitions(command.status)`
+ * themselves). The envelope surfaces it at the response boundary so
+ * the AI can branch on what verbs are available.
+ *
+ * **Returned by (current implementation):**
+ *   - {@link ClusterKernel.commitMutation} via {@link CommitMutationResult}
+ *     (only success-path lifecycle response that ships the envelope today).
+ *
+ * **Other lifecycle methods** ({@link ClusterKernel.proposeMutation},
+ * {@link ClusterKernel.validateMutation}, {@link ClusterKernel.approveMutation},
+ * {@link ClusterKernel.rejectMutation}, {@link ClusterKernel.compensateMutation})
+ * return plain `Command` objects. Their next valid actions are derivable via
+ * `validTransitions(command.status)` from `src/kernel/commands.ts` — call
+ * that helper at the consumer boundary if the envelope shape is needed.
+ *
+ * Wave C1-Amend fix-up (V3-C1-004): pre-fix this JSDoc claimed the
+ * envelope was returned by all six lifecycle methods, but actual
+ * implementation only ships it on commitMutation. The narrowed claim
+ * matches reality without expanding the breaking-change surface; the
+ * MCP error-path next_valid_actions envelope (via
+ * `lifecycleNextValidActions` in src/mcp/server.ts) is separately
+ * maintained and not affected by this narrowing.
+ */
+export interface CommandLifecycleEnvelope {
+    command: Command;
+    nextValidActions: import('../types/command.js').CommandStatus[];
 }
 
 /**
  * ClusterKernel — the coordination layer over the four truth stores.
  *
- * Routes all operations through typed verbs. No caller accesses stores directly.
- * Every write produces provenance. Every committed command produces a receipt.
+ * Routes all operations through typed verbs. No caller accesses stores
+ * directly. Every write produces provenance. Every committed command
+ * produces a receipt.
+ *
+ * KERNEL-C-007 (Wave C1-Amend): every public method on this class
+ * carries `@param` / `@returns` / `@throws` / `@example` JSDoc. The
+ * verb-parity contract (see {@link ClusterKernelInterface}) mirrors
+ * the same JSDoc shape on the interface so consumers reading the type
+ * see the contract there.
+ *
+ * @example
+ *   import { ClusterKernel } from 'db-cluster/kernel';
+ *   import { createLocalCluster } from 'db-cluster/adapters/local';
+ *
+ *   const stores = await createLocalCluster('.db-cluster');
+ *   const kernel = new ClusterKernel(stores, { dataDir: '.db-cluster' });
+ *
+ *   const { entity, receipt } = await kernel.createEntity({
+ *       kind: 'Person',
+ *       name: 'Alice',
+ *       attributes: {},
+ *       actorId: 'tester',
+ *   });
+ *   console.log(entity.id, receipt.id);
  */
 export class ClusterKernel implements ClusterKernelInterface {
     private commandQueue: CommandQueue | null;
@@ -299,7 +432,29 @@ export class ClusterKernel implements ClusterKernelInterface {
 
     /**
      * Ingest a source artifact into the cluster.
-     * Writes: artifact store, index store, ledger.
+     *
+     * Writes (in order): artifact store, index store, ledger
+     * (`artifact_ingested` event), command queue (synthetic
+     * `ingest_artifact` command persisted for `inspectCommand`), ledger
+     * again (receipt).
+     *
+     * @param input - {@link IngestArtifactInput} — filename, content
+     *                Buffer, mimeType, actorId.
+     * @returns Object with the stored `artifact`, its `indexRecord`,
+     *          the `provenance` event, and the `receipt`.
+     * @throws {ReceiptFailedError} - the artifact + index mutations
+     *         succeeded but the post-mutation ledger writes failed.
+     *         A `mutation_orphaned` ledger event is recorded
+     *         best-effort. Recovery: `db-cluster doctor` will surface
+     *         the orphan; inspect the ledger.
+     * @example
+     *   const result = await kernel.ingestArtifact({
+     *       filename: 'report.pdf',
+     *       content: Buffer.from('...'),
+     *       mimeType: 'application/pdf',
+     *       actorId: 'analyst:1',
+     *   });
+     *   console.log(result.artifact.contentHash);
      */
     async ingestArtifact(input: IngestArtifactInput): Promise<{
         artifact: Artifact;
@@ -373,7 +528,25 @@ export class ClusterKernel implements ClusterKernelInterface {
 
     /**
      * Create a canonical entity.
-     * Writes: canonical store, index store, ledger.
+     *
+     * Writes (in order): canonical store, index store, ledger
+     * (`entity_created` event), command queue (synthetic
+     * `create_entity` command), ledger again (receipt).
+     *
+     * @param input - {@link CreateEntityInput} — kind, name, attributes,
+     *                actorId.
+     * @returns Object with the stored `entity`, its `indexRecord`, the
+     *          `provenance` event, and the `receipt`.
+     * @throws {ReceiptFailedError} - the canonical mutation succeeded
+     *         but the post-mutation ledger writes failed.
+     * @example
+     *   const result = await kernel.createEntity({
+     *       kind: 'Person',
+     *       name: 'Alice',
+     *       attributes: { team: 'eng' },
+     *       actorId: 'admin:1',
+     *   });
+     *   console.log(result.entity.id, result.receipt.id);
      */
     async createEntity(input: CreateEntityInput): Promise<{
         entity: Entity;
@@ -440,7 +613,24 @@ export class ClusterKernel implements ClusterKernelInterface {
 
     /**
      * Link an artifact as evidence for an entity.
-     * Writes: ledger (provenance edge).
+     *
+     * Writes only the ledger (`evidence_linked` provenance edge plus a
+     * receipt). The canonical and artifact stores are NOT mutated;
+     * existence of both is verified before any ledger write.
+     *
+     * @param input - {@link LinkEvidenceInput} — artifactId, entityId,
+     *                actorId, optional detail bag.
+     * @returns Object with the `provenance` event and the `receipt`.
+     * @throws {NotFoundError} - artifactId or entityId not in their
+     *         respective owner stores (pre-mutation check).
+     * @throws {ReceiptFailedError} - ledger write failed.
+     * @example
+     *   await kernel.linkEvidence({
+     *       artifactId: 'art-1',
+     *       entityId: 'ent-1',
+     *       actorId: 'analyst:1',
+     *       detail: { source: 'manual' },
+     *   });
      */
     async linkEvidence(input: LinkEvidenceInput): Promise<{
         provenance: ProvenanceEvent;
@@ -521,6 +711,12 @@ export class ClusterKernel implements ClusterKernelInterface {
     /**
      * Find sources through the index, then resolve from owner stores.
      * Reads: index store → canonical store, artifact store.
+     *
+     * KERNEL-C-003 (Wave C1-Amend): when the result is empty, the
+     * `_meta.empty_reason` field distinguishes `no_data` (cluster is
+     * empty) from `no_match` (cluster has data but nothing matched
+     * this query). The PolicyEnforcedKernel-side override adds the
+     * `all_filtered_by_policy` case.
      */
     async findSources(input: FindSourcesInput): Promise<FindSourcesResult> {
         const indexRecords = await this.stores.index.search({
@@ -541,11 +737,59 @@ export class ClusterKernel implements ClusterKernelInterface {
             }
         }
 
+        // KERNEL-C-003: populate _meta only when the result is empty.
+        if (
+            indexRecords.length === 0 &&
+            resolvedEntities.length === 0 &&
+            resolvedArtifacts.length === 0
+        ) {
+            // Distinguish empty-because-cluster-is-empty from
+            // empty-because-query-doesnt-match. Count the canonical +
+            // artifact stores to make the call.
+            const totalIndexed = await this.stores.index.count();
+            if (totalIndexed === 0) {
+                return {
+                    indexRecords,
+                    resolvedEntities,
+                    resolvedArtifacts,
+                    _meta: {
+                        empty_reason: 'no_data',
+                        remediation_hint:
+                            'The cluster has no indexed records. Ingest artifacts or ' +
+                            'create entities (see `db-cluster ingest` / `db-cluster ' +
+                            'create-entity` or `cluster.ingestArtifact` / ' +
+                            '`cluster.createEntity`).',
+                    },
+                };
+            }
+            return {
+                indexRecords,
+                resolvedEntities,
+                resolvedArtifacts,
+                _meta: {
+                    empty_reason: 'no_match',
+                    remediation_hint:
+                        `No records match query "${input.query}". The cluster ` +
+                        `has ${totalIndexed} indexed records — try a broader query, ` +
+                        'or use `db-cluster index status` (CLI) / `cluster.indexStatus()` ' +
+                        '(SDK) to see what kinds are indexed.',
+                },
+            };
+        }
+
         return { indexRecords, resolvedEntities, resolvedArtifacts };
     }
 
     /**
-     * Inspect an entity — returns canonical truth, not index projection.
+     * Inspect an entity — returns canonical truth, not the index
+     * projection.
+     *
+     * @param id - The entity id.
+     * @returns The canonical {@link Entity}.
+     * @throws {NotFoundError} - entity does not exist in the canonical store.
+     * @example
+     *   const entity = await kernel.inspectEntity('ent-1');
+     *   console.log(entity.kind, entity.name);
      */
     async inspectEntity(id: string): Promise<Entity> {
         const entity = await this.stores.canonical.get(id);
@@ -554,7 +798,13 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Trace provenance for a subject. Walks ledger lineage.
+     * Trace provenance for a subject — walks ledger lineage.
+     *
+     * @param subjectId - The subject id (entity / artifact / command id).
+     * @returns Array of {@link ProvenanceEvent} ordered by ledger insertion.
+     * @example
+     *   const events = await kernel.traceProvenance('ent-1');
+     *   for (const e of events) console.log(e.action, e.timestamp);
      */
     async traceProvenance(subjectId: string): Promise<ProvenanceEvent[]> {
         return traceSubjectProvenance(this.stores.ledger, subjectId);
@@ -562,30 +812,45 @@ export class ClusterKernel implements ClusterKernelInterface {
 
     /**
      * Propose a mutation. Does NOT mutate any store.
-     * Returns a command that can later be committed.
+     * Returns a command in 'proposed' status that can later be
+     * validated and committed.
      *
-     * KERNEL-B-007 (Buffer side-channel for ingest_artifact): when the verb is
-     * `ingest_artifact` and `payload.content` is a Buffer, we:
+     * KERNEL-B-007 (Buffer side-channel for ingest_artifact): when the
+     * verb is `ingest_artifact` and `payload.content` is a Buffer:
      *
      *  1. Recompute `sha256(content)` and verify it equals the caller's
      *     supplied `payload.contentHash`. Mismatch throws
-     *     {@link ContentHashMismatchError} BEFORE any disk write so a
-     *     misbehaving caller can never seed a poisoned hash → buffer mapping.
+     *     {@link ContentHashMismatchError} BEFORE any disk write.
      *  2. Write the Buffer to a staging file at
-     *     `.db-cluster/pending-content/{contentHash}` via tmp+rename so the
-     *     write is atomic. Crash mid-write leaves the prior good state.
+     *     `.db-cluster/pending-content/{contentHash}` via tmp+rename so
+     *     the write is atomic.
      *  3. Replace `payload.content` with the contentHash string so the
-     *     command persists as pure JSON (no Buffer round-trip corruption).
-     *     Persisted payload shape:
-     *     `{ filename, content: '<contentHash>', mimeType, contentHash }`.
+     *     command persists as pure JSON.
      *
-     * Commit-time then reads the buffer back from staging, re-validates the
-     * hash (catching post-propose tampering), and only then calls the
-     * artifact store. See {@link commitMutation} `ingest_artifact` arm.
+     * Commit-time reads the buffer back from staging and re-validates
+     * the hash (catching post-propose tampering via
+     * {@link StagedContentTamperedError}).
      *
-     * When the kernel is constructed without a `dataDir` (in-memory mode),
-     * the staging-area path is bypassed because the in-memory command map
-     * does not serialize the payload — the Buffer survives intact.
+     * In-memory mode (no `dataDir`) bypasses the staging area because
+     * Buffer payloads survive the in-memory command map intact (no
+     * JSON round-trip).
+     *
+     * @param input - {@link ProposeMutationInput} — verb, targetStore,
+     *                payload, proposedBy.
+     * @returns The proposed {@link Command} in 'proposed' status.
+     *          Wrap with {@link withNextValidActions} to surface
+     *          legal next moves.
+     * @throws {ContentHashMismatchError} - ingest_artifact propose with
+     *         contentHash that doesn't match the supplied Buffer.
+     * @example
+     *   const cmd = await kernel.proposeMutation({
+     *       verb: 'create_entity',
+     *       targetStore: 'canonical',
+     *       payload: { kind: 'Person', name: 'Alice', attributes: {} },
+     *       proposedBy: 'analyst:1',
+     *   });
+     *   await kernel.validateMutation(cmd.id);
+     *   await kernel.commitMutation(cmd.id, 'analyst:1');
      */
     async proposeMutation(input: ProposeMutationInput): Promise<Command> {
         let payload = input.payload;
@@ -629,13 +894,53 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Commit a previously proposed (or validated/approved) mutation.
-     * Validates if needed, executes against the target store, emits provenance and receipt.
+     * Commit a previously validated/approved mutation. Executes against
+     * the target store, emits provenance + receipt.
+     *
+     * KERNEL-C-005 (Wave C1-Amend): the three invalid-state cases
+     * surface as distinct typed errors so the AI can branch:
+     *
+     *  - id not in queue → {@link CommandNotFoundError}
+     *  - id is 'proposed' (not yet validated) → {@link CommandNotValidatedError}
+     *  - id is 'committed' / 'compensated' (terminal) → {@link CommandAlreadyTerminalError}
+     *  - id is 'rejected' → {@link CommandRejectedError}
+     *
+     * For `ingest_artifact` the staged buffer is read back from
+     * `.db-cluster/pending-content/{contentHash}` and re-hashed; a
+     * mismatch throws {@link StagedContentTamperedError} (the staging
+     * file is preserved for forensics).
+     *
+     * @param commandId - The command id (validated or approved).
+     * @param actorId - Actor recording the commit.
+     * @returns {@link CommitMutationResult} — committed command +
+     *          receipt + {@link CommandLifecycleEnvelope.nextValidActions}.
+     * @throws {CommandNotFoundError} - id does not exist in queue.
+     * @throws {CommandNotValidatedError} - command status is 'proposed'.
+     * @throws {CommandAlreadyTerminalError} - command in 'committed' /
+     *         'compensated' status.
+     * @throws {CommandRejectedError} - command in 'rejected' status.
+     * @throws {InvalidStateTransitionError} - any other unexpected status.
+     * @throws {StagedContentTamperedError} - ingest_artifact staging
+     *         file rewritten between propose and commit.
+     * @throws {ReceiptFailedError} - mutation succeeded but receipt failed.
+     * @example
+     *   try {
+     *       const result = await kernel.commitMutation(cmd.id, 'system');
+     *       console.log(result.nextValidActions); // ['compensated']
+     *   } catch (err) {
+     *       if (err instanceof CommandNotValidatedError) {
+     *           await kernel.validateMutation(cmd.id);
+     *           // retry
+     *       }
+     *   }
      */
     async commitMutation(commandId: string, actorId: string): Promise<CommitMutationResult> {
         const command = this.getCommand(commandId);
         if (!command) {
-            throw new CommandNotValidatedError(commandId);
+            // KERNEL-C-005: distinct from "not validated" — the id doesn't
+            // exist in the queue. AI can branch on COMMAND_NOT_FOUND vs
+            // COMMAND_NOT_VALIDATED.
+            throw new CommandNotFoundError(commandId);
         }
 
         // Only validated or approved commands are committable.
@@ -645,13 +950,22 @@ export class ClusterKernel implements ClusterKernelInterface {
         // validate-inline, which used to allow approval to be skipped entirely.
         const committableStatuses: Command['status'][] = ['validated', 'approved'];
         if (!committableStatuses.includes(command.status)) {
+            // KERNEL-C-005: collapse pre-fix surfaced 3 cases as
+            // CommandNotValidatedError. Now each carries a distinct typed
+            // error so AI / CLI / dashboard can branch correctly.
             if (command.status === 'rejected') {
                 throw new CommandRejectedError(commandId, command.rejectionReason ?? 'Previously rejected');
             }
             if (command.status === 'proposed') {
                 throw new CommandNotValidatedError(commandId);
             }
-            throw new CommandNotValidatedError(commandId);
+            // committed / compensated are terminal states.
+            if (command.status === 'committed' || command.status === 'compensated') {
+                throw new CommandAlreadyTerminalError(commandId, command.status);
+            }
+            // Any future status not in the explicit set — surface as
+            // a transition error so we don't silently mask new states.
+            throw new InvalidStateTransitionError(command.status, 'committed', commandId);
         }
 
         const readyCommand: Command = command; // already validated or approved
@@ -892,12 +1206,62 @@ export class ClusterKernel implements ClusterKernelInterface {
             throw new ReceiptFailedError(affectedIds[0] ?? commandId, commandId, cause);
         }
 
-        return { command: committed, receipt };
+        return {
+            command: committed,
+            receipt,
+            // KERNEL-C-002: surface legal next moves at the response boundary.
+            nextValidActions: validTransitions(committed.status),
+        };
+    }
+
+    /**
+     * Wrap any `Command` with the legal next-state moves out of its
+     * current status. KERNEL-C-002 (Wave C1-Amend). Surface-side
+     * consumers (MCP / SDK / CLI) wrap lifecycle responses with this
+     * helper so the AI / operator can branch on what's legal next.
+     *
+     * Pure function — no side effects, no I/O. Reads
+     * `validTransitions(command.status)`.
+     *
+     * @param command - A `Command` in any lifecycle status.
+     * @returns Envelope with `command` and `nextValidActions`.
+     *
+     * @example
+     *   const envelope = kernel.withNextValidActions(
+     *       await kernel.proposeMutation(input)
+     *   );
+     *   // envelope.command, envelope.nextValidActions
+     */
+    withNextValidActions(command: Command): CommandLifecycleEnvelope {
+        return {
+            command,
+            nextValidActions: validTransitions(command.status),
+        };
     }
 
     /**
      * Validate a proposed command without committing it.
-     * Returns the validated command with check results.
+     *
+     * Runs structural + semantic checks via {@link validateCommand}.
+     * On success transitions the command from 'proposed' to 'validated'.
+     * On failure transitions to 'rejected' and throws.
+     *
+     * @param commandId - The id of a command in 'proposed' status.
+     * @returns The same command in 'validated' status with `validation`
+     *          populated.
+     * @throws {NotFoundError} - id does not exist.
+     * @throws {CommandNotValidatedError} - command not in 'proposed' status.
+     * @throws {CommandRejectedError} - validation failed; command was
+     *         transitioned to 'rejected' before this throw.
+     * @example
+     *   try {
+     *       const validated = await kernel.validateMutation(commandId);
+     *       console.log(validated.validation?.valid);
+     *   } catch (err) {
+     *       if (err instanceof CommandRejectedError) {
+     *           console.log('rejected:', err.reason);
+     *       }
+     *   }
      */
     async validateMutation(commandId: string): Promise<Command> {
         const command = this.getCommand(commandId);
@@ -919,7 +1283,19 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Approve a validated command — operator/policy gate.
+     * Approve a validated command — operator/policy gate that
+     * transitions 'validated' → 'approved'. Records a
+     * `command_approved` provenance event with the approver and note.
+     *
+     * @param commandId - The id of a 'validated' command.
+     * @param approvedBy - Actor recording the approval.
+     * @param note - Optional approval note (persisted on the command).
+     * @returns The command in 'approved' status.
+     * @throws {NotFoundError} - id does not exist.
+     * @throws {InvalidStateTransitionError} - command not in 'validated'
+     *         status.
+     * @example
+     *   const approved = await kernel.approveMutation(cmd.id, 'admin', 'lgtm');
      */
     async approveMutation(commandId: string, approvedBy: string, note?: string): Promise<Command> {
         const command = this.getCommand(commandId);
@@ -942,12 +1318,21 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Reject a proposed or validated command.
+     * Reject a proposed / validated / approved command.
      *
-     * KERNEL-B-007: ingest_artifact commands stage their Buffer payload to
-     * `.db-cluster/pending-content/{contentHash}`. Rejection cleans that
-     * file up so a rejected propose doesn't leak staged content into the
-     * working directory.
+     * KERNEL-B-007: ingest_artifact commands stage their Buffer payload
+     * to `.db-cluster/pending-content/{contentHash}`. Rejection cleans
+     * that file up so a rejected propose doesn't leak staged content.
+     *
+     * @param commandId - The id of a non-terminal command.
+     * @param rejectedBy - Actor recording the rejection.
+     * @param reason - Why the command was rejected (persisted).
+     * @returns The command in 'rejected' status.
+     * @throws {NotFoundError} - id does not exist.
+     * @throws {InvalidStateTransitionError} - command is in a terminal
+     *         status (committed / rejected / compensated).
+     * @example
+     *   await kernel.rejectMutation(cmd.id, 'admin', 'duplicate proposal');
      */
     async rejectMutation(commandId: string, rejectedBy: string, reason: string): Promise<Command> {
         const command = this.getCommand(commandId);
@@ -975,8 +1360,31 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Compensate a committed command — create a compensating command that corrects
-     * without erasing history. The original receipt is preserved.
+     * Compensate a committed command — create a compensating command
+     * that corrects without erasing history. The original receipt is
+     * preserved; the original command is transitioned to 'compensated'
+     * with a back-reference to the compensating command.
+     *
+     * @param originalCommandId - The id of the committed command to compensate.
+     * @param compensatedBy - Actor recording the compensation.
+     * @param reason - Why the command was compensated (persisted).
+     * @param compensatingPayload - Optional override of the compensating
+     *                              command's payload. Defaults to a
+     *                              shape containing the original's verb
+     *                              and payload as audit context.
+     * @returns Object with the new `compensatingCommand`, the original
+     *          in 'compensated' status, and the `receipt`.
+     * @throws {NotFoundError} - originalCommandId does not exist.
+     * @throws {InvalidStateTransitionError} - original is not in
+     *         'committed' status.
+     * @throws {ReceiptFailedError} - the compensating-command writes
+     *         partially succeeded but the ledger writes failed.
+     * @example
+     *   const { compensatingCommand } = await kernel.compensateMutation(
+     *       cmd.id,
+     *       'ops:lead',
+     *       'reverse erroneous mutation',
+     *   );
      */
     async compensateMutation(
         originalCommandId: string,
@@ -987,7 +1395,8 @@ export class ClusterKernel implements ClusterKernelInterface {
         const original = this.getCommand(originalCommandId);
         if (!original) throw new NotFoundError('command', originalCommandId);
         if (original.status !== 'committed') {
-            throw new Error(`Cannot compensate command in status: ${original.status}. Must be 'committed'.`);
+            // SHA-KERNEL-C-001: was bare `new Error(...)` — typed now.
+            throw new InvalidStateTransitionError(original.status, 'compensated', originalCommandId);
         }
 
         // Create compensating command
@@ -1066,7 +1475,15 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Inspect a command — full lifecycle state.
+     * Inspect a command — full lifecycle state (validation results,
+     * approval metadata, rejection reason, etc.).
+     *
+     * @param commandId - The command id.
+     * @returns The {@link Command} with all lifecycle metadata.
+     * @throws {NotFoundError} - id does not exist.
+     * @example
+     *   const cmd = await kernel.inspectCommand(commandId);
+     *   console.log(cmd.status, cmd.validation?.valid);
      */
     async inspectCommand(commandId: string): Promise<Command> {
         const command = this.getCommand(commandId);
@@ -1075,7 +1492,15 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * List all receipts, optionally filtered.
+     * List receipts, optionally filtered.
+     *
+     * @param filter - Optional shape `{commandId?, since?, limit?}`:
+     *   - `commandId` — filter to a single command's receipts.
+     *   - `since` — ISO-8601 lower bound on `receipt.committedAt`.
+     *   - `limit` — max receipts to return (default adapter-defined).
+     * @returns Array of {@link Receipt} ordered newest-first.
+     * @example
+     *   const recent = await kernel.listReceipts({ limit: 20 });
      */
     async listReceipts(filter?: { commandId?: string; since?: string; limit?: number }): Promise<Receipt[]> {
         return this.stores.ledger.listReceipts(filter);
@@ -1188,7 +1613,14 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Returns the current index status: total count, and per-store breakdown.
+     * Returns the current index status: total count, per-store
+     * breakdown, expected total (from owner stores), and
+     * `possiblyStale` flag (true when total !== expectedTotal).
+     *
+     * @returns {@link IndexStatusResult}.
+     * @example
+     *   const status = await kernel.indexStatus();
+     *   if (status.possiblyStale) await kernel.rebuildIndex('ops:admin');
      */
     async indexStatus(): Promise<IndexStatusResult> {
         const total = await this.stores.index.count();
@@ -1213,8 +1645,19 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Explain why an index record exists: what owned truth it derives from,
-     * whether that truth still exists, and whether the record appears stale.
+     * Explain why an index record exists.
+     *
+     * Returns the owned truth the record derives from, whether that
+     * truth still exists, whether the index text drifted from the
+     * current entity/artifact state, and a human-readable
+     * `staleCause` when present.
+     *
+     * @param recordId - The index record id.
+     * @returns {@link IndexExplanation}.
+     * @throws {NotFoundError} - index record does not exist.
+     * @example
+     *   const explanation = await kernel.explainIndex(recordId);
+     *   if (explanation.stale) console.log(explanation.staleCause);
      */
     async explainIndex(recordId: string): Promise<IndexExplanation> {
         const record = await this.stores.index.get(recordId);
@@ -1281,7 +1724,15 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * List all index records that are stale (source truth missing or changed).
+     * List all index records that are stale (source truth missing or
+     * changed).
+     *
+     * @returns Array of {@link StaleRecord}. Each carries the
+     *          `indexRecordId`, the `sourceId`/`sourceStore`, and a
+     *          human-readable `cause`.
+     * @example
+     *   const stale = await kernel.listStaleRecords();
+     *   if (stale.length) await kernel.rebuildIndex('ops:admin');
      */
     async listStaleRecords(): Promise<StaleRecord[]> {
         const allRecords = await this.stores.index.search({ limit: 100000 });
@@ -1333,8 +1784,23 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Retrieve an EvidenceBundle — structured cluster retrieval, not search.
-     * Queries index → resolves owner truth → attaches provenance → classifies freshness/gaps.
+     * Retrieve an EvidenceBundle — structured cluster retrieval, not
+     * search.
+     *
+     * Queries the index, resolves owner truth, attaches provenance,
+     * classifies freshness and provenance gaps. Use this for
+     * grounded-AI retrieval where the caller needs to know which
+     * confidence boundaries apply to each piece of evidence.
+     *
+     * @param query - The search text.
+     * @param options - Optional `{limit}`.
+     * @returns {@link EvidenceBundle} with `resolvedEntities`,
+     *          `resolvedArtifacts`, `indexRecords`,
+     *          `provenanceEvents`, `freshness`, `missingContext`,
+     *          `confidenceBoundaries`.
+     * @example
+     *   const bundle = await kernel.retrieveBundle('foo', { limit: 20 });
+     *   if (!bundle.freshness.allFresh) console.warn('stale evidence');
      */
     async retrieveBundle(query: string, options?: { limit?: number }): Promise<EvidenceBundle> {
         const planner = new RetrievalPlanner(this.stores);
@@ -1342,8 +1808,14 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Explain a retrieval bundle — summarize what was found, what is missing,
-     * and what confidence boundaries apply.
+     * Explain a retrieval bundle as a human-readable summary.
+     *
+     * @param bundle - The bundle to explain.
+     * @returns {@link RetrievalExplanation} with a prose summary,
+     *          counts, freshness flag, and confidence boundaries.
+     * @example
+     *   const expl = await kernel.explainRetrieval(bundle);
+     *   console.log(expl.summary);
      */
     async explainRetrieval(bundle: EvidenceBundle): Promise<RetrievalExplanation> {
         const resolvedCount = bundle.resolvedEntities.length + bundle.resolvedArtifacts.length;
@@ -1384,7 +1856,20 @@ export class ClusterKernel implements ClusterKernelInterface {
     // ─── Phase 4: Provenance Graph Verbs ────────────────────────────────
 
     /**
-     * Trace any cluster object — build a navigable provenance graph from a URI.
+     * Trace any cluster object — build a navigable provenance graph
+     * starting from a URI.
+     *
+     * @param uri - Cluster URI (e.g. `cluster://canonical/<id>`).
+     * @param options - Partial {@link TraceOptions} — `direction`,
+     *                  `depth`, `includeReceipts`, `includeIndex`,
+     *                  `includeGaps`, `includeCommands`.
+     * @returns {@link ProvenanceGraph} with nodes / edges / gaps /
+     *          warnings / summary.
+     * @example
+     *   const g = await kernel.traceObject('cluster://canonical/ent-1', {
+     *       direction: 'backward', depth: 3,
+     *   });
+     *   console.log(g.summary.oneLiner);
      */
     async traceObject(uri: string, options?: Partial<TraceOptions>): Promise<ProvenanceGraph> {
         const builder = new TraceBuilder(this.stores, uri, options);
@@ -1392,7 +1877,15 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Trace all objects in a retrieval bundle — combined provenance graph.
+     * Trace all objects in a retrieval bundle — combined provenance
+     * graph keyed at `bundle://<id>`.
+     *
+     * @param bundle - The retrieval bundle to trace.
+     * @param options - Partial {@link TraceOptions}.
+     * @returns Combined {@link ProvenanceGraph} for every resolved
+     *          entity and artifact in the bundle.
+     * @example
+     *   const graph = await kernel.traceBundle(bundle, { depth: 2 });
      */
     async traceBundle(bundle: EvidenceBundle, options?: Partial<TraceOptions>): Promise<ProvenanceGraph> {
         // Build individual traces for each resolved evidence item
@@ -1455,7 +1948,15 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Explain a provenance graph as human-readable text.
+     * Explain a provenance graph as human-readable multi-line text.
+     *
+     * @param graph - The provenance graph (from {@link traceObject} or
+     *                {@link traceBundle}).
+     * @returns Formatted prose: focal URI, direction, node summary,
+     *          edge listing, gap & warning sections.
+     * @example
+     *   const graph = await kernel.traceObject(uri);
+     *   process.stdout.write(kernel.explainTrace(graph));
      */
     explainTrace(graph: ProvenanceGraph): string {
         const lines: string[] = [];
@@ -1506,7 +2007,16 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Why does this object exist? Compact operator-facing explanation.
+     * "Why does this object exist?" Compact operator-facing
+     * explanation derived from a backward trace.
+     *
+     * @param uri - Cluster URI of the object to explain.
+     * @returns Multi-line summary naming the focal node, its creation
+     *          edge, evidence links, receipts, and any provenance gaps.
+     *          Returns "object not found" prose if the URI doesn't
+     *          resolve.
+     * @example
+     *   console.log(await kernel.why('cluster://canonical/ent-1'));
      */
     async why(uri: string): Promise<string> {
         const graph = await this.traceObject(uri, { direction: 'backward', depth: 5, includeReceipts: true, includeIndex: false, includeGaps: true, includeCommands: false });

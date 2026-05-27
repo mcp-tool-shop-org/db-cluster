@@ -73,9 +73,19 @@ export async function compareRetrieval(
         provenanceEvents += events.length;
     }
 
-    // Analyze bundle quality
+    // Analyze bundle quality.
+    // SHA-SURFACE-LEAK-2 (Wave C1-Amend should-have-been-A): pre-fix this
+    // line read the per-Entity owner field (which is a literal type and
+    // therefore structurally tautological — every Entity has the same
+    // value, so the predicate never failed and never caught a real
+    // "did not resolve to owner truth" case). The ResolvedEvidence
+    // wrapper carries `ownerStore: string` which is the load-bearing
+    // per-evidence-item ownership signal. The fix asserts
+    // ownerStore === 'canonical' so the predicate has actual semantic
+    // value: it now means "did the resolver actually land in the
+    // canonical store, not a sibling derivative".
     const resolvesToOwnerTruth = bundle.resolvedEntities.length > 0 &&
-        bundle.resolvedEntities.every((r) => r.object.owner === 'canonical');
+        bundle.resolvedEntities.every((r) => r.ownerStore === 'canonical');
 
     const hasProvenanceBacking = provenanceEvents > 0;
 

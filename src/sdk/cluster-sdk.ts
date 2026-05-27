@@ -140,6 +140,49 @@ export class ClusterSDK {
      */
     private readonly policyEnforced: boolean;
 
+    /**
+     * Construct a ClusterSDK against a cluster directory.
+     *
+     * SURFACE-C-014 (Wave C1-Amend): policy-vs-raw branch + principal-
+     * fallback behavior were buried in inline `// SURFACE-R2-004 fix:`
+     * comments. This JSDoc surfaces the contract for SDK consumers.
+     *
+     * Policy enforcement is OPT-IN:
+     *   - Pass `policies`, `trustZones`, or `visibilityRules` → the SDK
+     *     wraps the kernel with PolicyEnforcedKernel. Every read/write
+     *     crosses the policy layer; redaction markers are emitted where
+     *     a value is denied.
+     *   - Omit those fields → raw ClusterKernel. No policy gate. Preserves
+     *     the ~614 baseline tests' "no policies = no gate" behavior.
+     *
+     * Principal fallback:
+     *   - When `policies` are set but `principal` is omitted, the SDK
+     *     falls back to `INTERNAL_TRUSTED_PRINCIPAL` (cluster-admin) AND
+     *     emits a `console.warn` so the caller knows they got the trusted
+     *     principal — least-privilege deployments should always pass an
+     *     explicit principal.
+     *   - To opt into the trusted principal silently, pass
+     *     `principal: ClusterSDK.INTERNAL_TRUSTED_PRINCIPAL` explicitly.
+     *
+     * @param options Cluster directory + policy/principal configuration.
+     * @throws Will not throw on construction (errors deferred to first
+     *   kernel call). Malformed PolicyEnforcedKernel construction surfaces
+     *   the underlying TypeError; check {@link buildSDKOptions} for the
+     *   fail-closed shape used by the MCP boundary.
+     *
+     * @example
+     * // Raw mode — no policies
+     * const sdk = new ClusterSDK({ clusterDir: '.db-cluster' });
+     * await sdk.findSources('thing');
+     *
+     * @example
+     * // Policy-enforced mode with explicit principal
+     * const sdk = new ClusterSDK({
+     *   clusterDir: '.db-cluster',
+     *   policies: myPolicies,
+     *   principal: { id: 'svc-1', name: 'svc-1', roles: ['reader'], trustZone: 'internal' },
+     * });
+     */
     constructor(options: SDKOptions) {
         const stores = createLocalCluster(options.clusterDir);
         this.resolver = new ClusterResolver(stores);
@@ -220,6 +263,33 @@ export class ClusterSDK {
 
     // ─── Retrieval ─────────────────────────────────────────────────
 
+    /**
+     * Find sources in the cluster index matching a query string.
+     *
+     * Returns up to `limit` index records plus resolved owner-truth
+     * objects (entities, artifacts) for each match. Index records are
+     * derivative — they may be stale relative to the canonical/artifact
+     * stores; the resolver runs through the kernel so any policy-driven
+     * filter applies. Stale index records are still returned but the
+     * caller can detect staleness on the resolved objects.
+     *
+     * SURFACE-C-013 (Wave C1-Amend): added JSDoc to this method to match
+     * the discipline already in place on `commitMutation` /
+     * `retrieveBundle` / `policyExplain`.
+     *
+     * @param query Text query to match against indexed records.
+     * @param limit Max results (default 20 in the kernel).
+     * @returns Find result with indexRecords, resolvedEntities,
+     *   resolvedArtifacts.
+     * @throws PolicyDeniedError when the principal lacks the
+     *   `find_sources` capability under the configured policies.
+     *
+     * @example
+     * const result = await sdk.findSources('quarterly-report', 50);
+     * for (const r of result.resolvedEntities) {
+     *   console.log(r.kind, r.name);
+     * }
+     */
     async findSources(query: string, limit?: number): Promise<FindSourcesResult> {
         return this.kernel.findSources({ query, limit });
     }
@@ -261,6 +331,29 @@ export class ClusterSDK {
         };
     }
 
+    /**
+     * Explain what a retrieval bundle contains in operator-readable prose.
+     *
+     * The returned `summary` is multi-line text suitable for printing to
+     * a terminal or pasting into an issue tracker. `resolvedCount` /
+     * `missingCount` / `allFresh` give the same signals in structured
+     * form for programmatic callers.
+     *
+     * SURFACE-C-013 (Wave C1-Amend): added JSDoc to align with the
+     * documented exemplars in this file.
+     *
+     * @param bundle Evidence bundle from {@link retrieveBundle}.
+     * @returns `{ summary, resolvedCount, missingCount, allFresh }`.
+     * @throws Won't throw on a well-formed bundle; if the underlying
+     *   kernel was constructed in policy-enforced mode and the principal
+     *   lacks read capability, PolicyDeniedError surfaces from
+     *   kernel-side reads.
+     *
+     * @example
+     * const bundle = await sdk.retrieveBundle('quarterly-report');
+     * const expl = await sdk.explainRetrieval(bundle);
+     * console.log(expl.summary);
+     */
     async explainRetrieval(bundle: EvidenceBundle): Promise<{ summary: string; resolvedCount: number; missingCount: number; allFresh: boolean }> {
         const explanation = await this.kernel.explainRetrieval(bundle);
         return {
@@ -326,16 +419,81 @@ export class ClusterSDK {
 
     // ─── Provenance ────────────────────────────────────────────────
 
+    /**
+     * Trace provenance for any cluster URI.
+     *
+     * Returns a navigable {@link ProvenanceGraph} showing why an object
+     * exists, what truth supports it, and what changed it. Direction +
+     * depth are configurable via {@link TraceOptions}. The graph carries
+     * receipts and gaps when requested.
+     *
+     * SURFACE-C-013 (Wave C1-Amend): added JSDoc for SDK discoverability.
+     *
+     * @param uri Cluster URI (`cluster://<store>/<id>`).
+     * @param options Trace direction, depth, include flags.
+     * @returns Navigable provenance graph.
+     * @throws NotFoundError when the URI does not resolve.
+     * @throws InvalidClusterUriError when URI is malformed.
+     *
+     * @example
+     * const graph = await sdk.traceObject('cluster://canonical/abc', {
+     *   direction: 'backward',
+     *   depth: 5,
+     * });
+     */
     async traceObject(uri: string, options?: Partial<TraceOptions>): Promise<ProvenanceGraph> {
         return this.kernel.traceObject(uri, options);
     }
 
+    /**
+     * Why does this object exist? Returns a compact one-paragraph
+     * explanation derived from a backward provenance trace.
+     *
+     * The string surfaces who created the object, what evidence was
+     * linked, and any receipts attached. Designed for direct display to
+     * an operator or AI consumer — see {@link traceObject} for the
+     * structured graph.
+     *
+     * SURFACE-C-013 (Wave C1-Amend): added JSDoc.
+     *
+     * @param uri Cluster URI to explain.
+     * @returns Multi-line prose explanation.
+     * @throws NotFoundError when the URI does not resolve.
+     *
+     * @example
+     * const story = await sdk.why('cluster://canonical/abc');
+     * console.log(story);
+     */
     async why(uri: string): Promise<string> {
         return this.kernel.why(uri);
     }
 
     // ─── Command lifecycle ─────────────────────────────────────────
 
+    /**
+     * Propose a mutation command. STAGED ONLY — no cluster truth is
+     * written. The returned command is in `proposed` status and must
+     * pass validate → approve → commit to actually mutate the cluster.
+     *
+     * SURFACE-C-013 (Wave C1-Amend): added JSDoc.
+     *
+     * @param input Mutation specification.
+     * @returns The newly-staged Command with id + status='proposed'.
+     * @throws InvalidContentShapeError when payload.content is the wrong shape
+     *   (ingest_artifact verb).
+     * @throws ContentHashMismatchError when caller-supplied contentHash
+     *   doesn't match sha256(content) (ingest_artifact verb).
+     * @throws PolicyDeniedError when policy gates the `propose_command`
+     *   capability.
+     *
+     * @example
+     * const cmd = await sdk.proposeMutation({
+     *   verb: 'create_entity',
+     *   targetStore: 'canonical',
+     *   payload: { kind: 'person', name: 'Ada', attributes: {} },
+     *   proposedBy: 'alice',
+     * });
+     */
     async proposeMutation(input: {
         verb: Command['verb'];
         targetStore: Command['targetStore'];
@@ -345,14 +503,63 @@ export class ClusterSDK {
         return this.kernel.proposeMutation(input);
     }
 
+    /**
+     * Validate a proposed command — runs structural + semantic checks.
+     * Transitions the command from `proposed` to `validated`. Does NOT
+     * commit.
+     *
+     * SURFACE-C-013 (Wave C1-Amend): added JSDoc.
+     *
+     * @param commandId ID of the proposed command.
+     * @returns The command with status='validated' and a `validation`
+     *   record listing the named checks that ran.
+     * @throws NotFoundError when the command ID doesn't exist.
+     *
+     * @example
+     * const validated = await sdk.validateMutation(cmd.id);
+     */
     async validateMutation(commandId: string): Promise<Command> {
         return this.kernel.validateMutation(commandId);
     }
 
+    /**
+     * Approve a validated command — operator/policy gate. Transitions
+     * the command from `validated` to `approved`. Does NOT commit; the
+     * cluster truth is unchanged until {@link commitMutation}.
+     *
+     * SURFACE-C-013 (Wave C1-Amend): added JSDoc.
+     *
+     * @param commandId ID of the validated command.
+     * @param approvedBy Actor approving.
+     * @param note Optional approval note for audit.
+     * @returns The command with status='approved' and approvedBy /
+     *   approvedAt / approvalNote populated.
+     * @throws NotFoundError when the command ID doesn't exist.
+     * @throws PolicyDeniedError when policy gates `approve_command`.
+     *
+     * @example
+     * await sdk.approveMutation(cmd.id, 'bob', 'reviewed in PR-1234');
+     */
     async approveMutation(commandId: string, approvedBy: string, note?: string): Promise<Command> {
         return this.kernel.approveMutation(commandId, approvedBy, note);
     }
 
+    /**
+     * Reject a proposed or validated command. Terminal — rejected
+     * commands CANNOT be committed. Use this to record that a proposal
+     * was reviewed and refused.
+     *
+     * SURFACE-C-013 (Wave C1-Amend): added JSDoc.
+     *
+     * @param commandId ID of the command to reject.
+     * @param rejectedBy Actor rejecting.
+     * @param reason Operator-facing reason (surfaces in audit).
+     * @returns The command with status='rejected'.
+     * @throws NotFoundError when the command ID doesn't exist.
+     *
+     * @example
+     * await sdk.rejectMutation(cmd.id, 'bob', 'duplicate of cmd-xyz');
+     */
     async rejectMutation(commandId: string, rejectedBy: string, reason: string): Promise<Command> {
         return this.kernel.rejectMutation(commandId, rejectedBy, reason);
     }
@@ -373,14 +580,63 @@ export class ClusterSDK {
         return this.kernel.commitMutation(commandId, actorId);
     }
 
+    /**
+     * Compensate a committed command — emits a correcting command + a
+     * receipt linking the pair. The original command is NOT deleted;
+     * compensation preserves audit history.
+     *
+     * SURFACE-C-013 (Wave C1-Amend): added JSDoc.
+     *
+     * @param commandId ID of the committed command to compensate.
+     * @param compensatedBy Actor performing compensation.
+     * @param reason Operator-facing rationale.
+     * @returns The compensating command + the original (now flagged) +
+     *   the receipt linking the two.
+     * @throws NotFoundError when the command ID doesn't exist.
+     * @throws PolicyDeniedError when policy gates `compensate_command`.
+     *
+     * @example
+     * const result = await sdk.compensateMutation(committed.id, 'bob', 'rolled back per ticket');
+     */
     async compensateMutation(commandId: string, compensatedBy: string, reason: string): Promise<{ compensatingCommand: Command; originalCommand: Command; receipt: Receipt }> {
         return this.kernel.compensateMutation(commandId, compensatedBy, reason);
     }
 
+    /**
+     * Inspect a command — returns full lifecycle state including status,
+     * validation results, approval/rejection metadata, and any
+     * compensation pointers.
+     *
+     * SURFACE-C-013 (Wave C1-Amend): added JSDoc.
+     *
+     * @param commandId Command ID to inspect.
+     * @returns The Command in its current status with all lifecycle
+     *   fields populated.
+     * @throws NotFoundError when the command ID doesn't exist.
+     *
+     * @example
+     * const cmd = await sdk.inspectCommand(commandId);
+     * console.log(cmd.status, cmd.validation);
+     */
     async inspectCommand(commandId: string): Promise<Command> {
         return this.kernel.inspectCommand(commandId);
     }
 
+    /**
+     * List mutation receipts — proof records of committed operations.
+     * Each receipt links to its command, target store, and the
+     * `resultSummary` produced at commit time.
+     *
+     * SURFACE-C-013 (Wave C1-Amend): added JSDoc.
+     *
+     * @param filter Optional `commandId` / `since` / `limit`.
+     * @returns Array of Receipts (newest first; per kernel discipline).
+     * @throws PolicyDeniedError when policy gates `read_audit`.
+     *
+     * @example
+     * const recent = await sdk.listReceipts({ limit: 10 });
+     * for (const r of recent) console.log(r.committedAt, r.resultSummary);
+     */
     async listReceipts(filter?: { commandId?: string; since?: string; limit?: number }): Promise<Receipt[]> {
         return this.kernel.listReceipts(filter);
     }

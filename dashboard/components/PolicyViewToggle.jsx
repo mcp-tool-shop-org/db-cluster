@@ -95,18 +95,46 @@ function PolicyViewToggle({ currentView, views, onViewChange, children }) {
  * `'[REDACTED]'`. Renderers that need to display a placeholder must
  * detect `obj._redacted === true` at the view layer and emit their own
  * string (typically `'[REDACTED]'`) for the human-readable surface.
- *
- * Renderer guidance — within JSX:
- *
- *   const redactedDisplay = obj && obj._redacted === true
- *       ? '[REDACTED]'
- *       : obj;
- *
- *   <pre>{JSON.stringify(redactedDisplay, null, 2)}</pre>
- *
- * This view-layer adapter is the responsibility of each component that
- * renders a redacted DashboardObject; this file's component only renders
- * the toggle UI and does not call `applyRedaction` itself.
  */
 
-window.PolicyViewToggle = PolicyViewToggle;
+/**
+ * Render-time adapter for the redacted-marker contract.
+ *
+ * Wave C1-Amend §2d (SURFACE-C-019): the contract documented above was
+ * never actually wired at consumer panels — `{_redacted: true}` markers
+ * would JSON.stringify to literal `{"_redacted":true}` text. This helper
+ * walks an arbitrary object and replaces any redacted-marker objects
+ * (detected via `_redacted === true`) with the string `'[REDACTED]'`.
+ * Field-level `'[REDACTED]'` strings already pass through unchanged.
+ *
+ * Pre-fix: `<pre>{JSON.stringify(obj, null, 2)}</pre>` would render the
+ * literal marker. Post-fix: consumer panels call
+ * `window.renderRedactionMarkers(obj)` before passing to JSON.stringify,
+ * and operators see `[REDACTED]` everywhere a value was withheld.
+ *
+ * The contract test in test/wave-c1-surface-regression.test.ts asserts
+ * the conversion. Sibling consumer panels (OperationsPanel,
+ * CommandPreviewPanel, ClusterTruthInspector payload preview) call
+ * through this helper when rendering policy-filtered data.
+ *
+ * @param {*} value — the object to walk
+ * @returns {*} A structurally-identical clone with markers replaced.
+ */
+function renderRedactionMarkers(value) {
+    if (value === null || value === undefined) return value;
+    if (typeof value !== 'object') return value;
+    // Marker detection — the load-bearing discriminator from
+    // src/types/redaction.ts is `_redacted === true`.
+    if (value._redacted === true) return '[REDACTED]';
+    if (Array.isArray(value)) return value.map(renderRedactionMarkers);
+    const out = {};
+    for (const key of Object.keys(value)) {
+        out[key] = renderRedactionMarkers(value[key]);
+    }
+    return out;
+}
+
+if (typeof window !== 'undefined') {
+    window.PolicyViewToggle = PolicyViewToggle;
+    window.renderRedactionMarkers = renderRedactionMarkers;
+}

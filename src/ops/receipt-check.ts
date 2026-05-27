@@ -15,6 +15,22 @@ export interface ReceiptCheckResult {
 
 /**
  * Verify receipts reference valid provenance events.
+ *
+ * @param stores  ClusterStores bundle. Reads ledger.listReceipts +
+ *                ledger.getEvent. Never mutates state.
+ * @param options Optional knobs. `limit` caps how many receipts are sampled
+ *                (default 200).
+ * @returns       {@link ReceiptCheckResult} carrying total/valid/orphans
+ *                counts plus per-orphan error strings and a structured
+ *                HealthCheck[] surface.
+ * @throws        Adapter-level exceptions from ledger.listReceipts /
+ *                ledger.getEvent propagate.
+ *
+ * @example
+ *   const result = await checkReceipts(stores);
+ *   if (result.orphans > 0) {
+ *       for (const e of result.errors) console.error(e);
+ *   }
  */
 export async function checkReceipts(stores: ClusterStores, options?: { limit?: number }): Promise<ReceiptCheckResult> {
     const limit = options?.limit ?? 200;
@@ -56,6 +72,13 @@ export async function checkReceipts(stores: ClusterStores, options?: { limit?: n
             severity: 'warning',
             message: `${orphans}/${receipts.length} receipt(s) reference missing provenance events.`,
             repairAvailable: false,
+            // Wave C1-Amend fix-up (V1-C1-005): suggestedCommand for
+            // doctor footer "Top fix" surfacing.
+            suggestedCommand: 'db-cluster receipts',
+            nextSteps: [
+                'Run `db-cluster receipts` to inspect the affected receipts.',
+                'Run `db-cluster trace <eventId>` for the missing provenance events.',
+            ],
         });
     }
 

@@ -48,6 +48,12 @@
  * The marker is intentionally NOT a class — it is plain JSON and
  * round-trips through ledger persistence and MCP boundary serialization
  * unchanged.
+ *
+ * KERNEL-C-004 (Wave C1-Amend): the optional `capability` field names
+ * which capability from the 13-value {@link Capability} union would
+ * unlock the field when `reason === 'capability_denied'`. The AI can
+ * then request the right capability rather than trial-and-error against
+ * the policy engine.
  */
 export type RedactedMarker = {
     /** Discriminator — `true` literal. */
@@ -78,6 +84,25 @@ export type RedactedMarker = {
         | 'sensitive_field'
         | 'unknown_field'
         | 'cycle_detected';
+    /**
+     * KERNEL-C-004: when `reason === 'capability_denied'`, the name of
+     * the capability from the 13-value {@link Capability} union that
+     * would unlock this field. The AI can then request the right
+     * capability rather than trial-and-error.
+     *
+     * Optional because non-policy reasons (`sensitive_field`,
+     * `unknown_field`, `cycle_detected`) don't have an associated
+     * capability — the redaction is structural, not policy-driven.
+     *
+     * Producer-side responsibility: any redactor that emits a marker
+     * with `reason: 'capability_denied'` SHOULD populate `capability`
+     * with the matched policy decision's capability. Markers without
+     * `capability` for a `capability_denied` reason indicate a producer
+     * that didn't know which rule fired (rare — usually means the
+     * blanket rule decision was lost; consumers should still render
+     * `'unknown'` rather than crash).
+     */
+    capability?: string;
 };
 
 /**
@@ -102,10 +127,27 @@ export function isRedactedMarker(v: unknown): v is RedactedMarker {
  * `_redacted: true` literal lives in exactly one place. Consumers should
  * use this factory rather than constructing markers inline — that way a
  * future addition of a `redactedAt` timestamp lands in one site.
+ *
+ * KERNEL-C-004 (Wave C1-Amend): the optional fourth argument `capability`
+ * names which capability would unlock the field when `reason ===
+ * 'capability_denied'`. Producers that know the matched-policy capability
+ * (the PolicyEnforcedKernel-side redactors) SHOULD pass it; producers
+ * that don't (structural unknown-field stripper) may omit.
+ *
+ * @param kind - The shape category of the redacted value.
+ * @param reason - Why redaction fired.
+ * @param capability - Optional: the capability name (from the
+ *                     {@link Capability} union) that would unlock the
+ *                     field. Use when `reason === 'capability_denied'`.
  */
 export function redactedMarker(
     kind: RedactedMarker['kind'],
     reason: RedactedMarker['reason'],
+    capability?: string,
 ): RedactedMarker {
-    return { _redacted: true, kind, reason };
+    const marker: RedactedMarker = { _redacted: true, kind, reason };
+    if (capability !== undefined) {
+        marker.capability = capability;
+    }
+    return marker;
 }

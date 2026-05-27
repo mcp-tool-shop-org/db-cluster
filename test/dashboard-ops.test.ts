@@ -42,7 +42,7 @@ describe('Dashboard operations model', () => {
         expect(ops.indexHealth.stale).toBeGreaterThan(0);
     });
 
-    it('suggests reindex when stale records exist', async () => {
+    it('suggests rebuild index when stale records exist', async () => {
         const { entity } = await kernel.createEntity({ kind: 'test', name: 'C', attributes: {}, actorId: 'u' });
         await stores.canonical.update(entity.id, { name: 'Dirty' });
 
@@ -50,7 +50,10 @@ describe('Dashboard operations model', () => {
 
         expect(ops.repairSuggestions.length).toBeGreaterThan(0);
         expect(ops.repairSuggestions.some((s) => s.action === 'rebuild_index')).toBe(true);
-        expect(ops.repairSuggestions.some((s) => s.command === 'db-cluster reindex')).toBe(true);
+        // Wave C1-Amend fix-up (V1-C1-004): the canonical command is
+        // `db-cluster rebuild index`, NOT the pre-fix phantom
+        // `db-cluster reindex` (which doesn't exist anywhere in cli.ts).
+        expect(ops.repairSuggestions.some((s) => s.command === 'db-cluster rebuild index')).toBe(true);
     });
 
     it('includes receipt count in provenance health', async () => {

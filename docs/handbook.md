@@ -528,14 +528,26 @@ Restore imports the backup and verifies integrity. Index is rebuilt from restore
 
 ### 9.6 Common damage scenarios
 
-| Scenario | Recovery |
-|----------|----------|
-| Deleted index | `db-cluster rebuild index` — index is derivative |
-| Missing artifact | `db-cluster restore` from backup |
-| Missing receipt | `db-cluster restore` or re-commit |
-| Stale index projection | `db-cluster rebuild index` |
-| Broken provenance link | `db-cluster verify` detects, manual repair |
-| Invalid Postgres schema | `db-cluster stores migrate` |
+Each scenario lists the verify-symptom (what `doctor`/`verify` says), the verify-recovery (commands to run), and the escalate column (when to bail). For full step-by-step procedures see `docs/runbooks/`.
+
+| Scenario | Verify-symptom | Verify-recovery | Escalate | Runbook |
+|---|---|---|---|---|
+| Deleted index | `doctor` reports `index` in `missing` status; `rebuild check` returns 0 records | `db-cluster rebuild check`; if expected-total > 0, `db-cluster rebuild index` | If rebuild reports stale records post-rebuild, the canonical/artifact stores have inconsistent owner truth | [index-stale.md](runbooks/index-stale.md) |
+| Stale index projection | `doctor` reports `index` in `stale`; `rebuild check` returns `possiblyStale > 0` | `db-cluster rebuild index --dry-run` then `db-cluster rebuild index` | If `verify --sample 200` post-rebuild still reports inconsistencies, escalate | [index-stale.md](runbooks/index-stale.md) |
+| Corrupt store file | `doctor` reports a store in `corrupt`; CLI exit 70 with `CORRUPT_STORE` | Restore from backup; if backup unavailable AND file is `pending-commands.json`/index, excise; otherwise stop | Multiple stores corrupt simultaneously (filesystem failure); recurrence after restore | [corrupt-store.md](runbooks/corrupt-store.md) |
+| Command queue corrupt | CLI exit 70 with `COMMAND_QUEUE_CORRUPT` or `COMMAND_QUEUE_PERSISTENCE_LOST` | Restore from backup that includes `pending-commands.json` + `command-queue-marker`; OR delete both files to re-cold-start (loses pending commands) | If pending commands are load-bearing and no backup exists | [corrupt-store.md](runbooks/corrupt-store.md) (Command queue section) |
+| Orphan mutations | `doctor` reports `mutation_orphaned > 0`; CLI exit 70 with `RECEIPT_FAILED` | `db-cluster doctor --json` to confirm; backfill receipt OR restore from pre-orphan backup; do NOT blindly retry | More than 5 orphans accumulating, OR cascading `verify` failures | [orphan-mutations.md](runbooks/orphan-mutations.md) |
+| Missing artifact | `doctor` reports `artifact_count_mismatch`; `verify` reports broken artifact reference | `db-cluster restore` from backup | If backup also missing the artifact, the source content is lost — escalate | [corrupt-store.md](runbooks/corrupt-store.md) |
+| Missing receipt | `doctor` reports `mutation_orphaned`, OR `db-cluster receipts` shows gap | `db-cluster restore` from backup that includes the receipt; OR re-record via compensating receipt if audit allows | Multiple missing receipts across the same time window suggests ledger corruption | [orphan-mutations.md](runbooks/orphan-mutations.md) |
+| Broken provenance link | `verify` reports `provenance_subject_missing`; CLI exit 70 with `PROVENANCE_MISSING` | `db-cluster verify --json --sample 200` to identify all broken links; manually repair by recording compensating events | If breaks span the entire ledger window, escalate | [orphan-mutations.md](runbooks/orphan-mutations.md) |
+| Ledger cycle | CLI exit 65 with `LEDGER_CYCLE_DETECTED`; error names the cycle path | Excise the cycling event by hand OR restore from backup | Cycle > 5 events deep (manual excision unsafe) | [corrupt-store.md](runbooks/corrupt-store.md) (Ledger section) |
+| Postgres unreachable | `doctor` reports `canonical` in `unreachable`; logs show connection refused | `psql` to confirm reachability; check `pg_hba.conf`; restart Postgres if needed | If reachable but `verify-schema` still drifts post-migrate | [postgres-unreachable.md](runbooks/postgres-unreachable.md) |
+| Postgres schema drift | `migration-status` reports missing tables; `verify-schema` reports column drift | `db-cluster stores migrate`; re-verify | If migration reports success but `verify-schema` still drifts | [postgres-unreachable.md](runbooks/postgres-unreachable.md) |
+| Postgres pool exhaustion | `doctor` reports pool errors; stderr logs from `pool.on('error', ...)` | Pool re-establishes on next `db-cluster doctor`; for chronic exhaustion, increase Postgres `max_connections` OR reduce concurrent db-cluster processes | If exhaustion recurs every minute (structural network issue) | [postgres-unreachable.md](runbooks/postgres-unreachable.md) |
+| Invalid policy config | CLI exit 78 with `INVALID_POLICY_CONFIG` | Validate the policy YAML / JSON against the schema in `docs/policy-and-redaction.md`; fix and retry | If the policy passes schema but still rejects all access, the policy logic is wrong | (inline — fix and retry) |
+| Content hash mismatch | CLI exit 65 with `CONTENT_HASH_MISMATCH` on propose | Recompute `sha256(content)` and re-propose | If the same caller repeatedly mismatches, the caller is computing the hash wrong | (inline — fix caller) |
+| Staged content tampered | CLI exit 65 with `STAGED_CONTENT_TAMPERED` on commit | Inspect the staging file (preserved for forensics); investigate the cause; remove staging file; re-propose | If tampering is intentional, this is a security incident — escalate | (inline — investigate, do NOT retry) |
+| Policy-denied | CLI exit 77 with `POLICY_DENIED` | The principal lacks the named capability; request capability OR call `db-cluster policy explain` to inspect the denial | If policy explain returns no matching rule, the policy config is incomplete | (inline — request capability) |
 
 ---
 

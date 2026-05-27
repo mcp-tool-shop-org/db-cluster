@@ -8,6 +8,11 @@
 import type { ClusterStores } from '../contracts/index.js';
 import type { Command } from '../types/command.js';
 import { doctor } from '../ops/doctor.js';
+// SHA-SURFACE-LEAK-1 (Wave C1-Amend should-have-been-A): the pre-fix
+// `kernel: { indexStatus(): Promise<any>; ... }` typing let the consumer
+// read fields that don't exist on the actual producer's shape. Now we
+// import the producer type so TypeScript catches drift at compile time.
+import type { IndexStatusResult } from '../kernel/cluster-kernel.js';
 
 export type HealthLevel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 
@@ -25,7 +30,17 @@ export interface IndexHealth {
 }
 
 export interface ProvenanceHealth {
-    totalEvents: number;
+    /**
+     * Total provenance events. `null` when countEvents() failed at
+     * runtime — preserves the "we don't know" signal rather than
+     * silently collapsing to 0 (which masks degraded → healthy).
+     *
+     * Wave C1-Amend fix-up (V3-C1-011): pre-fix this was typed
+     * `number` but the runtime set it to `null` on countEvents failure;
+     * line 275 collapsed null → 0 with `?? 0`, defeating the purpose.
+     * Mirrors the {@link orphanEvents} discipline below.
+     */
+    totalEvents: number | null;
     totalReceipts: number;
     /**
      * SURFACE-B-011 (Wave B1-Amend): the count of `mutation_orphaned`
@@ -112,7 +127,17 @@ export interface BuildOpsModelOptions {
  */
 export async function buildOpsModel(
     stores: ClusterStores,
-    kernel: { indexStatus(): Promise<any>; listStaleRecords(): Promise<any[]>; listReceipts(filter?: any): Promise<any[]> },
+    // SHA-SURFACE-LEAK-1 (Wave C1-Amend): tightened the kernel arg type
+    // so the index-status read can't drift from the producer's shape
+    // again. Pre-fix the implementation read `indexStatus.totalRecords` /
+    // `.missingRecords` — neither field exists on IndexStatusResult.
+    // TypeScript would have caught this on a typed reference; the typing
+    // was deliberately `any` and silenced the error.
+    kernel: {
+        indexStatus(): Promise<IndexStatusResult>;
+        listStaleRecords(): Promise<unknown[]>;
+        listReceipts(filter?: { limit?: number }): Promise<unknown[]>;
+    },
     options?: BuildOpsModelOptions,
 ): Promise<OpsModel> {
     const health = await doctor(stores, {
@@ -136,6 +161,20 @@ export async function buildOpsModel(
         countDegradedReason = 'orphan_count_unavailable';
     }
 
+    // SHA-SURFACE-LEAK-3 (Wave C1-Amend should-have-been-A): pre-fix the
+    // dashboard returned `totalEvents: 0` hardcoded with a TODO. The
+    // operator looked at the panel and always saw zero. Now we count
+    // via the ledger contract — countEvents() with no action filter
+    // counts ALL provenance events. Same degraded-signal discipline as
+    // orphanEvents: null on error so the dashboard renders '?'/degraded
+    // rather than the misleading literal zero.
+    let totalEvents: number | null = 0;
+    try {
+        totalEvents = await stores.ledger.countEvents();
+    } catch {
+        totalEvents = null;
+    }
+
     // Map store checks
     const storeChecks: StoreHealth[] = health.checks
         .filter((c) => c.name.endsWith('_reachable'))
@@ -145,12 +184,21 @@ export async function buildOpsModel(
             message: c.message,
         }));
 
-    // Index health
+    // SHA-SURFACE-LEAK-1 (Wave C1-Amend should-have-been-A): pre-fix
+    // read `indexStatus.totalRecords` / `.missingRecords` — neither field
+    // exists on IndexStatusResult (declared in src/kernel/cluster-kernel.ts).
+    // Real shape: { total, byStore, expectedTotal, possiblyStale }.
+    // `missing` is derived as `expectedTotal - total` (positive = some
+    // owner records have no index entry). The pre-fix bug silently
+    // displayed 0 in the dashboard IndexHealth tile for every cluster.
+    const total = indexStatus.total ?? 0;
+    const expectedTotal = indexStatus.expectedTotal ?? 0;
+    const missing = Math.max(0, expectedTotal - total);
     const indexHealth: IndexHealth = {
-        total: indexStatus.totalRecords ?? 0,
-        fresh: (indexStatus.totalRecords ?? 0) - staleRecords.length,
+        total,
+        fresh: Math.max(0, total - staleRecords.length),
         stale: staleRecords.length,
-        missing: indexStatus.missingRecords ?? 0,
+        missing,
     };
 
     // Artifact integrity (from doctor checks)
@@ -166,7 +214,12 @@ export async function buildOpsModel(
     if (staleRecords.length > 0) {
         repairSuggestions.push({
             action: 'rebuild_index',
-            command: 'db-cluster reindex',
+            // Wave C1-Amend fix-up (V1-C1-004 — sibling-pattern of
+            // SHA-STORES-PHANTOM-CMD): the canonical CLI subcommand is
+            // `db-cluster rebuild index` (cli.ts:1804). The pre-fix
+            // `db-cluster reindex` did not exist — operators copy-pasting
+            // the repair suggestion got "unknown command".
+            command: 'db-cluster rebuild index',
             description: `${staleRecords.length} stale index record(s) detected`,
             severity: 'warn',
         });
@@ -195,12 +248,23 @@ export async function buildOpsModel(
     }
     for (const check of health.checks) {
         if (check.status !== 'healthy' && check.repairAvailable) {
-            repairSuggestions.push({
-                action: `repair_${check.name}`,
-                command: `db-cluster doctor --repair`,
-                description: check.message,
-                severity: check.severity === 'error' ? 'error' : 'warn',
-            });
+            // Wave C1-Amend fix-up (V1-C1-004 — sibling-pattern of
+            // SHA-STORES-PHANTOM-CMD): pre-fix this site emitted the
+            // phantom `db-cluster doctor --repair` which does not exist
+            // anywhere in src/cli.ts. Drop the synthetic suggestion when
+            // the check itself didn't supply one — operators see no
+            // wrong command instead of a fake. When the check carries
+            // its own `suggestedCommand` (the canonical contract every
+            // HealthCheck producer should populate), surface that.
+            const command = (check as { suggestedCommand?: string }).suggestedCommand;
+            if (command) {
+                repairSuggestions.push({
+                    action: `repair_${check.name}`,
+                    command,
+                    description: check.message,
+                    severity: check.severity === 'error' ? 'error' : 'warn',
+                });
+            }
         }
     }
 
@@ -231,7 +295,15 @@ export async function buildOpsModel(
         stores: storeChecks,
         indexHealth,
         provenanceHealth: {
-            totalEvents: 0, // Would need provenance store list
+            // SHA-SURFACE-LEAK-3: read from ledger via countEvents({}).
+            // null preserves the "we don't know" signal when the count
+            // failed at runtime, mirroring the orphan-events discipline.
+            //
+            // Wave C1-Amend fix-up (V3-C1-011): preserve null through
+            // the boundary rather than collapsing with `?? 0`. The
+            // dashboard renderer interprets null as "?" so the operator
+            // sees the degraded signal instead of "0 events".
+            totalEvents: totalEvents,
             totalReceipts: receipts.length,
             orphanEvents,
             degradedReason,

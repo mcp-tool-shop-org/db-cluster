@@ -497,7 +497,11 @@ function ProposeMutationPanel({ focal, onClose }) {
   const [value, setValue] = React.useState('"phase-2"');
   const verbs = ['update_entity', 'link_evidence', 'reindex', 'propose_mutation'];
 
-  const cmdJson = JSON.stringify({
+  // Wave C1-Amend fix-up (Cluster E — V1-C1-009 + V3-C1-003): route
+  // through renderRedactionMarkers so any {_redacted:true} marker in the
+  // payload renders as '[REDACTED]' rather than leaking the literal
+  // marker. The helper is a no-op when payloads carry no markers.
+  const _rawCmd = {
     verb,
     targetStore: focal.owner,
     subject: focal.id,
@@ -505,7 +509,14 @@ function ProposeMutationPanel({ focal, onClose }) {
     proposedBy: 'agent:claude',
     proposedAt: new Date().toISOString().replace(/\.\d{3}/, ''),
     status: 'proposed',
-  }, null, 2);
+  };
+  const cmdJson = JSON.stringify(
+    typeof window !== 'undefined' && typeof window.renderRedactionMarkers === 'function'
+      ? window.renderRedactionMarkers(_rawCmd)
+      : _rawCmd,
+    null,
+    2,
+  );
 
   return (
     <div className="border border-warn-line/60 bg-warn-soft/30 rounded-md">
@@ -578,17 +589,25 @@ function tryPayload(verb, field, value) {
 // Action bar
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ActionButton({ icon, label, hint, onClick, tone = 'neutral', active }) {
+function ActionButton({ icon, label, hint, onClick, tone = 'neutral', active, disabled, disabledReason }) {
   const tones = {
     neutral: 'border-ink-800 text-ink-200 hover:border-ink-650 hover:bg-ink-850',
     index:   'border-index-line/60 text-index hover:bg-index-soft/40',
     warn:    'border-warn-line/60 text-warn hover:bg-warn-soft/40',
     ledger:  'border-ledger-line/60 text-ledger hover:bg-ledger-soft/40',
   };
+  // SURFACE-C-020 (Wave C1-Amend): when disabled, mirror the existing
+  // "stage for commit" exemplar at line 556-562 — strip hover effect,
+  // add cursor-not-allowed, and use the title attribute for a tooltip
+  // that names the equivalent CLI command operators should run instead.
   const activeRing = active ? 'ring-1 ring-inset ring-ink-650' : '';
+  const disabledClasses = disabled ? 'opacity-60 cursor-not-allowed' : '';
   return (
-    <button onClick={onClick}
-            className={`group flex items-start gap-2 text-left px-3 py-2.5 rounded border bg-ink-900 ${tones[tone]} ${activeRing} transition`}>
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={!!disabled}
+      title={disabled ? disabledReason : undefined}
+      className={`group flex items-start gap-2 text-left px-3 py-2.5 rounded border bg-ink-900 ${tones[tone]} ${activeRing} ${disabledClasses} transition`}>
       <span className="mono text-[14px] leading-none pt-0.5">{icon}</span>
       <span>
         <span className="block mono text-[12px] leading-none">{label}</span>
@@ -890,8 +909,16 @@ function ClusterTruthInspector() {
           <span className="mono text-[10.5px] text-ink-600">— all mutations routed through the kernel</span>
         </div>
         <div className="grid grid-cols-5 gap-2">
+          {/*
+            SURFACE-C-020 (Wave C1-Amend): stub onClick handlers used to
+            silently do nothing. Operators saw clickable buttons that
+            looked active. Now disabled with a tooltip naming the
+            equivalent CLI command — mirrors the "stage for commit"
+            exemplar at line 556-562 in the same file.
+          */}
           <ActionButton icon="↘" label="resolve" hint="follow URI → owner record"
-                        onClick={() => {}} />
+                        disabled
+                        disabledReason={`run: db-cluster resolve ${focal.uri}`} />
           <ActionButton icon="≡" label="trace provenance" hint="expand full event path" tone="ledger"
                         active={traceExpanded}
                         onClick={() => setTraceExpanded((v) => !v)} />
@@ -899,7 +926,8 @@ function ClusterTruthInspector() {
                         active={openDrawer === 'explain'}
                         onClick={() => setOpenDrawer((d) => d === 'explain' ? null : 'explain')} />
           <ActionButton icon="↻" label="rebuild index" hint="delete & re-derive from owner stores"
-                        onClick={() => {}} />
+                        disabled
+                        disabledReason="run: db-cluster rebuild index --dry-run (preview), then without --dry-run to apply" />
           <ActionButton icon="⇢" label="propose mutation" hint="typed command · AI may propose · operator commits"
                         tone="warn"
                         active={openDrawer === 'propose'}

@@ -148,6 +148,27 @@ async function runMutation(
  * Uses the canonical lifecycle (propose → validate → approve → commit)
  * for every write. Direct `kernel.createEntity` / `ingestArtifact` /
  * `linkEvidence` calls are intentionally avoided (SURFACE-003).
+ *
+ * SURFACE-C-016 (Wave C1-Amend): added @example below to align with the
+ * JSDoc discipline used elsewhere in the SDK surface.
+ *
+ * @example
+ * import { ingestRepoKnowledge } from 'db-cluster/integrations/repo-knowledge';
+ *
+ * const result = await ingestRepoKnowledge(kernel, [
+ *   { kind: 'memory_file', path: 'memory/full-treatment.md', content: '...' },
+ *   { kind: 'memory_file', path: 'memory/shipcheck.md', content: '...' },
+ * ], {
+ *   repoName: 'mcp-tool-shop-org/db-cluster',
+ *   actorId: 'ingest-bot',
+ * });
+ * console.log(`${result.entityIds.length} entities, ${result.artifactIds.length} artifacts`);
+ *
+ * `inferEntityKind` heuristic: by default `kind` is taken from the
+ * source object; callers can override by pre-classifying sources (e.g.
+ * promote `'memory_file'` to `'protocol'` for memory/*.md). The
+ * heuristic is intentionally simple — wrap with a domain-specific
+ * pre-processor for finer-grained classification.
  */
 export async function ingestRepoKnowledge(
     kernel: IngestKernel,

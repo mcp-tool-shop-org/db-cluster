@@ -146,8 +146,11 @@ describe('Phase 5 — Mutation Law and Command Runtime', () => {
                 proposedBy: 'ai',
             });
 
+            // SHA-KERNEL-C-001 (Wave C1-Amend): typed
+            // InvalidStateTransitionError replaces bare new Error(...).
+            // Message reads "Cannot transition command X from status 'proposed' to 'approved'".
             await expect(kernel.approveMutation(cmd.id, 'admin'))
-                .rejects.toThrow(/Cannot approve.*proposed/);
+                .rejects.toThrow(/'proposed'.*'approved'/);
         });
     });
 
@@ -205,8 +208,10 @@ describe('Phase 5 — Mutation Law and Command Runtime', () => {
                 proposedBy: 'ai',
             });
 
+            // SHA-KERNEL-C-001 (Wave C1-Amend): typed
+            // InvalidStateTransitionError. Message: "Cannot transition command X from status 'proposed' to 'compensated'".
             await expect(kernel.compensateMutation(cmd.id, 'ops', 'mistake'))
-                .rejects.toThrow(/Cannot compensate.*proposed/);
+                .rejects.toThrow(/'proposed'.*'compensated'/);
         });
     });
 
@@ -372,8 +377,9 @@ describe('Phase 5 — Mutation Law and Command Runtime', () => {
             await kernel.validateMutation(cmd.id);
             await kernel.commitMutation(cmd.id, 'ai');
 
+            // SHA-KERNEL-C-001 (Wave C1-Amend): typed InvalidStateTransitionError.
             await expect(kernel.rejectMutation(cmd.id, 'admin', 'too late'))
-                .rejects.toThrow(/Cannot reject/);
+                .rejects.toThrow(/'committed'.*'rejected'/);
         });
 
         it('cannot approve a rejected command', async () => {
@@ -386,8 +392,9 @@ describe('Phase 5 — Mutation Law and Command Runtime', () => {
             await kernel.validateMutation(cmd.id);
             await kernel.rejectMutation(cmd.id, 'admin', 'nope');
 
+            // SHA-KERNEL-C-001 (Wave C1-Amend): typed InvalidStateTransitionError.
             await expect(kernel.approveMutation(cmd.id, 'admin'))
-                .rejects.toThrow(/Cannot approve/);
+                .rejects.toThrow(/'rejected'.*'approved'/);
         });
     });
 });

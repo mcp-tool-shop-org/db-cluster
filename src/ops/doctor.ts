@@ -31,12 +31,87 @@ export interface DoctorOptions {
      * window is treated as an orphan (the conservative choice).
      */
     commandQueue?: { list(): Command[] };
+    /**
+     * Progress callback (STORES-C-002). Fired between individual store
+     * reachability probes and the multi-step orphan/staging checks. The
+     * `total` count includes all built-in checks doctor() runs in this
+     * session (e.g. canonical / artifact / index / ledger reachability,
+     * index population, postgres migration, policy defaults, orphan
+     * mutations, staging files). `message` is a short human-readable
+     * label of the check currently running.
+     *
+     * Optional — CLI surface subscribes for live progress in the
+     * terminal; the SDK/MCP layer wires this through for callers that
+     * want to render a progress bar.
+     */
+    onProgress?: (current: number, total: number, message?: string) => void;
 }
 
+/**
+ * Run the full cluster health-check matrix and return a structured
+ * {@link ClusterHealth} report. Doctor never mutates cluster state; every
+ * finding is read-only and accompanied by an actionable remediation hint
+ * (either {@link HealthCheck.suggestedCommand} or
+ * {@link HealthCheck.nextSteps}).
+ *
+ * Checks performed (in order):
+ *   1. Store reachability — canonical / artifact / index / ledger.
+ *   2. Index-vs-truth population — empty index against populated truth.
+ *   3. Postgres migration registry — when `postgresPool` is supplied.
+ *   4. Policy defaults loadable.
+ *   5. Orphaned mutations — surfaces `mutation_orphaned` ledger events.
+ *   6. Orphan staging files — surfaces unreferenced pending-content/.
+ *
+ * Every check produced with `repairAvailable: true` ALSO carries
+ * {@link HealthCheck.suggestedCommand} so operator-facing surfaces can
+ * render `→ fix: ${cmd}` without conditional branching. Multi-step
+ * recoveries populate {@link HealthCheck.nextSteps} additionally.
+ *
+ * @param stores  ClusterStores bundle — canonical / artifact / index /
+ *                ledger adapters. Doctor calls `list({ limit: 1 })` on
+ *                each store for the reachability probe.
+ * @param options Doctor-specific knobs. See {@link DoctorOptions}.
+ * @returns       A {@link ClusterHealth} summarizing all checks. The
+ *                top-level `status` is the worst of the per-check statuses
+ *                (corrupt > unreachable > missing > stale > degraded >
+ *                healthy). Never throws — every check error is converted
+ *                to a `status: 'unreachable'` check.
+ * @throws        Doctor itself does not throw. Individual store-adapter
+ *                exceptions are caught and surfaced as `unreachable`
+ *                checks. The only path that could throw is a corrupted
+ *                CommandQueue handle passed via `options.commandQueue`;
+ *                doctor swallows those too (best-effort).
+ *
+ * @example
+ *   const health = await doctor(stores);
+ *   for (const check of health.checks) {
+ *       if (check.suggestedCommand) {
+ *           console.log(`  → fix: ${check.suggestedCommand}`);
+ *       }
+ *       if (check.nextSteps) {
+ *           for (const step of check.nextSteps) console.log(`    • ${step}`);
+ *       }
+ *   }
+ */
 export async function doctor(stores: ClusterStores, options?: DoctorOptions): Promise<ClusterHealth> {
     const checks: HealthCheck[] = [];
+    const onProgress = options?.onProgress;
+    // Conservative upper bound — actual count depends on postgresPool presence
+    // and dataDir presence; the CLI clamps display at `current ≤ total` so a
+    // slight over-count is fine.
+    const totalSteps = 8;
+    let step = 0;
+    const tick = (label: string) => {
+        step++;
+        try {
+            onProgress?.(step, totalSteps, label);
+        } catch {
+            // Best-effort: a misbehaving callback must not derail doctor.
+        }
+    };
 
     // --- Canonical store reachability ---
+    tick('canonical_reachable');
     try {
         await stores.canonical.list({ limit: 1 });
         checks.push({
@@ -55,10 +130,16 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
             severity: 'error',
             message: `Canonical store unreachable: ${err.message}`,
             repairAvailable: false,
+            nextSteps: [
+                'Verify DB_CLUSTER_CANONICAL_BACKEND and connection env vars (e.g. DB_CLUSTER_POSTGRES_URL).',
+                'Run `db-cluster stores verify` to test backend connectivity.',
+                'Inspect the cluster data directory permissions and disk space.',
+            ],
         });
     }
 
     // --- Artifact store reachability ---
+    tick('artifact_reachable');
     try {
         await stores.artifact.list({ limit: 1 });
         checks.push({
@@ -77,10 +158,15 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
             severity: 'error',
             message: `Artifact store unreachable: ${err.message}`,
             repairAvailable: false,
+            nextSteps: [
+                'Inspect the cluster data directory for read/write permissions.',
+                'Run `db-cluster stores verify` to confirm adapter state.',
+            ],
         });
     }
 
     // --- Index store reachability ---
+    tick('index_reachable');
     try {
         await stores.index.count();
         checks.push({
@@ -98,11 +184,17 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
             status: 'unreachable',
             severity: 'error',
             message: `Index store unreachable: ${err.message}`,
-            repairAvailable: false,
+            repairAvailable: true,
+            suggestedCommand: 'db-cluster rebuild index',
+            nextSteps: [
+                'Inspect the index file under the cluster data directory for corruption.',
+                'Run `db-cluster rebuild index` to reconstruct the index from owner truth.',
+            ],
         });
     }
 
     // --- Ledger store reachability ---
+    tick('ledger_reachable');
     try {
         await stores.ledger.listEvents({ limit: 1 });
         checks.push({
@@ -121,10 +213,15 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
             severity: 'error',
             message: `Ledger store unreachable: ${err.message}`,
             repairAvailable: false,
+            nextSteps: [
+                'Inspect the ledger events.json file for corruption.',
+                'Restore from a backup with `db-cluster restore <backup.json>`.',
+            ],
         });
     }
 
     // --- Index staleness check ---
+    tick('index_populated');
     try {
         const indexCount = await stores.index.count();
         if (indexCount === 0) {
@@ -139,6 +236,10 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
                     message: 'Index is empty but canonical/artifact stores have records. Index needs rebuild.',
                     repairAvailable: true,
                     suggestedCommand: 'db-cluster rebuild index',
+                    nextSteps: [
+                        'Run `db-cluster rebuild index --dry-run` first to inspect the plan.',
+                        'Then run `db-cluster rebuild index` to populate the index from owner truth.',
+                    ],
                 });
             } else {
                 checks.push({
@@ -169,6 +270,7 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
     // canonical-entities literal. When migration 002 adds a new required
     // table, only `getRequiredTables()` changes and this loop picks it up.
     if (options?.postgresPool) {
+        tick('postgres_migration');
         try {
             const required = getRequiredTables();
             // Single round-trip: ask information_schema for every required
@@ -192,14 +294,35 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
                     repairAvailable: false,
                 });
             } else {
+                // SHA-STORES-PHANTOM-CMD (Stage C Wave C1-Audit):
+                // Pre-fix this check set `suggestedCommand: 'db-cluster stores migrate'`.
+                // The CLI command DOES exist (cli.ts:1134) and runs
+                // PostgresCanonicalStore.migrate() — a `CREATE TABLE IF NOT
+                // EXISTS canonical_entities` shim. But there is no real
+                // applied_migrations registry yet (that lands with v0.2 per
+                // the Stage B B1-Amend deferral of AGG-B1-7), and Stage C
+                // advisor disposition is to NOT promise an operator-facing
+                // migration workflow that doesn't actually track applied
+                // migrations. Drop suggestedCommand; explain the situation
+                // via `details` + `nextSteps`.
                 checks.push({
                     name: 'postgres_migration',
                     store: 'migration',
                     status: 'missing',
                     severity: 'error',
-                    message: `Postgres required table(s) not found: ${missing.join(', ')}. Migrations not run.`,
-                    repairAvailable: true,
-                    suggestedCommand: 'db-cluster stores migrate',
+                    message: `Postgres required table(s) not found: ${missing.join(', ')}. Migration registry pending — manual schema setup required.`,
+                    repairAvailable: false,
+                    details:
+                        'A first-class applied_migrations registry lands with v0.2. Until then, ' +
+                        'the Postgres backend exposes a `db-cluster stores migrate` shim that calls ' +
+                        '`CREATE TABLE IF NOT EXISTS canonical_entities` but does not track applied ' +
+                        'migration state. Operators bootstrapping a fresh Postgres backend should run ' +
+                        'the shim once and inspect `information_schema.tables` to verify.',
+                    nextSteps: [
+                        'Inspect required tables in Postgres: `SELECT table_name FROM information_schema.tables WHERE table_name IN (\'canonical_entities\')`.',
+                        'For first-time setup of a fresh Postgres backend, run the schema bootstrap shim available via the SDK\'s PostgresCanonicalStore.migrate() method.',
+                        'For schema drift, consult the migration timeline in docs/operations.md (v0.2 will ship a real applied_migrations registry).',
+                    ],
                 });
             }
         } catch (err: any) {
@@ -210,6 +333,10 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
                 severity: 'error',
                 message: `Postgres health check failed: ${err.message}`,
                 repairAvailable: false,
+                nextSteps: [
+                    'Verify DB_CLUSTER_POSTGRES_URL is set and the Postgres instance accepts connections.',
+                    'Run `db-cluster stores verify` to test the connection out-of-band.',
+                ],
             });
         }
     }
@@ -219,6 +346,7 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
     void CANONICAL_TABLE;
 
     // --- Policy defaults loadable ---
+    tick('policy_defaults');
     try {
         const { DEFAULT_POLICIES } = await import('../policy/default-policies.js');
         if (DEFAULT_POLICIES.length > 0) {
@@ -239,6 +367,11 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
             severity: 'error',
             message: `Failed to load policy defaults: ${err.message}`,
             repairAvailable: false,
+            nextSteps: [
+                'Inspect `.db-cluster/policies.json` for malformed JSON or invalid rule shape.',
+                'Run `db-cluster policy explain` to see which policies the engine successfully loads.',
+                'If the file is corrupted, delete it to fall back to default policies; the policy engine will recreate it on next mutation.',
+            ],
         });
     }
 
@@ -259,6 +392,13 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
     // (no limit) and listEvents is only used to sample a small set for
     // display. The message reports the true count and (when capped)
     // notes the sample size.
+    //
+    // STORES-C-001 (Stage C Wave C1-Audit): pre-fix this check produced
+    // `repairAvailable: false` AND no suggestedCommand AND no nextSteps.
+    // Operators were told "uninspectable state" with no recovery path.
+    // Post-fix the check carries suggestedCommand (inspection command)
+    // AND nextSteps (multi-step recovery procedure).
+    tick('no_orphaned_mutations');
     try {
         const SAMPLE_LIMIT = 100;
         const orphanCount = await stores.ledger.countEvents({
@@ -282,6 +422,14 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
                 severity: 'warning',
                 message: `${orphanCount} orphaned mutation event(s) recorded${suffix}. A mutation completed against a store but its receipt write failed — the cluster has uninspectable state.`,
                 repairAvailable: false,
+                suggestedCommand: 'db-cluster verify',
+                nextSteps: [
+                    'Run `db-cluster verify` to confirm the orphan count and identify affected subjects.',
+                    'For each orphan, run `db-cluster trace <subjectId>` to inspect the lineage.',
+                    'Run `db-cluster receipts --limit 200` to confirm whether matching receipts are present or missing.',
+                    'If receipts are missing, the cluster\'s post-mutation provenance write failed: inspect logs around the original `mutation_orphaned` event timestamps to find the cause.',
+                    'Restore from a backup taken before the mutation_orphaned event timestamps if the orphan state is unrecoverable.',
+                ],
             });
         } else {
             checks.push({
@@ -301,6 +449,10 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
             severity: 'error',
             message: `Orphan check failed: ${err.message}`,
             repairAvailable: false,
+            nextSteps: [
+                'Inspect the ledger events.json file for corruption.',
+                'Run `db-cluster verify` to re-attempt the check via the verify surface.',
+            ],
         });
     }
 
@@ -322,6 +474,9 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
     //    whose payload.contentHash equals the filename's hash. We accept
     //    commands in any status — proposed/validated/approved/etc. — because
     //    rejected/committed commands should have already unlinked the file.
+    if (options?.dataDir) {
+        tick('no_orphan_staging');
+    }
     try {
         if (options?.dataDir) {
             const stagingDir = join(options.dataDir, 'pending-content');
@@ -392,6 +547,11 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
                         `delete them, or re-propose the corresponding ingest_artifact ` +
                         `commands.`,
                     repairAvailable: false,
+                    nextSteps: [
+                        'Inspect `<dataDir>/pending-content/` for files older than 1 hour.',
+                        'Run `db-cluster inspect-command <id>` against any proposed/validated ingest_artifact commands to identify matching hashes.',
+                        'Manually delete orphan staging files that have no matching command, or re-propose the ingest_artifact commands they correspond to.',
+                    ],
                 });
             } else {
                 checks.push({
@@ -412,6 +572,9 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
             severity: 'error',
             message: `Orphan-staging check failed: ${err.message}`,
             repairAvailable: false,
+            nextSteps: [
+                'Verify the cluster data directory and pending-content/ subdirectory permissions.',
+            ],
         });
     }
 

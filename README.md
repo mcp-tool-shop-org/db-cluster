@@ -2,9 +2,32 @@
   <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/brand/main/logos/db-cluster/readme.png" alt="db-cluster" width="800" />
 </p>
 
-**AI-native federated database cluster.**
+**AI-native federated database cluster.** Specialized truth stores behaving as one governed substrate — typed errors, structured exit codes, mutation receipts, MCP + SDK + CLI surfaces.
 
-An AI system should not query one flattened database. It should operate over a cluster of specialized truth stores, where each store preserves its native truth shape and the cluster exposes one coherent retrieval, provenance, and mutation surface.
+## Who is this for
+
+- **AI agents** that need trustworthy retrieval, structured error envelopes, and a mutation lifecycle that won't let them silently corrupt state.
+- **Operators** running graph + provenance stores who want typed exit codes, doctor/verify diagnostics, runbooks, and safe backup/restore.
+- **Developers** building cluster-backed applications who want a deliberate public API, fresh-install smoke tests, and per-method JSDoc + examples.
+- **Dashboard viewers** auditing cluster truth — store ownership, provenance lineage, command preview, redaction view.
+
+## Why use db-cluster
+
+- **Typed errors with `remediationHint`** — every `ClusterError` subclass answers WHAT TO DO, not just WHAT failed (CLI exit codes 65/70/77/78 mapped to typed-error codes).
+- **AI error envelopes** — `{code, message, retryable, remediation_hint, context, next_valid_actions}` schema; AI agents can branch on `code` and `retryable` instead of parsing prose.
+- **Receipts on every mutation** — content-addressable; provenance graph; rebuild-from-truth contract on the index store.
+- **MCP server with safety annotations** — read-only / staged / approval / write tools each carry machine-readable `readOnlyHint` / `destructiveHint` flags.
+- **SDK with policy enforcement** — `PolicyEnforcedKernel` is the only path; `ClusterKernel` is intentionally not exported.
+
+## Quickstart (3 steps)
+
+```bash
+npx db-cluster init                # 1. initialize .db-cluster/
+npx db-cluster ingest ./file.md    # 2. ingest an artifact
+npx db-cluster retrieve "query"    # 3. retrieve an evidence bundle
+```
+
+Full golden path: [`docs/quickstart.md`](docs/quickstart.md) (5 minutes).
 
 ## What this is
 
@@ -53,22 +76,23 @@ db-cluster commit ...
 db-cluster receipts
 ```
 
+See [`docs/cli.md`](docs/cli.md) for the full CLI reference (including the typed-error exit-code table).
+
 ## Status
 
-**Phase 15 — Release Readiness & Package Boundary: PASS.** Post-Wave-B1-Amend
-baseline: **778+ tests passing across 68 files** (the exact number tracks
-through each amend wave — see `CHANGELOG.md` for the per-wave count).
-Stryker mutation testing is shipped but experimental — not in the standing
-release-gate per the v2 dogfood-swarm protocol's verifier-3 doctrine. See
+**Phase 15 — Release Readiness & Package Boundary: PASS.** Post-Wave-C1-Amend
+baseline: **1200+ tests passing across 80+ files** (the exact number tracks
+through each amend wave — see `CHANGELOG.md` for the per-wave count). Stryker
+mutation testing is shipped but experimental — not in the standing release-gate
+per the v2 dogfood-swarm protocol's verifier-3 doctrine. See
 `docs/release-readiness.md` "Stryker mutation testing — current disposition".
 
 Phase 15 establishes a deliberate public API surface, package boundary, fresh
 install smoke tests, and release gate automation. The package is ready for
 versioned release as v0.1.0. The release-gate (`scripts/release-gate.mjs`) is
-8 stages — build, tests, pack, smoke-install, docs-drift, package-exports,
-completeness-checks, and (new in Wave B1-Amend) the doc-drift detector that
-typechecks every `typescript` code block in `docs/` against the real
-`src/types/*` surface.
+9 stages — build, tests, pack, smoke-install, docs-drift, package-exports,
+completeness-checks, doc-drift, and (new in Wave C1-Amend) JSDoc-completeness
+that verifies every required public symbol carries `@throws` + `@example`.
 
 Previous: Phase 14 — Repo-Knowledge Integration Gate.
 
@@ -87,6 +111,7 @@ Reference / Development phase history). Highlights:
 - [SDK](docs/sdk.md) / [CLI](docs/cli.md) / [MCP](docs/mcp.md) — surface references
 - [Policy and Redaction](docs/policy-and-redaction.md) — Principal, Capability, Policy, TrustZone
 - [Operations](docs/operations.md) — doctor, verify, rebuild, backup, restore
+- [Operator runbooks](docs/runbooks/README.md) — one runbook per typed-error class
 - [Release readiness](docs/release-readiness.md) — release flow + known flake patterns
 
 ## License

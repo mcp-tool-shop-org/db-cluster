@@ -156,3 +156,188 @@ When policy denies access:
 - Mutation proposals are rejected with reason
 - Redacted content shows `[REDACTED]` or `[Access restricted]`
 - The denial itself is not visible to the AI agent (prevents enumeration)
+
+## Error envelope shape (AiErrorEnvelope)
+
+When an MCP tool call fails, the server returns a typed error envelope. AI integrators should pattern-match on `code` and branch on `retryable` / `next_valid_actions` instead of parsing prose.
+
+The canonical TypeScript shape lives at [`src/types/ai-envelope.ts`](../src/types/ai-envelope.ts) — re-exported from `db-cluster/types` as `AiErrorEnvelope`. The shape is:
+
+```typescript
+import type { AiErrorEnvelope, EmptyResultMeta } from 'db-cluster/types';
+
+// Reference shape (informational — the real type lives in db-cluster/types):
+type AiErrorEnvelopeShape = {
+    /** Stable code — see CLUSTER_ERROR_CODES for the closed union. */
+    code: string;
+    /** Path-scrubbed message safe to surface to AI / operator. */
+    message: string;
+    /** Whether the operation can safely be retried unchanged. */
+    retryable: boolean;
+    /** Actionable next step. Mirrors ClusterError.remediationHint. */
+    remediation_hint: string;
+    /** Subclass-specific context pulled from public-readonly fields. */
+    context: Record<string, unknown>;
+    /** For command-lifecycle errors only: legal CommandStatus values. */
+    next_valid_actions?: string[];
+};
+void ({} as AiErrorEnvelope);
+void ({} as EmptyResultMeta);
+```
+
+The MCP transport wraps the envelope in the standard MCP error response:
+
+```json
+{
+  "isError": true,
+  "content": [
+    {
+      "type": "text",
+      "text": "<JSON-stringified AiErrorEnvelope>"
+    }
+  ],
+  "_meta": {
+    "operation": "error",
+    "code": "<same code as in body>"
+  }
+}
+```
+
+### AI agent branching pattern
+
+```typescript
+import type { AiErrorEnvelope } from 'db-cluster/types';
+declare const mcpClient: { call: (tool: string, args: any) => Promise<any> };
+declare const commandId: string;
+declare function askOperator(hint: string, ctx: Record<string, unknown>): Promise<void>;
+declare function retry(arg?: string): Promise<void>;
+declare function sleep(ms: number): Promise<void>;
+declare function jitter(): number;
+declare function surfaceFailure(env: AiErrorEnvelope): Promise<void>;
+
+async function branch() {
+    const result = await mcpClient.call('cluster_commit_mutation', { commandId });
+    if (result._meta?.operation === 'error') {
+        const env: AiErrorEnvelope = JSON.parse(result.content[0].text);
+
+        if (env.code === 'POLICY_DENIED') {
+            // Surface to operator; do NOT retry with elevated principal automatically.
+            return askOperator(env.remediation_hint, env.context);
+        }
+        if (env.next_valid_actions?.includes('validated')) {
+            // Validation step skipped — call validate first then retry commit.
+            await mcpClient.call('cluster_validate_mutation', { commandId });
+            return retry(commandId);
+        }
+        if (env.retryable) {
+            await sleep(jitter());
+            return retry();
+        }
+        // Otherwise surrender — terminal failure.
+        return surfaceFailure(env);
+    }
+}
+void branch;
+```
+
+### Example envelopes per error class
+
+**ContentHashMismatchError** (propose-time hash claim disagrees with bytes):
+
+```json
+{
+  "code": "CONTENT_HASH_MISMATCH",
+  "message": "Content hash mismatch on propose: caller claimed <hash1> but sha256(content)=<hash2>",
+  "retryable": false,
+  "remediation_hint": "Recompute the hash via sha256(content) and re-propose with the correct contentHash.",
+  "context": {
+    "claimedHash": "<hash1>",
+    "actualHash": "<hash2>"
+  }
+}
+```
+
+**CommandNotValidatedError** (commit called before validate):
+
+```json
+{
+  "code": "COMMAND_NOT_VALIDATED",
+  "message": "Command <id> has not been validated. Cannot commit.",
+  "retryable": false,
+  "remediation_hint": "Call validateMutation(commandId) before commitMutation — or run db-cluster validate <commandId>.",
+  "context": {
+    "commandId": "<id>"
+  },
+  "next_valid_actions": ["validated"]
+}
+```
+
+**CommandQueueCorruptError** (pending-commands.json unreadable):
+
+```json
+{
+  "code": "COMMAND_QUEUE_CORRUPT",
+  "message": "Command queue file is unreadable or corrupt: <path> (<cause>).",
+  "retryable": false,
+  "remediation_hint": "Recovery paths: (1) restore from backup, (2) delete the file to start fresh, (3) inspect by hand.",
+  "context": {
+    "filePath": "<path>"
+  }
+}
+```
+
+**PolicyDeniedError** (capability gate rejected):
+
+```json
+{
+  "code": "POLICY_DENIED",
+  "message": "Capability <cap> denied by policy <policy-name>.",
+  "retryable": false,
+  "remediation_hint": "The principal lacks the required capability. Request the capability from an operator OR call cluster_policy_explain to inspect the policy.",
+  "context": {
+    "capability": "read_owner_truth",
+    "matchedPolicyName": "default-external-read",
+    "principalId": "external-reader"
+  }
+}
+```
+
+## Empty-result envelope (EmptyResultMeta)
+
+Read tools that can return empty arrays carry an `_meta.empty_reason` distinguishing the three causes of emptiness:
+
+```typescript
+import type { EmptyResultMeta } from 'db-cluster/types';
+
+// Reference shape (informational — the real type lives in db-cluster/types):
+type EmptyResultMetaShape = {
+    _meta: {
+        empty_reason: 'no_data' | 'no_match' | 'all_filtered_by_policy';
+        remediation_hint: string;
+        filteredCount?: number;  // only on 'all_filtered_by_policy'
+    };
+};
+void ({} as EmptyResultMeta);
+void ({} as EmptyResultMetaShape);
+```
+
+| Reason | Meaning | AI branch |
+|---|---|---|
+| `no_data` | Store is empty for this query domain | Suggest ingest; don't widen the query. |
+| `no_match` | Store has data but nothing matched the query | Widen the query. |
+| `all_filtered_by_policy` | Records existed but policy filtered all out | Don't widen — the AI lacks the capability. Surface to operator. |
+
+Example with the empty-result meta:
+
+```json
+{
+  "resolvedEntities": [],
+  "resolvedArtifacts": [],
+  "indexRecords": [],
+  "_meta": {
+    "empty_reason": "all_filtered_by_policy",
+    "remediation_hint": "Policy filtered 14 records. Request 'read_owner_truth' capability.",
+    "filteredCount": 14
+  }
+}
+```

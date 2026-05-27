@@ -22,6 +22,20 @@ export interface MigrationPool {
 
 /**
  * Check Postgres migration status.
+ *
+ * @param pool Postgres pool-like handle exposing `query(text, values)`.
+ *             A real `pg.Pool` works, as does any mock conforming to the
+ *             {@link MigrationPool} interface.
+ * @returns    {@link MigrationStatus} summarizing which required tables
+ *             are present. `migrated: false` does NOT throw — it surfaces
+ *             via the structured result.
+ * @throws     Doesn't throw. Connection / query failures are caught and
+ *             surfaced as `migrated: false` with `message` capturing the
+ *             error.
+ *
+ * @example
+ *   const status = await checkMigrationStatus(pool);
+ *   if (!status.migrated) console.error(status.message);
  */
 export async function checkMigrationStatus(pool: MigrationPool): Promise<MigrationStatus> {
     try {
@@ -59,6 +73,15 @@ export async function checkMigrationStatus(pool: MigrationPool): Promise<Migrati
 
 /**
  * Verify schema matches expected structure.
+ *
+ * @param pool Postgres pool-like handle. See {@link MigrationPool}.
+ * @returns    Object with `valid: boolean` and `issues: string[]`. Empty
+ *             issues array means the schema matches expectations.
+ * @throws     Doesn't throw. Query errors are collected into `issues[]`.
+ *
+ * @example
+ *   const { valid, issues } = await verifySchema(pool);
+ *   if (!valid) issues.forEach(i => console.error(i));
  */
 export async function verifySchema(pool: MigrationPool): Promise<{ valid: boolean; issues: string[] }> {
     const issues: string[] = [];

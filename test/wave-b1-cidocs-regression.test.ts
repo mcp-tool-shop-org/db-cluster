@@ -205,15 +205,16 @@ describe('Wave B1-Amend CI/Docs regression — doc-drift detector', () => {
         expect(cfg.include).toContain('src/**/*');
     });
 
-    it('CIDOCS-B-001 §2d: release-gate.mjs wires doc-drift as [8/8]', () => {
+    it('CIDOCS-B-001 §2d: release-gate.mjs wires doc-drift (renumbered to [8/9] in Wave C1-Amend)', () => {
         const rg = readFileSync(join(ROOT, 'scripts/release-gate.mjs'), 'utf8');
-        expect(rg).toContain('[8/8] Doc-drift');
-        // The detector script path is built with `join(ROOT, 'scripts',
-        // 'doc-drift.mjs')` — assert the basename appears in source.
+        // Wave C1-Amend §2e added [9/9] JSDoc-completeness, renumbering 8/8 → 8/9.
+        // The fact of being doc-drift's stage is the contract; the exact number
+        // shifts as new stages land. The basename + doc-drift label are stable.
+        expect(rg).toMatch(/\[8\/\d+\] Doc-drift/);
         expect(rg).toContain("'doc-drift.mjs'");
-        // Stages 1–7 still present, renumbered:
-        expect(rg).toContain('[1/8] Build');
-        expect(rg).toContain('[7/8] Completeness');
+        // Stages 1 + completeness still present (numbering follows total stage count).
+        expect(rg).toMatch(/\[1\/\d+\] Build/);
+        expect(rg).toMatch(/\[7\/\d+\] Completeness/);
     });
 
     it('CIDOCS-B-001 §2d: doc-drift detector exits 0 on clean docs', () => {

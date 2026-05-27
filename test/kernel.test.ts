@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
-import { ProvenanceMissingError, CommandNotValidatedError } from '../src/kernel/errors.js';
+import { ProvenanceMissingError, CommandNotValidatedError, CommandNotFoundError } from '../src/kernel/errors.js';
 import type { ClusterStores } from '../src/contracts/index.js';
 
 describe('Wave 3 — Kernel Spine', () => {
@@ -224,8 +224,12 @@ describe('Wave 3 — Kernel Spine', () => {
     });
 
     it('commitMutation rejects unknown command IDs', async () => {
+        // KERNEL-C-005 (Wave C1-Amend): distinct typed error for the
+        // not-found case. Pre-fix collapsed to CommandNotValidatedError;
+        // the AI consumer can now branch on COMMAND_NOT_FOUND vs
+        // COMMAND_NOT_VALIDATED.
         await expect(
             kernel.commitMutation('bogus-command-id', 'user-1'),
-        ).rejects.toThrow(CommandNotValidatedError);
+        ).rejects.toThrow(CommandNotFoundError);
     });
 });

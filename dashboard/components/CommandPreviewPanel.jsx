@@ -9,9 +9,33 @@
  * - Compensation does not erase history
  */
 
-function CommandPreviewPanel({ commandState, receipts, onClose }) {
-    if (!commandState) return null;
+function CommandPreviewPanel({ state, commandState, receipts, onClose }) {
+    // Wave C1-Amend §2d (SURFACE-C-017): wrap in StateBoundary so the
+    // panel can render loading / empty / error / redacted states
+    // explicitly instead of returning null on null/undefined data.
+    // Backward-compat: when called with the legacy `commandState` prop,
+    // synthesize ComponentState.ready. When neither is set, surface an
+    // empty state with operator guidance.
+    const resolvedState = state || (
+        commandState
+            ? { kind: 'ready', data: { commandState, receipts } }
+            : { kind: 'empty', reason: 'no_data', remediationHint: 'Propose a mutation with `db-cluster propose <command-json>` then inspect with `db-cluster inspect-command <id>`.' }
+    );
 
+    return (
+        <window.StateBoundary state={resolvedState}>
+            {(data) => (
+                <CommandPreviewPanelBody
+                    commandState={data.commandState}
+                    receipts={data.receipts}
+                    onClose={onClose}
+                />
+            )}
+        </window.StateBoundary>
+    );
+}
+
+function CommandPreviewPanelBody({ commandState, receipts, onClose }) {
     const stages = [
         { key: 'proposed', label: 'proposed', description: 'AI or actor proposes a typed command' },
         { key: 'validated', label: 'validated', description: 'Kernel checks rules and structure' },
@@ -151,7 +175,20 @@ function CommandPreviewPanel({ commandState, receipts, onClose }) {
                     <div>
                         <div className="mono text-[10px] uppercase tracking-[0.12em] text-ink-500 mb-1.5">payload</div>
                         <pre className="mono text-[11px] text-ink-200 bg-ink-900 border border-ink-800 rounded p-2.5 overflow-auto max-h-[120px]">
-                            {JSON.stringify(commandState.payload, null, 2)}
+                            {/* Wave C1-Amend fix-up (Cluster E —
+                                V1-C1-009 + V3-C1-003): route through
+                                renderRedactionMarkers so {_redacted:true}
+                                markers render as '[REDACTED]' rather than
+                                leaking the literal marker object to
+                                operators. The helper is a no-op for
+                                payloads with no markers. */}
+                            {JSON.stringify(
+                                typeof window !== 'undefined' && typeof window.renderRedactionMarkers === 'function'
+                                    ? window.renderRedactionMarkers(commandState.payload)
+                                    : commandState.payload,
+                                null,
+                                2,
+                            )}
                         </pre>
                     </div>
 

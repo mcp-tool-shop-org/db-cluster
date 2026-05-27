@@ -25,3 +25,7 @@ export type {
 } from './provenance-graph.js';
 export type { RedactedMarker } from './redaction.js';
 export { isRedactedMarker, redactedMarker } from './redaction.js';
+// Wave C1-Amend §2a — AI envelope shapes (KERNEL-C-001).
+export type { AiErrorEnvelope, EmptyResultMeta } from './ai-envelope.js';
+// Wave C1-Amend §2d — Discriminated component state union for UI consumers.
+export type { ComponentState } from './component-state.js';

@@ -3,10 +3,43 @@
  *
  * Not a full dashboard. Just cluster integrity.
  * Actions are command suggestions, not silent mutations.
+ *
+ * Wave C1-Amend §2d (SURFACE-C-017 / SURFACE-C-018):
+ * - Accepts a `state` prop (ComponentState<OpsModel>) and wraps via the
+ *   StateBoundary. Pre-fix the panel returned `null` on null/undefined
+ *   `opsData`; operators couldn't distinguish loading from broken from
+ *   healthy-empty.
+ * - Consumes `opsData.repairSuggestions` (built by ops-model.ts) instead
+ *   of the static 4-item suggestedActions list. Pre-fix the repair
+ *   suggestions wired into the model were NEVER rendered — the warning
+ *   text appeared but the recovery commands sat in an unused array.
+ *
+ * Backward-compat: when called with the legacy `opsData` prop (no
+ * `state` wrapper), the panel auto-promotes to ComponentState.ready so
+ * existing call sites keep working through the migration.
  */
 
-function OperationsPanel({ opsData, onClose }) {
-    if (!opsData) return null;
+function OperationsPanel({ state, opsData, onClose }) {
+    // Migration shim: if `state` is missing but legacy `opsData` is
+    // provided, synthesize a ComponentState.ready. If both are missing,
+    // synthesize an empty state with operator guidance.
+    const resolvedState = state || (
+        opsData
+            ? { kind: 'ready', data: opsData }
+            : { kind: 'empty', reason: 'no_data', remediationHint: 'Run `db-cluster doctor --json` to populate cluster health.' }
+    );
+
+    // Wrap the panel body in StateBoundary so loading / empty / error /
+    // redacted states get a uniform render path.
+    return (
+        <window.StateBoundary state={resolvedState}>
+            {(data) => <OperationsPanelBody data={data} onClose={onClose} />}
+        </window.StateBoundary>
+    );
+}
+
+function OperationsPanelBody({ data, onClose }) {
+    const opsData = data;
 
     const overallColor = {
         healthy: 'text-ok',
@@ -146,27 +179,54 @@ function OperationsPanel({ opsData, onClose }) {
                 </div>
             </div>
 
-            {/* Repair suggestions */}
+            {/* Repair suggestions — SURFACE-C-018 (Wave C1-Amend):
+                consume opsData.repairSuggestions (built by ops-model.ts)
+                instead of a static 4-item list. When repairSuggestions is
+                empty AND the cluster is healthy, surface a "healthy" no-op
+                line so operators see the panel is active, not broken. */}
             <div className="px-4 pb-4">
                 <div className="mono text-[10px] uppercase tracking-[0.12em] text-ink-500 mb-2">suggested actions</div>
                 <div className="space-y-2">
-                    <SuggestedAction command="db-cluster reindex" description="Rebuild index from owner stores" />
-                    <SuggestedAction command="db-cluster doctor" description="Run full cluster health check" />
-                    <SuggestedAction command="db-cluster verify" description="Verify data consistency" />
-                    <SuggestedAction command="db-cluster backup" description="Create cluster backup" />
+                    {Array.isArray(opsData.repairSuggestions) && opsData.repairSuggestions.length > 0 ? (
+                        opsData.repairSuggestions.map((rs, idx) => (
+                            <SuggestedAction
+                                key={(rs.action || 'action') + ':' + idx}
+                                command={rs.command}
+                                description={rs.description}
+                                severity={rs.severity}
+                            />
+                        ))
+                    ) : opsData.overall === 'healthy' ? (
+                        <div className="mono text-[10.5px] text-ink-500 px-2.5 py-2">
+                            No repair needed — cluster healthy.
+                        </div>
+                    ) : (
+                        <SuggestedAction
+                            command="db-cluster doctor"
+                            description="Run full cluster health check"
+                        />
+                    )}
                 </div>
             </div>
         </div>
     );
 }
 
-function SuggestedAction({ command, description }) {
+function SuggestedAction({ command, description, severity }) {
+    // SURFACE-C-018 (Wave C1-Amend): colorize by severity so operators
+    // see "this is an error vs warning vs info" at a glance.
+    const severityColor =
+        severity === 'error' ? 'border-danger-line text-danger' :
+        severity === 'warn' ? 'border-warn-line text-warn' :
+        'border-ink-850 text-ledger';
     return (
-        <div className="flex items-center gap-3 px-2.5 py-2 rounded border border-ink-850 bg-ink-900/50">
-            <span className="mono text-[11px] text-ledger">{command}</span>
+        <div className={`flex items-center gap-3 px-2.5 py-2 rounded border bg-ink-900/50 ${severityColor}`}>
+            <span className="mono text-[11px]">{command}</span>
             <span className="mono text-[10.5px] text-ink-500">{description}</span>
         </div>
     );
 }
 
-window.OperationsPanel = OperationsPanel;
+if (typeof window !== 'undefined') {
+    window.OperationsPanel = OperationsPanel;
+}

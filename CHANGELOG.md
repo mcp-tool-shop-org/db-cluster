@@ -1,6 +1,63 @@
 # Changelog
 
+The CHANGELOG audience is **external readers** — operators, developers, and AI integrators picking up db-cluster from npm or GitHub. Each wave section opens with three audience-tagged blocks:
+
+- **User-visible changes** — what AI agents / operators / developers experience differently this release.
+- **Breaking changes** — API / CLI / MCP / SDK contract changes (the package is 0.x.x — breaking is permitted but always documented).
+- **Migration notes** — how to update existing usage.
+
+Internal swarm-finding IDs (KERNEL-X-NNN, STORES-X-NNN, AGG-NNN) appear as **backlinks at the bottom** of each wave section so the audit trail is preserved, but the body text is written for the external reader.
+
+## Wave C1-Amend — Dogfood-swarm Stage C Wave C1 amend (2026-05-27)
+
+Stage C Wave C1 amend closing the 68 behavioral-humanization findings the Stage C audit surfaced (25 HIGH + 38 MEDIUM + 5 LOW + 8 should-have-been-A). The wave addresses the gap between "structurally sound" (Stage B exit) and "actually usable" — typed-error remediation, AI envelope enrichment, operator runbooks, JSDoc completeness.
+
+### User-visible changes
+
+- **AI agents** now receive structured error envelopes (`AiErrorEnvelope`: `code` + `retryable` + `remediation_hint` + `context` + optional `next_valid_actions`) at every MCP / SDK error boundary — pattern-match on `code`, branch on `retryable`, instead of parsing prose. See `docs/mcp.md` "Error envelope shape".
+- **Operators** get four new runbooks in `docs/runbooks/` — one per failure class (corrupt-store, orphan-mutations, index-stale, postgres-unreachable). Each runbook follows the same Symptom / Cause / Verify / Recover / Escalate shape.
+- **CLI exit codes** are documented in `docs/cli.md` with a full typed-error → exit-code table. Operators can branch CI pipelines on `$?` without parsing stderr.
+- **Developers** can find `@example` blocks on every required public symbol. The new `scripts/jsdoc-gate.mjs` `[9/9]` release-gate stage enforces this forward.
+- **Dashboard viewers** see explicit loading / empty / error states instead of `null` returns — and the documented redaction-marker contract is now wired at every panel consumer.
+- **README** front-loads "Who is this for" + "Why use db-cluster" + 3-step quickstart so the 30-second test passes.
+- **CHANGELOG** restructured: per-wave User-visible / Breaking / Migration blocks (you're reading this format now).
+
+### Breaking changes
+
+- None at the contract level — this wave adds new types (`AiErrorEnvelope`, `EmptyResultMeta`, `ComponentState`) and enriches existing error subclasses with public-readonly fields (`code`, `remediationHint`, `retryable`). Existing consumers continue to work; new consumers can branch on the richer fields.
+
+### Migration notes
+
+- AI integrators previously parsing prose error messages should switch to `instanceof ClusterError` + `err.code` branches (Node-side) or `AiErrorEnvelope` pattern-match (MCP-side). See `docs/mcp.md` for the canonical branching pattern.
+- Operators who scripted against the CLI should consult the new `docs/cli.md` "Exit Codes" table and replace `[ "$?" -ne 0 ]` checks with code-specific branches (65 = data error, 70 = internal, 77 = permission, 78 = config).
+- Custom dashboard components should adopt the `ComponentState<T>` prop shape — returning `null` from a panel is no longer acceptable per the dashboard contract.
+
+### Release-gate
+
+- New `[9/9] JSDoc-completeness` stage in `scripts/release-gate.mjs`. Verifies every symbol in `REQUIRED_JSDOC_SYMBOLS` carries `@throws` (or `@returns Promise<...>` with explicit error type) + at least one `@example`. The allowlist is forward-looking — new public methods added after 2026-05-27 must opt in.
+
+### Internal swarm-finding backlinks (audit trail)
+
+Wave C1-Amend closes findings KERNEL-C-001 through KERNEL-C-012, STORES-C-001 through STORES-C-012, SURFACE-C-001 through SURFACE-C-023, TESTS-C-001 through TESTS-C-011, CIDOCS-C-001 through CIDOCS-C-010, plus 8 should-have-been-A items (SHA-KERNEL-C-001, SHA-STORES-PHANTOM-CMD, SHA-SURFACE-LEAK-1 through -5, SHA-CIDOCS-C-SHBA-001). Full audit + amend reports: `swarm-stage-c-audit-1-1779892297.md` + `.stage-c-amend/`.
+
 ## Wave B1-Amend — Dogfood-swarm Stage B Wave B1 amend (2026-05-27)
+
+### User-visible changes
+
+- **Doc-drift detector** runs as `[8/8] Doc-drift` in the release-gate, typechecking every TypeScript code block in `docs/**/*.md` against the real `src/types/*` surface. Operators reading docs no longer hit invented field names.
+- **Operations docs corrected** — `operations.md` now accurately says backup captures "base64-encoded content + SHA-256 checksum" (was wrongly: "metadata, not raw content").
+- **CI matrix expanded** to Node 20/22/24 × ubuntu/windows/macOS.
+- **`workflow_dispatch` triggers** on `ci.yml` + `release-gate.yml` so operators can re-run on a specific SHA.
+
+### Breaking changes
+
+- None.
+
+### Migration notes
+
+- No caller-side migration required. Custom docs pages that include `typescript` blocks must now use real `EvidenceBundle` / `ResolvedEvidence` / `ProvenanceGraph` / `ProvenanceNode` / `ProvenanceEdge` shapes — the doc-drift detector enforces.
+
+### Internal swarm-finding backlinks (audit trail)
 
 Stage B Wave B1 amend closing the 130 unique proactive-health findings the
 Stage B audit surfaced after Stage A exited at Wave A4. This wave runs

@@ -13,7 +13,7 @@ import type { ProvenanceEvent } from '../types/provenance-event.js';
 import type { Receipt } from '../types/receipt.js';
 import type { Command } from '../types/command.js';
 import { ImportSnapshotNotSupportedError } from './errors.js';
-import { assertContentMatch } from '../adapters/local/errors.js';
+import { assertContentMatch, BackupTargetExistsError } from '../adapters/local/errors.js';
 
 /**
  * Extract the stable identity-bearing fields from an Artifact metadata record
@@ -90,6 +90,29 @@ export interface BackupOptions {
      * call sites pass the same path used to construct the cluster.
      */
     dataDir?: string;
+    /**
+     * Progress callback fired as the backup walks each store
+     * (STORES-C-002). `total` is the projected count of records the backup
+     * will iterate (entities + artifacts + events + receipts + staging
+     * files), `current` is records walked so far. Optional.
+     */
+    onProgress?: (current: number, total: number, message?: string) => void;
+    /**
+     * Optional output path. When set, the resulting backup JSON is written
+     * to this path via writeFileSync after assembly. Returns the assembled
+     * ClusterBackup regardless of write outcome. Pre-Stage-C `backup()`
+     * left writing to the caller (the CLI); callers may still do that. The
+     * library-level path-write is here so the overwrite guard
+     * (STORES-C-006) is enforced uniformly across CLI / MCP / SDK consumers.
+     */
+    outputPath?: string;
+    /**
+     * Overwrite an existing file at {@link outputPath}. When `outputPath` is
+     * set and the target exists, `force: false` (the default) throws
+     * {@link BackupTargetExistsError}; `force: true` overwrites.
+     * Closes STORES-C-006.
+     */
+    force?: boolean;
 }
 
 export interface RestoreResult {
@@ -104,6 +127,25 @@ export interface RestoreResult {
      * accumulates per-file failures (e.g., contentHash mismatch).
      */
     staging?: { restored: number; skipped: number; errors: string[] };
+    /**
+     * STORES-C-003: whether this was a dry-run. When `true`, no mutation
+     * happened against any store — the counts reflect what WOULD happen.
+     */
+    dryRun: boolean;
+    /**
+     * STORES-C-003: per-result summary string for human-facing surfaces.
+     * Captures "entities: N created, M skipped, K errored" across all
+     * store kinds. CLI / dashboard / SDK surfaces render this verbatim
+     * alongside the structured counts.
+     */
+    summary: string;
+    /**
+     * STORES-C-003: non-fatal warnings collected during the restore (e.g.
+     * "snapshot has no staging files but dataDir was supplied"). Distinct
+     * from `.entities.errors` etc. — those are per-record failures; this
+     * is for whole-restore advisory messages.
+     */
+    warnings: string[];
 }
 
 export interface RestoreOptions {
@@ -115,18 +157,89 @@ export interface RestoreOptions {
      * call sites pass the same path used to construct the cluster.
      */
     dataDir?: string;
+    /**
+     * STORES-C-003: when true, do NOT mutate any store. Walk the backup
+     * payload, project what WOULD happen against the live cluster (counts
+     * + per-record errors), and return the structured RestoreResult.
+     * Useful for operator preview before destructive restore.
+     */
+    dryRun?: boolean;
+    /**
+     * Progress callback fired between records as the restore walks each
+     * store kind (STORES-C-002). `total` is the projected record count
+     * across entities + artifacts + events + receipts + staging,
+     * `current` is records walked.
+     */
+    onProgress?: (current: number, total: number, message?: string) => void;
 }
 
 /**
  * Export cluster state as a portable JSON backup.
- * Includes artifact content by default for complete restore.
+ *
+ * The output is an in-memory {@link ClusterBackup} object. When
+ * `options.outputPath` is set, the JSON is also written to that path; the
+ * write is guarded by {@link BackupTargetExistsError} unless `options.force`
+ * is `true` (STORES-C-006).
+ *
+ * @param stores   ClusterStores bundle. Reads canonical.list +
+ *                 artifact.list + artifact.getContent + ledger.listEvents +
+ *                 ledger.listReceipts. Never mutates state.
+ * @param options  See {@link BackupOptions}.
+ * @returns        {@link ClusterBackup} — version=1 envelope including
+ *                 entities, artifacts (legacy slot), artifactSnapshots
+ *                 (preferred slot with content), events, receipts, and
+ *                 optionally commands + staging files.
+ * @throws         {@link BackupTargetExistsError} when `outputPath` is set,
+ *                 the target exists, and `force` is not `true`.
+ *
+ * @example
+ *   // Library use
+ *   const data = await backup(stores);
+ *   writeFileSync('snapshot.json', JSON.stringify(data));
+ *
+ *   // CLI-style use with overwrite guard
+ *   try {
+ *       await backup(stores, { outputPath: 'snapshot.json' });
+ *   } catch (e) {
+ *       if (e instanceof BackupTargetExistsError) {
+ *           console.error(e.remediationHint);  // Suggest --force
+ *       }
+ *   }
  */
 export async function backup(stores: ClusterStores, options?: BackupOptions): Promise<ClusterBackup> {
+    // STORES-C-006: check outputPath BEFORE walking the stores so we fail
+    // fast — operators retrying with --force should not pay the I/O cost.
+    if (options?.outputPath) {
+        if (existsSync(options.outputPath) && !options.force) {
+            throw new BackupTargetExistsError(options.outputPath);
+        }
+    }
+
     const includeContent = options?.includeContent ?? true;
+    const onProgress = options?.onProgress;
+
     const entities = await stores.canonical.list({});
     const artifacts = await stores.artifact.list({});
     const events = await stores.ledger.listEvents({});
     const receipts = await stores.ledger.listReceipts({});
+
+    const total =
+        entities.length + artifacts.length + events.length + receipts.length;
+    let current = 0;
+    const tick = (label?: string) => {
+        try {
+            onProgress?.(current, total, label);
+        } catch {
+            // Best-effort.
+        }
+    };
+
+    // Entities are eager-listed above; tick once per entity for parity with
+    // restore's per-record progress.
+    for (let i = 0; i < entities.length; i++) {
+        current++;
+        tick(`entity ${entities[i].id}`);
+    }
 
     const artifactSnapshots: ArtifactSnapshot[] = [];
     for (const artifact of artifacts) {
@@ -138,6 +251,17 @@ export async function backup(stores: ClusterStores, options?: BackupOptions): Pr
             }
         }
         artifactSnapshots.push(snapshot);
+        current++;
+        tick(`artifact ${artifact.id}`);
+    }
+
+    for (let i = 0; i < events.length; i++) {
+        current++;
+        tick(`event ${events[i].id}`);
+    }
+    for (let i = 0; i < receipts.length; i++) {
+        current++;
+        tick(`receipt ${receipts[i].id}`);
     }
 
     const commands = options?.commandQueue ? options.commandQueue.list() : undefined;
@@ -175,7 +299,7 @@ export async function backup(stores: ClusterStores, options?: BackupOptions): Pr
         }
     }
 
-    return {
+    const result: ClusterBackup = {
         version: 1,
         createdAt: new Date().toISOString(),
         entities,
@@ -186,22 +310,88 @@ export async function backup(stores: ClusterStores, options?: BackupOptions): Pr
         commands,
         staging,
     };
+
+    // STORES-C-006: optional library-level write. The overwrite guard ran
+    // above; this is just the materialization.
+    if (options?.outputPath) {
+        writeFileSync(options.outputPath, JSON.stringify(result, null, 2), 'utf-8');
+        try {
+            onProgress?.(total, total, `wrote ${options.outputPath}`);
+        } catch {
+            // Best-effort.
+        }
+    }
+
+    return result;
 }
 
 /**
  * Restore cluster state from a backup.
- * Existing records are skipped (idempotent). Index is rebuilt after restore.
+ *
+ * Existing records are skipped (idempotent). Per-record errors are collected
+ * in {@link RestoreResult.entities}.errors / .artifacts.errors / etc. — never
+ * silently swallowed (STORES-C-003). Index is rebuilt after restore unless
+ * `options.dryRun` is true.
+ *
+ * @param stores   ClusterStores bundle. Writes via canonical.importSnapshot /
+ *                 artifact.importSnapshot / ledger.importEvent /
+ *                 ledger.importReceipt. Each adapter MUST implement the
+ *                 import* hook (STORES-001/002/003); a missing method throws
+ *                 {@link ImportSnapshotNotSupportedError}.
+ * @param data     The {@link ClusterBackup} to restore. Must have
+ *                 `version: 1`.
+ * @param options  See {@link RestoreOptions}.
+ * @returns        Structured {@link RestoreResult} with per-store counts +
+ *                 per-record errors[] + summary + warnings[] + dryRun flag.
+ * @throws         {@link ImportSnapshotNotSupportedError} when an adapter
+ *                 lacks the required import* method. Adapter-level errors
+ *                 from individual records are CAUGHT and collected into the
+ *                 result's errors arrays — they do not abort the whole
+ *                 restore.
+ *
+ * @example
+ *   // Dry-run first
+ *   const preview = await restore(stores, data, { dryRun: true });
+ *   console.log(preview.summary);
+ *
+ *   // Then commit
+ *   if (preview.entities.errors.length === 0) {
+ *       const result = await restore(stores, data);
+ *       console.log(result.summary);
+ *   }
  */
 export async function restore(stores: ClusterStores, data: ClusterBackup, options?: RestoreOptions): Promise<RestoreResult> {
     if (data.version !== 1) {
         throw new Error(`Unsupported backup version: ${data.version}`);
     }
 
+    const dryRun = options?.dryRun ?? false;
+    const onProgress = options?.onProgress;
+    const warnings: string[] = [];
+
     const result: RestoreResult = {
         entities: { created: 0, skipped: 0, errors: [] },
         artifacts: { created: 0, skipped: 0, errors: [] },
         events: { created: 0, skipped: 0, errors: [] },
         receipts: { created: 0, skipped: 0, errors: [] },
+        dryRun,
+        summary: '',
+        warnings,
+    };
+
+    const total =
+        data.entities.length +
+        (data.artifactSnapshots?.length ?? data.artifacts.length) +
+        data.events.length +
+        data.receipts.length +
+        (data.staging?.length ?? 0);
+    let current = 0;
+    const tick = (label?: string) => {
+        try {
+            onProgress?.(current, total, label);
+        } catch {
+            // Best-effort.
+        }
     };
 
     // Restore entities — preserves original IDs (STORES-001).
@@ -231,12 +421,16 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
                 }
                 result.entities.skipped++;
             } else {
-                await canonicalImport.call(stores.canonical, entity);
+                if (!dryRun) {
+                    await canonicalImport.call(stores.canonical, entity);
+                }
                 result.entities.created++;
             }
         } catch (err: any) {
             result.entities.errors.push(`Entity ${entity.id}: ${err.message}`);
         }
+        current++;
+        tick(`entity ${entity.id}`);
     }
 
     // Restore artifacts (from snapshots if available, otherwise metadata-only).
@@ -286,7 +480,9 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
                         );
                         continue;
                     }
-                    await artifactImport.call(stores.artifact, snapshot.metadata, content);
+                    if (!dryRun) {
+                        await artifactImport.call(stores.artifact, snapshot.metadata, content);
+                    }
                     result.artifacts.created++;
                 } else {
                     // Metadata-only backup — cannot restore content
@@ -297,6 +493,8 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
             } catch (err: any) {
                 result.artifacts.errors.push(`Artifact ${snapshot.metadata.id}: ${err.message}`);
             }
+            current++;
+            tick(`artifact ${snapshot.metadata.id}`);
         }
     }
 
@@ -321,12 +519,16 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
                 assertContentMatch('ledger-event', event.id, existing as unknown as Record<string, unknown>, event as unknown as Record<string, unknown>);
                 result.events.skipped++;
             } else {
-                await ledgerImportEvent!.call(stores.ledger, event);
+                if (!dryRun) {
+                    await ledgerImportEvent!.call(stores.ledger, event);
+                }
                 result.events.created++;
             }
         } catch (err: any) {
             result.events.errors.push(`Event ${event.id}: ${err.message}`);
         }
+        current++;
+        tick(`event ${event.id}`);
     }
 
     // Restore receipts — same story as events: `appendReceipt()` re-numbers
@@ -345,22 +547,32 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
                 assertContentMatch('ledger-receipt', receipt.id, existing as unknown as Record<string, unknown>, receipt as unknown as Record<string, unknown>);
                 result.receipts.skipped++;
             } else {
-                await ledgerImportReceipt!.call(stores.ledger, receipt);
+                if (!dryRun) {
+                    await ledgerImportReceipt!.call(stores.ledger, receipt);
+                }
                 result.receipts.created++;
             }
         } catch (err: any) {
             result.receipts.errors.push(`Receipt ${receipt.id}: ${err.message}`);
         }
+        current++;
+        tick(`receipt ${receipt.id}`);
     }
 
-    // Rebuild index after restore
-    const { rebuildIndex } = await import('./rebuild.js');
-    await rebuildIndex(stores);
+    // Rebuild index after restore (skipped on dry-run).
+    if (!dryRun) {
+        const { rebuildIndex } = await import('./rebuild.js');
+        await rebuildIndex(stores);
+    } else {
+        warnings.push('dry-run: index rebuild skipped');
+    }
 
     // Restore commands if command queue provided
     if (data.commands && options?.commandQueue) {
-        for (const command of data.commands) {
-            options.commandQueue.save(command);
+        if (!dryRun) {
+            for (const command of data.commands) {
+                options.commandQueue.save(command);
+            }
         }
         result.commands = { restored: data.commands.length };
     }
@@ -372,10 +584,12 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
     // format) is a no-op — silently treated as "no staging files."
     if (options?.dataDir && Array.isArray(data.staging) && data.staging.length > 0) {
         const stagingDir = join(options.dataDir, 'pending-content');
-        try {
-            mkdirSync(stagingDir, { recursive: true });
-        } catch {
-            // Defer error surfacing to the per-entry loop.
+        if (!dryRun) {
+            try {
+                mkdirSync(stagingDir, { recursive: true });
+            } catch {
+                // Defer error surfacing to the per-entry loop.
+            }
         }
         const stagingResult = { restored: 0, skipped: 0, errors: [] as string[] };
         for (const entry of data.staging) {
@@ -399,14 +613,49 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
                     stagingResult.skipped++;
                     continue;
                 }
-                writeFileSync(targetPath, buf);
+                if (!dryRun) {
+                    writeFileSync(targetPath, buf);
+                }
                 stagingResult.restored++;
             } catch (err: any) {
                 stagingResult.errors.push(`Staging entry ${entry.contentHash}: ${err.message}`);
             }
+            current++;
+            tick(`staging ${entry.contentHash.slice(0, 8)}`);
         }
         result.staging = stagingResult;
+    } else if (options?.dataDir && (!data.staging || data.staging.length === 0)) {
+        // Advisory: dataDir supplied but backup has no staging snapshot.
+        // Older backup format predates V1-A4-004; not an error, but the
+        // operator may want to know.
+        if (data.staging === undefined) {
+            warnings.push('backup snapshot pre-dates staging support (V1-A4-004); no staging files restored');
+        }
     }
+
+    // Build the operator-facing summary string.
+    const parts: string[] = [];
+    parts.push(
+        `entities: ${result.entities.created} created, ${result.entities.skipped} skipped, ${result.entities.errors.length} errored`,
+    );
+    parts.push(
+        `artifacts: ${result.artifacts.created} created, ${result.artifacts.skipped} skipped, ${result.artifacts.errors.length} errored`,
+    );
+    parts.push(
+        `events: ${result.events.created} created, ${result.events.skipped} skipped, ${result.events.errors.length} errored`,
+    );
+    parts.push(
+        `receipts: ${result.receipts.created} created, ${result.receipts.skipped} skipped, ${result.receipts.errors.length} errored`,
+    );
+    if (result.staging) {
+        parts.push(
+            `staging: ${result.staging.restored} restored, ${result.staging.skipped} skipped, ${result.staging.errors.length} errored`,
+        );
+    }
+    if (result.commands) {
+        parts.push(`commands: ${result.commands.restored} restored`);
+    }
+    result.summary = (dryRun ? '[DRY RUN] ' : '') + parts.join('; ');
 
     return result;
 }
