@@ -1,0 +1,36 @@
+id: optional-import-contract-method
+language: typescript
+severity: error
+message: |
+  Store-contract `import*` methods (`importSnapshot`, `importEvent`,
+  `importReceipt`) MUST NOT be declared optional (`?:`) on contract
+  interfaces in `src/contracts/`. Optional contract methods invite
+  silent skipping at restore time — restore() needs every adapter to
+  implement them. If a backend cannot honor the contract, the adapter
+  should throw `ImportSnapshotNotSupportedError` from a required method,
+  not omit the method.
+
+  Closes STORES-R2-002 — declare these as required and have adapters
+  that cannot implement them throw the typed error from `src/ops/errors.ts`.
+rule:
+  any:
+    - pattern: |
+        interface $IFACE {
+          $$$
+          importSnapshot?($$$): $RET
+          $$$
+        }
+    - pattern: |
+        interface $IFACE {
+          $$$
+          importEvent?($$$): $RET
+          $$$
+        }
+    - pattern: |
+        interface $IFACE {
+          $$$
+          importReceipt?($$$): $RET
+          $$$
+        }
+files:
+  - "src/contracts/*.ts"

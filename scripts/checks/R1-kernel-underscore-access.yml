@@ -1,0 +1,14 @@
+id: kernel-underscore-access
+language: typescript
+severity: error
+message: |
+  Access to the private `_kernel` escape hatch is forbidden. Wave A2
+  (SURFACE-R001) deleted every caller that reached past the
+  PolicyEnforcedKernel wrapper this way. New uses re-introduce the policy
+  bypass — call the wrapper method directly or extend it.
+rule:
+  pattern: $KERNEL._kernel
+files:
+  - "src/**/*.ts"
+ignores:
+  - "test/**"

@@ -1,0 +1,41 @@
+{
+    "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+    "_comment": "Stryker config targeting code paths exercised by Waves A1/A2/A3. See CHANGELOG.md Wave A3 for the rationale. Run via `npm run test:mutation`.",
+    "packageManager": "npm",
+    "reporters": ["progress", "clear-text", "html"],
+    "testRunner": "vitest",
+    "vitest": {
+        "configFile": "vitest.stryker.config.ts"
+    },
+    "coverageAnalysis": "off",
+    "concurrency": 2,
+    "timeoutMS": 60000,
+    "timeoutFactor": 2.0,
+    "checkers": ["typescript"],
+    "tsconfigFile": "tsconfig.json",
+    "disableTypeChecks": false,
+    "mutate": [
+        "src/kernel/errors.ts",
+        "src/kernel/command-queue.ts",
+        "src/kernel/policy-enforced-kernel.ts",
+        "src/policy/redactor.ts",
+        "src/ops/verify.ts",
+        "src/ops/rebuild.ts",
+        "src/adapters/local/local-canonical-store.ts",
+        "src/sdk/cluster-sdk.ts",
+        "src/mcp/server.ts"
+    ],
+    "ignorePatterns": [
+        "dist/**",
+        "node_modules/**",
+        ".stryker-tmp/**",
+        "reports/**",
+        "*.tgz",
+        "dashboard/**"
+    ],
+    "thresholds": {
+        "high": 80,
+        "low": 60,
+        "break": null
+    }
+}

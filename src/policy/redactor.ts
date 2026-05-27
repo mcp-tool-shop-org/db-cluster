@@ -114,16 +114,24 @@ export function redactReceipt(receipt: Receipt, rules: RedactionRule[]): Receipt
 /**
  * Redact a single ProvenanceEvent surfaced through {@link
  * import('../kernel/cluster-kernel.js').ClusterKernel.explainIndex} when
- * the index record points at a ledger source. The shape parallels
- * {@link redactEntity}: we strip leaky fields based on rules but keep the
- * audit-essential identifiers (id, action, timestamp, subjectId,
- * subjectStore). KERNEL-R005.
+ * the index record points at a ledger source, or through any flat-event
+ * surface (e.g. `traceProvenance`, `retrieveBundle.provenanceEvents`).
+ * The shape parallels {@link redactEntity}: we strip leaky fields based
+ * on rules but keep the audit-essential identifiers (id, action,
+ * timestamp, subjectId, subjectStore). KERNEL-R005 / KERNEL-R2-006.
  *
  * Rules consulted:
- * - `command_payload` → strips the `detail.payload` and `detail.commandId`
- *   fields (these mirror the original command payload through the ledger).
- * - `provenance_actors` → masks `actorId`.
- * - `receipt_details` → strips the full `detail` object (the most aggressive).
+ * - `command_payload` → strips `detail.payload`, `detail.commandId`,
+ *   AND identifying fields that the kernel emits into `detail` for
+ *   synthetic command provenance: `kind`, `entityId`, `name`. Those
+ *   leak entity identity through the ledger surface for callers with
+ *   no owner-truth grant.
+ * - `provenance_actors` → masks `actorId`. Both `strip` and `mask`
+ *   emit the `REDACTED` sentinel (truthy, distinguishable from a
+ *   missing field — pre-fix `strip` emitted `''` which collided with
+ *   "no actor recorded").
+ * - `receipt_details` → strips the full `detail` object (the most
+ *   aggressive — covers the leakage above).
  *
  * If no rule fires, the event is returned unchanged.
  */
@@ -145,13 +153,28 @@ export function redactProvenanceEvent(
         detail = {};
     } else if (payloadRule) {
         const next: Record<string, unknown> = { ...detail };
+        // Command payload + commandId — original strip behavior.
         if ('payload' in next) delete next.payload;
         if ('commandId' in next) delete next.commandId;
+        // KERNEL-R2-006: kernel helpers emit `kind`, `entityId`, `name`
+        // into the detail object for synthetic-command provenance.
+        // Those mirror the same information that lives in the entity
+        // owner-truth, so the command_payload redaction rule must
+        // strip them as well — otherwise a caller with discovery-only
+        // grants reads owner truth through this surface.
+        if ('kind' in next) delete next.kind;
+        if ('entityId' in next) delete next.entityId;
+        if ('name' in next) delete next.name;
         detail = next;
     }
 
     if (actorRule) {
-        actorId = actorRule.behavior === 'strip' ? '' : REDACTED;
+        // KERNEL-R2-006: both `strip` and `mask` emit the truthy
+        // `REDACTED` sentinel. Pre-fix `strip` emitted `''` (falsy),
+        // which (a) was indistinguishable from "no actor recorded"
+        // and (b) downstream `if (event.actorId)` checks treated the
+        // redaction as a missing-actor signal.
+        actorId = REDACTED;
     }
 
     return { ...event, actorId, detail };

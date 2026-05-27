@@ -53,20 +53,15 @@ describe('Repo-knowledge operations and recovery', () => {
 
     it('verify confirms index integrity', async () => {
         const result = await verify(stores);
-        // TESTS-R006: pin the expected outcome rather than `['healthy',
-        // 'degraded']`. The repo-knowledge ingest emits provenance events
-        // with subjectStore='ledger' (command_validated / command_approved)
-        // that verify() flags as orphans because the orphan probe only
-        // scans canonical+artifact. So `provenance_references_valid` is
-        // EXPECTED to be 'stale' (causing overall status='degraded') as
-        // long as the SURFACE-003-partial ledger-store provenance gap
-        // remains. When a future Stage B fix extends verify() to also
-        // check the ledger subject store, status will return 'healthy'
-        // and this assertion will fail — forcing a follow-up update
-        // rather than silently passing.
-        expect(result.status).toBe('degraded');
+        // KERNEL-R2-002 (Wave A3) fixed verify()'s orphan probe to skip
+        // events with subjectStore in ['ledger','index'] — those reference
+        // commandIds / index records, not canonical/artifact subjects, and
+        // were being false-flagged as orphans. After the fix, a normal
+        // repo-knowledge ingest produces no false orphans, so this cluster
+        // verifies healthy.
+        expect(result.status).toBe('healthy');
         const provenanceCheck = result.checks.find((c) => c.name === 'provenance_references_valid');
-        expect(provenanceCheck?.status).toBe('stale');
+        expect(provenanceCheck?.status).toBe('healthy');
 
         // Load-bearing invariants still hold:
         // - No unreachable / corrupt stores.

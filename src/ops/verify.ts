@@ -90,11 +90,27 @@ export async function verify(stores: ClusterStores, options?: VerifyOptions): Pr
     }
 
     // --- Provenance events reference existing objects ---
+    // KERNEL-R2-002 alignment: only canonical/artifact-subject events are
+    // checked here. Events with subjectStore='ledger' or 'index' reference
+    // command/index IDs by design — their reachability is not verifiable
+    // via canonical/artifact.exists. The pre-fix code iterated all events
+    // and false-flagged every command_approved / command_rejected /
+    // mutation_orphaned / command_compensated event as an orphan because
+    // their subjectId is a command UUID never present in canonical or
+    // artifact. That made verify() report 'stale' for any cluster that
+    // had ever approved or rejected a command.
     try {
         const events = await stores.ledger.listEvents({ limit });
         let orphanCount = 0;
 
         for (const event of events) {
+            // Only canonical- and artifact-subject events are verifiable
+            // via store.exists(). Ledger- and index-subject events reference
+            // commandIds / indexIds whose reachability is not modelled by
+            // the canonical/artifact stores.
+            if (event.subjectStore !== 'canonical' && event.subjectStore !== 'artifact') {
+                continue;
+            }
             if (event.subjectId) {
                 const inCanonical = await stores.canonical.exists(event.subjectId);
                 const inArtifact = await stores.artifact.exists(event.subjectId);
@@ -130,6 +146,44 @@ export async function verify(stores: ClusterStores, options?: VerifyOptions): Pr
             status: 'unreachable',
             severity: 'error',
             message: `Provenance verification failed: ${err.message}`,
+            repairAvailable: false,
+        });
+    }
+
+    // --- No orphaned mutations (STORES-R2-003) ---
+    // Wave A2 added mutation_orphaned events on receipt failure (KERNEL-R009)
+    // but verify()/doctor() had no consumer for that signal. A cluster with
+    // orphaned mutations reported healthy. This check surfaces the orphans.
+    try {
+        const orphanedEvents = await stores.ledger.listEvents({ action: 'mutation_orphaned', limit });
+        const orphanCount = orphanedEvents.length;
+
+        if (orphanCount > 0) {
+            checks.push({
+                name: 'no_orphaned_mutations',
+                store: 'ledger',
+                status: 'degraded',
+                severity: 'warning',
+                message: `${orphanCount} orphaned mutation event(s) recorded. A mutation completed against a store but its receipt write failed — the cluster has uninspectable state.`,
+                repairAvailable: false,
+            });
+        } else {
+            checks.push({
+                name: 'no_orphaned_mutations',
+                store: 'ledger',
+                status: 'healthy',
+                severity: 'info',
+                message: 'No orphaned mutation events recorded.',
+                repairAvailable: false,
+            });
+        }
+    } catch (err: any) {
+        checks.push({
+            name: 'no_orphaned_mutations',
+            store: 'ledger',
+            status: 'unreachable',
+            severity: 'error',
+            message: `Orphan verification failed: ${err.message}`,
             repairAvailable: false,
         });
     }

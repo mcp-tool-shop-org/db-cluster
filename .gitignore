@@ -4,3 +4,5 @@ dist/
 *.tgz
 .db-cluster/
 examples/**/.db-cluster/
+.stryker-tmp/
+reports/

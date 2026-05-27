@@ -314,10 +314,19 @@ export class ClusterKernel implements ClusterKernelInterface {
         }
 
         // Provenance + synthetic command persistence + receipt
-        // (see KERNEL-002, KERNEL-005). Note: this verb only writes to the
-        // ledger so the "mutation already happened" window opens only AFTER
-        // recordProvenance succeeds. If recordProvenance itself throws,
-        // nothing was committed and we just re-throw.
+        // (see KERNEL-002, KERNEL-005).
+        //
+        // KERNEL-R2-005: the recordProvenance call was previously OUTSIDE
+        // the try/catch. A failure at that write produced a bare ledger
+        // Error rather than `ReceiptFailedError`, and no
+        // `mutation_orphaned` event was attempted. Both writes (the
+        // evidence_linked event and the receipt) now live in the same
+        // try/catch so that ANY ledger-write failure on the link path
+        // surfaces as the typed `ReceiptFailedError` and triggers a
+        // best-effort orphan record. If the provenance step itself fails
+        // there is no `provenance.id` to attach to the orphan detail,
+        // but the orphan path runs anyway (we capture the entity id +
+        // command id + cause so `doctor()` / `verify()` can flag it).
         const cmd = markCommitted(
             validateCommand(
                 proposeCommand(
@@ -328,21 +337,23 @@ export class ClusterKernel implements ClusterKernelInterface {
                 ),
             ),
         );
-        const provenance = await recordProvenance(
-            this.stores.ledger,
-            'evidence_linked',
-            input.actorId,
-            input.entityId,
-            'canonical',
-            {
-                artifactId: input.artifactId,
-                entityId: input.entityId,
-                ...(input.detail ?? {}),
-            },
-        );
 
+        let provenance: ProvenanceEvent;
         let receipt: Receipt;
         try {
+            provenance = await recordProvenance(
+                this.stores.ledger,
+                'evidence_linked',
+                input.actorId,
+                input.entityId,
+                'canonical',
+                {
+                    artifactId: input.artifactId,
+                    entityId: input.entityId,
+                    ...(input.detail ?? {}),
+                },
+            );
+
             this.saveCommand(cmd);
 
             receipt = await emitReceipt(
@@ -358,7 +369,6 @@ export class ClusterKernel implements ClusterKernelInterface {
                 verb: 'link_evidence',
                 artifactId: input.artifactId,
                 entityId: input.entityId,
-                provenanceEventId: provenance.id,
                 actorId: input.actorId,
             });
             throw new ReceiptFailedError(input.entityId, cmd.id, cause);
@@ -805,39 +815,43 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
-     * Internal index rebuild — clears the index and re-derives from canonical
-     * + artifact source truth. Returns the count of records rebuilt.
+     * Internal index rebuild — re-derives the index from canonical +
+     * artifact source truth via the atomic {@link IndexStore.replaceAll}
+     * contract method. Returns the count of records rebuilt.
      *
      * Factored out of {@link rebuildIndex} so that the `'reindex'` arm of
      * {@link commitMutation} can perform the actual rebuild work without
      * double-emitting provenance/receipt (KERNEL-R008). The two call sites
      * share this helper for the truth-mutation phase and emit their own
      * surrounding provenance/receipt sequence.
+     *
+     * KERNEL-R2-003 (regression-of-A2): the previous implementation
+     * called `index.clear()` then looped `index.index(...)` calls, opening
+     * an empty-index window between the clear and the first re-insert.
+     * Concurrent readers during that window saw zero records. Wave A2
+     * required adapters to implement `replaceAll` as an atomic swap
+     * (STORES-R003) — `ops/rebuild.ts` was updated to use it, but this
+     * helper was missed. We now build the full record set in memory and
+     * commit it in one `replaceAll` call.
      */
     private async performIndexRebuild(): Promise<number> {
-        // NOTE: see STORES-008 — clear-then-rebuild leaves an empty index window
-        // on mid-rebuild crash. That hazard is owned by ops/rebuild.ts /
-        // IndexStore contract changes (out of scope for the kernel agent).
-        await this.stores.index.clear();
+        const staged: Omit<IndexRecord, 'id' | 'indexedAt' | 'owner'>[] = [];
 
-        let rebuilt = 0;
-
-        // Re-index all entities
+        // Stage all entities
         const entities = await this.stores.canonical.list();
         for (const entity of entities) {
-            await this.stores.index.index({
+            staged.push({
                 sourceId: entity.id,
                 sourceStore: 'canonical',
                 text: `${entity.kind}: ${entity.name}`,
                 metadata: { kind: entity.kind, ...entity.attributes },
             });
-            rebuilt++;
         }
 
-        // Re-index all artifacts
+        // Stage all artifacts
         const artifacts = await this.stores.artifact.list();
         for (const artifact of artifacts) {
-            await this.stores.index.index({
+            staged.push({
                 sourceId: artifact.id,
                 sourceStore: 'artifact',
                 text: `${artifact.filename} [${artifact.mimeType}]`,
@@ -848,10 +862,12 @@ export class ClusterKernel implements ClusterKernelInterface {
                     version: artifact.version,
                 },
             });
-            rebuilt++;
         }
 
-        return rebuilt;
+        // Atomic swap. The contract guarantees `replaceAll` exists on
+        // every adapter (STORES-R003), so no duck-typed fallback.
+        await this.stores.index.replaceAll(staged);
+        return staged.length;
     }
 
     /**

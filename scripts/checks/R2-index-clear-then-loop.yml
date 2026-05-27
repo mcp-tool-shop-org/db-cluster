@@ -1,0 +1,24 @@
+id: index-clear-then-loop
+language: typescript
+severity: error
+message: |
+  Non-atomic index rebuild pattern: `index.clear()` followed by an
+  `index.index(...)` loop inside the same function leaves an empty index
+  window if the process crashes mid-rebuild (KERNEL-R2-003). Use the
+  atomic `replaceAll(records)` contract method on IndexStore instead.
+rule:
+  pattern: $RECEIVER.index.clear()
+  inside:
+    any:
+      - kind: function_declaration
+      - kind: method_definition
+      - kind: function_expression
+      - kind: arrow_function
+    stopBy: end
+    has:
+      pattern: $X.index.index($_)
+      stopBy: end
+files:
+  - "src/**/*.ts"
+ignores:
+  - "test/**"

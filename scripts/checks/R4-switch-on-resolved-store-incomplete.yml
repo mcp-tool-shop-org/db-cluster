@@ -1,0 +1,22 @@
+id: switch-on-resolved-store-incomplete
+language: typescript
+severity: error
+message: |
+  A `switch` on a `*.store` discriminator must cover all 5 cluster stores
+  (`canonical`, `artifact`, `index`, `ledger`, `receipt`). Missing arms
+  silently drop entire stores from cross-store traversal logic. See
+  `src/resolver/cluster-resolver.ts:resolveFromParsed` and
+  `src/provenance/trace-builder.ts:traceFrom` for the canonical pattern.
+
+  The `completeness-checks.mjs` orchestrator runs a follow-up text
+  inspection on each match and fails the rule unless all 5 case labels
+  are present in the switch body.
+rule:
+  any:
+    - pattern: switch ($X.store) { $$$ }
+    - pattern: switch (resolved.store) { $$$ }
+    - pattern: switch (parsed.store) { $$$ }
+files:
+  - "src/**/*.ts"
+ignores:
+  - "test/**"

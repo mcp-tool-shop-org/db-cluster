@@ -6,7 +6,6 @@ import { userInfo } from 'node:os';
 import { createLocalCluster } from './adapters/local/index.js';
 import { ClusterKernel } from './kernel/cluster-kernel.js';
 import { PolicyEnforcedKernel } from './kernel/policy-enforced-kernel.js';
-import { ClusterResolver } from './resolver/index.js';
 import { formatClusterUri, parseClusterUri, isClusterUri } from './uri/index.js';
 import { evaluatePolicy, explainPolicyDecision, checkVisibility } from './policy/policy-engine.js';
 import { DEFAULT_POLICIES, DEFAULT_TRUST_ZONES, DEFAULT_VISIBILITY_RULES } from './policy/default-policies.js';
@@ -337,7 +336,8 @@ program
     .command('commit <command-id>')
     .description('Commit a proposed mutation through command runtime')
     .option('--self-approve', 'Acknowledge that the operator is also the proposer (no separation of duties)', false)
-    .action(async (commandId: string, opts: { selfApprove?: boolean }) => {
+    .option('--accept-soft-duty-bypass', 'Required alongside --self-approve to actually walk validate→approve→commit with a single actor (KERNEL-R002 soft bypass)', false)
+    .action(async (commandId: string, opts: { selfApprove?: boolean; acceptSoftDutyBypass?: boolean }) => {
         const kernel = getKernel();
         const operator = resolveOperator(rootActor());
 
@@ -347,6 +347,28 @@ program
             const proposed = await kernel.inspectCommand(commandId).catch(() => null);
             const proposer = proposed?.proposedBy;
             checkSelfApproval(proposer, operator, !!opts.selfApprove);
+
+            // SURFACE-R2-006 fix: when --self-approve causes the CLI to
+            // auto-walk validate → approve → commit under a single actor,
+            // require an explicit additional acknowledgment flag. This is
+            // the same shape as KERNEL-R002 (separation of duties was
+            // removed from the SDK auto-walk) but applied at the CLI
+            // surface, where the auto-walk still lives for operator
+            // ergonomics. Without --accept-soft-duty-bypass, refuse loudly.
+            const willAutoWalk = !!opts.selfApprove && proposed !== null && (proposed.status === 'proposed' || proposed.status === 'validated');
+            if (willAutoWalk) {
+                if (!opts.acceptSoftDutyBypass) {
+                    console.error(
+                        'WARNING: --self-approve walks validate→approve→commit with a single actor, defeating separation of duties. ' +
+                        'Pass --accept-soft-duty-bypass to acknowledge.',
+                    );
+                    process.exit(1);
+                }
+                console.error(
+                    `⚠️  --self-approve + --accept-soft-duty-bypass: walking validate→approve→commit under a single actor (${operator.actorId}). ` +
+                    'Separation of duties is intentionally bypassed for this invocation.',
+                );
+            }
 
             // KERNEL-R002 fix: the CLI now explicitly chains validate → approve →
             // commit. The SDK's commitMutation no longer auto-walks; callers must
@@ -581,15 +603,66 @@ program
             console.error('No cluster found. Run `db-cluster init` first.');
             process.exit(1);
         }
-        const stores = createLocalCluster(CLUSTER_DIR);
-        const resolver = new ClusterResolver(stores);
+        // SURFACE-R2-001 fix: route through ClusterSDK so policy + per-store
+        // sanitization apply. Previously the CLI built a raw ClusterResolver
+        // and JSON.stringified the result — `storagePath` and other internal
+        // fields leaked unconditionally. The SDK now sanitizes all five
+        // store types when policy-enforced (SURFACE-R2-003), and the CLI
+        // additionally scrubs known leaky fields before printing so even the
+        // no-policy path is safe.
+        const config = loadPolicyConfig();
+        const policyConfigured = !!(
+            config && (
+                (config.policies && config.policies.length > 0) ||
+                (config.trustZones && config.trustZones.length > 0) ||
+                (config.visibilityRules && config.visibilityRules.length > 0)
+            )
+        );
+
+        const { ClusterSDK } = await import('./sdk/cluster-sdk.js');
+        const { sanitizeArtifactForOutput, sanitizeEntityForOutput, sanitizeReceiptForOutput }
+            = await import('./mcp/sanitize.js');
+        const { sanitizeIndexRecordForOutput, sanitizeProvenanceEventForOutput }
+            = await import('./policy/store-output-sanitizers.js');
+
+        const sdk = policyConfigured
+            ? new ClusterSDK({
+                clusterDir: CLUSTER_DIR,
+                policies: config!.policies,
+                trustZones: config!.trustZones,
+                visibilityRules: config!.visibilityRules,
+                principal: config!.principal ?? ClusterSDK.INTERNAL_TRUSTED_PRINCIPAL,
+            })
+            : new ClusterSDK({ clusterDir: CLUSTER_DIR });
 
         try {
-            const resolved = await resolver.resolve(uri);
-            console.log(`Resolved: ${resolved.uri}`);
-            console.log(`  kind:  ${resolved.kind}`);
+            const resolved = await sdk.resolve(uri);
+            // Belt-and-suspenders: even on the no-policy SDK path the CLI
+            // must not print `storagePath` (artifact) or raw ledger payload.
+            // SDK.resolve already sanitizes when policy-enforced; this is
+            // the unconditional CLI-output baseline.
+            // AGG-003 fix-up (Wave A3): cover all 5 store types. The
+            // pre-fix CLI baseline-sanitization only covered 3 of 5
+            // (artifact + canonical + receipt) and `cluster://index/<id>`
+            // / `cluster://ledger/<id>` printed raw IndexRecord.metadata
+            // / ProvenanceEvent.actorId+detail to stdout — captured in CI
+            // logs / shell history / piped consumers. Now mirrors the
+            // SDK's 5-arm coverage (which is unconditional after AGG-002).
+            let object: unknown = resolved.object;
+            if (resolved.store === 'artifact') {
+                object = sanitizeArtifactForOutput(resolved.object as any);
+            } else if (resolved.store === 'canonical') {
+                object = sanitizeEntityForOutput(resolved.object as any);
+            } else if (resolved.store === 'receipt') {
+                object = sanitizeReceiptForOutput(resolved.object as any);
+            } else if (resolved.store === 'index') {
+                object = sanitizeIndexRecordForOutput(resolved.object as any);
+            } else if (resolved.store === 'ledger') {
+                object = sanitizeProvenanceEventForOutput(resolved.object as any);
+            }
+            console.log(`Resolved: ${uri}`);
             console.log(`  store: ${resolved.store}`);
-            console.log(`  object: ${JSON.stringify(resolved.object, null, 2)}`);
+            console.log(`  object: ${JSON.stringify(object, null, 2)}`);
         } catch (err: any) {
             console.error(`Resolve failed: ${err.message}`);
             process.exit(1);

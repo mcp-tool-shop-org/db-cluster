@@ -32,16 +32,16 @@ function run(label, cmd, opts = {}) {
 console.log('\n=== Release Gate ===\n');
 
 // 1. Build
-console.log('[1/6] Build');
+console.log('[1/7] Build');
 run('tsc --noEmit', 'npx tsc --noEmit');
 run('npm run build', 'npm run build');
 
 // 2. Test suite
-console.log('\n[2/6] Tests');
+console.log('\n[2/7] Tests');
 run('vitest run', 'npx vitest run', { timeout: 300_000 });
 
 // 3. Pack
-console.log('\n[3/6] Package');
+console.log('\n[3/7] Package');
 run('npm pack', 'npm pack');
 const tgz = join(ROOT, 'db-cluster-0.1.0.tgz');
 if (!existsSync(tgz)) {
@@ -50,7 +50,7 @@ if (!existsSync(tgz)) {
 }
 
 // 4. Fresh install smoke
-console.log('\n[4/6] Fresh install smoke');
+console.log('\n[4/7] Fresh install smoke');
 const smokeDir = mkdtempSync(join(tmpdir(), 'release-gate-'));
 try {
   run('smoke-install', `node ${join(ROOT, 'scripts', 'smoke-install.mjs')} ${tgz}`, { cwd: smokeDir });
@@ -59,7 +59,7 @@ try {
 }
 
 // 5. Docs drift check — shipped directories don't import from src/
-console.log('\n[5/6] Docs drift');
+console.log('\n[5/7] Docs drift');
 process.stdout.write('  No src/ imports in shipped dirs... ');
 function scanForDrift(dir) {
   const offenders = [];
@@ -98,7 +98,7 @@ if (offenders.length > 0) {
 }
 
 // 6. Package exports exist in dist
-console.log('\n[6/6] Export paths exist in dist');
+console.log('\n[6/7] Export paths exist in dist');
 const exports = ['dist/index.js', 'dist/sdk/index.js', 'dist/mcp/index.js', 'dist/policy/index.js', 'dist/types/index.js'];
 for (const exp of exports) {
   process.stdout.write(`  ${exp}... `);
@@ -109,6 +109,10 @@ for (const exp of exports) {
     failures++;
   }
 }
+
+// 7. Completeness — mechanical ast-grep gates for known legacy patterns
+console.log('\n[7/7] Completeness');
+run('completeness-checks', `node ${join(ROOT, 'scripts', 'completeness-checks.mjs')}`, { timeout: 180_000 });
 
 // Verdict
 console.log('\n=== Verdict ===');

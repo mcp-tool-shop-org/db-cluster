@@ -17,12 +17,13 @@ export interface CanonicalStore {
      * restored entities keep their original IDs (otherwise their provenance
      * chain breaks because events still carry the original subjectId).
      *
-     * Optional on the contract because not every adapter must support it
-     * today (postgres parity ships in a follow-up wave); but every adapter
-     * intended for production use SHOULD implement it. The restore op surfaces
-     * an explicit error when this is missing.
+     * REQUIRED on the contract (STORES-R2-002): every adapter must
+     * implement this. backup.ts::restore() already throws
+     * ImportSnapshotNotSupportedError at runtime when the method is
+     * missing — promoting it to a contract requirement closes the
+     * compile-time gap that let new adapters compile cleanly without it.
      */
-    importSnapshot?(entity: Entity): Promise<Entity>;
+    importSnapshot(entity: Entity): Promise<Entity>;
 }
 
 export interface EntityFilter {

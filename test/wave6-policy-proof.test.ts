@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PolicyEnforcedKernel, PolicyDeniedError } from '../src/kernel/policy-enforced-kernel.js';
 import type { PolicyKernelOptions } from '../src/kernel/policy-enforced-kernel.js';
+import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import type { Policy, Principal, TrustZone, VisibilityRule, RedactionRule } from '../src/types/policy.js';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterSDK } from '../src/sdk/cluster-sdk.js';
@@ -684,21 +685,47 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
             expect(inspected.attributes.x).toBe(1);
         });
 
-        it('index derivation: index is derivative of canonical', async () => {
+        it('index derivation: index is derivative of canonical (admin surface AND store doctrine)', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
             await adminK.createEntity({
                 kind: 'concept', name: 'Index Derives', attributes: {}, actorId: 'admin-1',
             });
 
-            // This proof is about cluster doctrine — "the index is a derivative
-            // store, sourced from canonical." That's a property of the storage
-            // layer, not of the policy layer. Read directly from the index
-            // store. (Previously this used adminK._kernel.findSources to
-            // bypass the policy/visibility layer; the _kernel getter was
-            // removed in Wave A2 / KERNEL-R003. Going to the store directly
-            // is the principled replacement — the question being asked is
-            // about doctrine, not about what a policy-bound caller sees.)
+            // ── Leg 1 (TESTS-R2-007 — restored admin-surface assertion) ──
+            //
+            // The index-derivation invariant must hold AT THE ADMIN SURFACE,
+            // not just at the storage layer. Previously this used
+            // `adminK._kernel.findSources(...)` to reach the raw kernel
+            // through the PolicyEnforcedKernel — that `_kernel` getter was
+            // removed in Wave A2 / KERNEL-R003 to close a bypass.
+            //
+            // The principled replacement is to construct a fresh raw
+            // ClusterKernel against the SAME stores. This is exactly what
+            // an admin-trusted code path sees in the absence of policy
+            // enforcement (e.g., `ops/` recovery scripts running before
+            // the policy layer is loaded). The shape it returns is the
+            // contract the policy layer wraps on top of.
+            const rawAdminK = new ClusterKernel(stores);
+            const surface = await rawAdminK.findSources({ query: 'Index Derives' });
+            expect(surface.indexRecords.length).toBeGreaterThan(0);
+            const surfaceRecord = surface.indexRecords.find((r) => r.text.includes('Index Derives'));
+            expect(surfaceRecord).toBeDefined();
+            expect(surfaceRecord!.owner).toBe('index');
+            expect(surfaceRecord!.sourceStore).toBe('canonical');
+            // The admin kernel also resolves the entity from canonical —
+            // owner truth flows through the same call.
+            expect(surface.resolvedEntities.length).toBeGreaterThan(0);
+            const surfaceEntity = surface.resolvedEntities.find((e) => e.name === 'Index Derives');
+            expect(surfaceEntity).toBeDefined();
+            expect(surfaceEntity!.owner).toBe('canonical');
+
+            // ── Leg 2 — storage-doctrine probe (kept from prior fix) ──
+            //
+            // The doctrine claim "the index is a derivative store, sourced
+            // from canonical" is also a property of the storage layer
+            // independent of any caller. Read directly from the index store
+            // to assert the doctrine holds even when no kernel surfaces it.
             const records = await stores.index.search({ text: 'Index Derives' });
             expect(records.length).toBeGreaterThan(0);
             expect(records[0].owner).toBe('index');

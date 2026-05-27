@@ -6,7 +6,7 @@ import {
     ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { resolve, sep } from 'node:path';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { ClusterSDK } from '../sdk/cluster-sdk.js';
 import type { SDKOptions } from '../sdk/cluster-sdk.js';
 import type { Principal, Policy, TrustZone, VisibilityRule } from '../types/policy.js';
@@ -15,6 +15,10 @@ import {
     sanitizeEntityForOutput,
     sanitizeReceiptForOutput,
 } from './sanitize.js';
+import {
+    sanitizeIndexRecordForOutput,
+    sanitizeProvenanceEventForOutput,
+} from '../policy/store-output-sanitizers.js';
 
 const CLUSTER_DIR = resolve(process.env.DB_CLUSTER_DIR ?? process.cwd(), '.db-cluster');
 
@@ -66,7 +70,7 @@ function failClosedOnInvalidPrincipal(reason: string, source: string): never {
     process.exit(1);
 }
 
-function buildSDKOptions(): SDKOptions {
+export function buildSDKOptions(): SDKOptions {
     const base: SDKOptions = { clusterDir: CLUSTER_DIR };
 
     let principal: Principal | undefined;
@@ -91,7 +95,12 @@ function buildSDKOptions(): SDKOptions {
     if (policiesFile && policiesFile.trim() !== '') {
         // SURFACE-R006 fix: sandbox the policies-file path so an attacker who
         // controls the env var cannot read arbitrary files outside cwd.
-        const allowedRoot = process.cwd();
+        // SURFACE-R2-002 fix: the prior lexical check (`resolve()` +
+        // `startsWith`) blocked `..` traversal but did NOT block symlinks. A
+        // symlink at `<cwd>/policies.json` pointing to `/etc/passwd` would
+        // pass the lexical check and the readFileSync below would read the
+        // outside file. Now we realpath the resolved path and re-check.
+        const allowedRoot = realpathSync(process.cwd());
         const resolvedPath = resolve(allowedRoot, policiesFile);
         if (resolvedPath !== allowedRoot && !resolvedPath.startsWith(allowedRoot + sep)) {
             throw new Error(
@@ -100,6 +109,22 @@ function buildSDKOptions(): SDKOptions {
         }
         if (!existsSync(resolvedPath)) {
             throw new Error(`DB_CLUSTER_POLICIES_FILE not found: ${resolvedPath}`);
+        }
+        // Realpath check: follow any symlinks and re-verify the target lives
+        // inside the allowed root. We tolerate ENOENT (handled above), but
+        // any other error (EACCES, EINVAL on Windows symlinks) is fatal.
+        let realResolved: string;
+        try {
+            realResolved = realpathSync(resolvedPath);
+        } catch (err: any) {
+            throw new Error(
+                `DB_CLUSTER_POLICIES_FILE realpath failed: ${err.message}`,
+            );
+        }
+        if (realResolved !== allowedRoot && !realResolved.startsWith(allowedRoot + sep)) {
+            throw new Error(
+                `DB_CLUSTER_POLICIES_FILE resolves outside the working directory via symlink: ${policiesFile} -> ${realResolved}`,
+            );
         }
         let parsed: {
             policies?: Policy[];
@@ -508,19 +533,34 @@ export async function handleTool(name: string, args: Record<string, unknown>, sd
 
         case 'cluster_resolve': {
             const resolved = await sdk.resolve(args.uri as string);
-            // Artifact-store URIs MUST be sanitized — never expose `storagePath`.
-            // Canonical (entity) results get `_sourceType: 'owner-truth'` via
-            // sanitizeEntityForOutput. Other stores (index/ledger/receipt) do
-            // not carry filesystem paths but get a `_sourceType` marker.
+            // All five store types resolvable through the cluster resolver
+            // MUST be sanitized at the MCP boundary. Artifact-store URIs
+            // MUST never expose `storagePath`. Canonical (entity) results
+            // get `_sourceType: 'owner-truth'` via sanitizeEntityForOutput.
+            // Ledger / index / receipt URIs get
+            // sanitizeProvenanceEventForOutput / sanitizeIndexRecordForOutput
+            // / sanitizeReceiptForOutput respectively — these strip the
+            // leakiest fields (`actorId`+`detail.payload` on ledger,
+            // `metadata` on index, marker on receipt) so the MCP host
+            // cannot read raw owner truth across this boundary.
             //
-            // The SDK already sanitizes when policy-enforced (SURFACE-R003),
-            // so this is a second pass to harden the MCP boundary for callers
+            // AGG-001 fix (Wave A3 fix-up): the pre-fix code only covered
+            // artifact + canonical (2 of 5 store types). ledger/index/receipt
+            // URIs returned raw `resolved.object`. The SDK already
+            // sanitizes when policy-enforced; this MCP boundary now mirrors
+            // the SDK's 5-arm coverage to harden the boundary for callers
             // that constructed the SDK without policies.
             let object: unknown = resolved.object;
             if (resolved.store === 'artifact') {
                 object = sanitizeArtifactForOutput(resolved.object as any);
             } else if (resolved.store === 'canonical') {
                 object = sanitizeEntityForOutput(resolved.object as any);
+            } else if (resolved.store === 'receipt') {
+                object = sanitizeReceiptForOutput(resolved.object as any);
+            } else if (resolved.store === 'ledger') {
+                object = sanitizeProvenanceEventForOutput(resolved.object as any);
+            } else if (resolved.store === 'index') {
+                object = sanitizeIndexRecordForOutput(resolved.object as any);
             }
             return {
                 _meta: { operation: 'read', writesCluster: false, ownerStore: resolved.store, uri: args.uri },
@@ -620,6 +660,13 @@ export async function handleTool(name: string, args: Record<string, unknown>, sd
 
         case 'cluster_commit_mutation': {
             const result = await sdk.commitMutation(args.commandId as string, args.actorId as string);
+            // AGG-006 fix (Wave A3 fix-up): cluster_list_receipts wraps every
+            // returned receipt with sanitizeReceiptForOutput, but the
+            // commit/compensate arms previously returned `result.receipt`
+            // raw. `resultSummary` contains entity names verbatim
+            // (e.g., 'Created entity: User/john@example.com') — these
+            // arms now wrap the receipt to attach `_sourceType` and align
+            // with the list surface.
             return {
                 _meta: {
                     operation: 'write',
@@ -630,12 +677,15 @@ export async function handleTool(name: string, args: Record<string, unknown>, sd
                     warning: 'Cluster truth was MUTATED. Receipt issued as proof.',
                 },
                 command: formatCommandOutput(result.command),
-                receipt: result.receipt,
+                receipt: sanitizeReceiptForOutput(result.receipt),
             };
         }
 
         case 'cluster_compensate_mutation': {
             const result = await sdk.compensateMutation(args.commandId as string, args.compensatedBy as string, args.reason as string);
+            // AGG-006 fix (Wave A3 fix-up): see cluster_commit_mutation —
+            // same rationale, the receipt is wrapped before crossing
+            // the MCP boundary.
             return {
                 _meta: {
                     operation: 'compensate',
@@ -647,7 +697,7 @@ export async function handleTool(name: string, args: Record<string, unknown>, sd
                 },
                 compensatingCommand: formatCommandOutput(result.compensatingCommand),
                 originalCommand: formatCommandOutput(result.originalCommand),
-                receipt: result.receipt,
+                receipt: sanitizeReceiptForOutput(result.receipt),
             };
         }
 

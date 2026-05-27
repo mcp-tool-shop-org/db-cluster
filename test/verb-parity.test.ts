@@ -59,6 +59,15 @@ const POLICY_KERNEL_EXTRAS = new Set<string>([
     'enforce',
     'collectRedactionRules',
     'checkVisibility',
+    // AGG-004 fix-up (Wave A3) — `hasAnyPerResourceRule` is a private
+    // helper used by the double-enforce pattern in `inspectEntity` /
+    // `inspectCommand`. It inspects this kernel's policy bundle to decide
+    // whether NotFoundError after a coarse-allow should be unified to
+    // PolicyDeniedError (closes the per-resource refinement oracle).
+    // Marked `private` in TypeScript, but TS private is compile-time only —
+    // the method is mechanically on the prototype. No reason to expose
+    // through ClusterKernel since ClusterKernel has no policy bundle.
+    'hasAnyPerResourceRule',
 ]);
 
 /**

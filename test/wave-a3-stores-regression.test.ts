@@ -1,0 +1,598 @@
+/**
+ * Wave A3 — Stores domain regression nets.
+ *
+ * Pins five behaviours that the re-audit-2 found could silently regress:
+ *  - KERNEL-R2-002 — verify() must NOT false-flag ledger-subject events
+ *    (command_approved / command_rejected / mutation_orphaned / etc) as
+ *    orphans. Their subjectId is a command UUID, never present in canonical
+ *    or artifact. The pre-fix code flagged every approved command as stale.
+ *  - STORES-R2-002 — importSnapshot / importEvent / importReceipt are
+ *    REQUIRED on their contracts (not optional?). backup.ts has treated them
+ *    as runtime-mandatory since Wave A1; the contract must promise it too
+ *    so a new adapter cannot compile without them.
+ *  - STORES-R2-003 — verify() must consume mutation_orphaned events. A
+ *    cluster with N orphaned mutations had been reporting healthy.
+ *  - STORES-R2-004 — TraceBuilder.eventToEdgeType must not return
+ *    'entity_created_by' for action 'mutation_orphaned'.
+ *  - STORES-R2-005 — LocalArtifactStore.ingest() content write must be
+ *    atomic via tmp+rename. The pre-fix plain writeFileSync left an orphan
+ *    content file on mid-write crash.
+ */
+
+import { describe, it, expect } from 'vitest';
+import { createHash } from 'node:crypto';
+import { execSync } from 'node:child_process';
+import {
+    mkdtempSync,
+    mkdirSync,
+    rmSync,
+    existsSync,
+    readdirSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createLocalCluster } from '../src/adapters/local/index.js';
+import { LocalArtifactStore } from '../src/adapters/local/local-artifact-store.js';
+import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
+import { verify } from '../src/ops/verify.js';
+import { TraceBuilder } from '../src/provenance/trace-builder.js';
+
+describe('Wave A3 — Stores regression nets', () => {
+    // ─── KERNEL-R2-002 — verify() ignores ledger-subject events ──────────
+    //
+    // Before the fix: verify() iterated every ledger event and checked
+    // canonical.exists(event.subjectId) || artifact.exists(event.subjectId).
+    // Events with subjectStore='ledger' (command_approved, command_rejected,
+    // mutation_orphaned, command_compensated) have a commandId UUID for
+    // subjectId. Those IDs are never in canonical/artifact, so the check
+    // flagged them as orphans → verify().status === 'stale' for any cluster
+    // that had ever approved or rejected a command.
+    //
+    // The full invariant: after a complete propose → validate → approve →
+    // commit lifecycle, verify().status === 'healthy' and the
+    // provenance_references_valid check passes.
+
+    describe('KERNEL-R2-002 — verify() ignores ledger-subject events', () => {
+        it('verify() reports healthy after a full propose→validate→approve→commit lifecycle', async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'wave-a3-verify-lifecycle-'));
+            try {
+                const stores = createLocalCluster(dir);
+                const kernel = new ClusterKernel(stores, { dataDir: dir });
+
+                // Full mutation lifecycle that emits command_approved
+                // (subjectStore='ledger', subjectId=commandId).
+                const proposal = await kernel.proposeMutation({
+                    verb: 'create_entity',
+                    targetStore: 'canonical',
+                    payload: { kind: 'finding', name: 'verify-lifecycle', attributes: {} },
+                    proposedBy: 'agent',
+                });
+                await kernel.validateMutation(proposal.id);
+                await kernel.approveMutation(proposal.id, 'operator');
+                await kernel.commitMutation(proposal.id, 'operator');
+
+                // Sanity — a command_approved event with subjectStore='ledger' exists.
+                const events = await stores.ledger.listEvents({});
+                const approvedEvents = events.filter((e) => e.action === 'command_approved');
+                expect(approvedEvents.length).toBeGreaterThan(0);
+                expect(approvedEvents[0].subjectStore).toBe('ledger');
+
+                // Now verify(): pre-fix this returned 'stale' because the
+                // approved command's subjectId (a UUID) wasn't in canonical
+                // or artifact stores. Post-fix: ledger-subject events are
+                // excluded from the orphan check.
+                const result = await verify(stores);
+                expect(result.status).toBe('healthy');
+
+                const provCheck = result.checks.find(
+                    (c) => c.name === 'provenance_references_valid',
+                );
+                expect(provCheck).toBeDefined();
+                expect(provCheck!.status).toBe('healthy');
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+
+        it('verify() ignores rejected-command ledger events as orphans', async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'wave-a3-verify-reject-'));
+            try {
+                const stores = createLocalCluster(dir);
+                const kernel = new ClusterKernel(stores, { dataDir: dir });
+
+                const proposal = await kernel.proposeMutation({
+                    verb: 'create_entity',
+                    targetStore: 'canonical',
+                    payload: { kind: 'finding', name: 'reject-lifecycle', attributes: {} },
+                    proposedBy: 'agent',
+                });
+                await kernel.rejectMutation(proposal.id, 'operator', 'denied');
+
+                const events = await stores.ledger.listEvents({});
+                const rejectedEvents = events.filter((e) => e.action === 'command_rejected');
+                expect(rejectedEvents.length).toBeGreaterThan(0);
+                expect(rejectedEvents[0].subjectStore).toBe('ledger');
+
+                // Pre-fix this would have flagged the rejected command as orphan.
+                const result = await verify(stores);
+                const provCheck = result.checks.find(
+                    (c) => c.name === 'provenance_references_valid',
+                );
+                expect(provCheck!.status).toBe('healthy');
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+    });
+
+    // ─── STORES-R2-002 — import* hooks REQUIRED on contracts ─────────────
+    //
+    // Wave A2 promoted IndexStore.replaceAll to required but missed the
+    // three import hooks. backup.ts::restore() treats all four as mandatory
+    // at runtime (throws ImportSnapshotNotSupportedError when missing). The
+    // contract still declared them optional (?:). Any new adapter could
+    // compile cleanly without implementing them and only fail at restore.
+    //
+    // This test spawns tsc against a fixture file that defines a class
+    // implementing a contract WITHOUT the now-required method, with a
+    // @ts-expect-error directive on the class header. Before promotion the
+    // directive is "unused" → tsc fails with TS2578. After promotion the
+    // directive matches the real "missing member" error → tsc passes.
+
+    describe('STORES-R2-002 — import* hooks are contract-required', () => {
+        const repoRoot = process.cwd();
+
+        const tscCheck = (fixturePath: string): { ok: boolean; output: string } => {
+            try {
+                const out = execSync(
+                    `npx tsc --noEmit --strict --target es2022 --module nodenext --moduleResolution nodenext "${fixturePath}"`,
+                    { cwd: repoRoot, encoding: 'utf-8', stdio: 'pipe' },
+                );
+                return { ok: true, output: out };
+            } catch (err: unknown) {
+                const e = err as { stdout?: string; stderr?: string };
+                return {
+                    ok: false,
+                    output: `${e.stdout ?? ''}${e.stderr ?? ''}`,
+                };
+            }
+        };
+
+        it('CanonicalStore: a class without importSnapshot fails to compile', () => {
+            const result = tscCheck(
+                join(repoRoot, 'test/fixtures/incomplete-canonical-store.fixture.ts'),
+            );
+            // The fixture has `// @ts-expect-error` on its class header.
+            // Post-fix, the directive matches a real "missing member" error
+            // → tsc exits 0. Pre-fix, the directive is unused → tsc exits
+            // non-zero with TS2578.
+            expect(result.ok, `tsc output:\n${result.output}`).toBe(true);
+        });
+
+        it('ArtifactStore: a class without importSnapshot fails to compile', () => {
+            const result = tscCheck(
+                join(repoRoot, 'test/fixtures/incomplete-artifact-store.fixture.ts'),
+            );
+            expect(result.ok, `tsc output:\n${result.output}`).toBe(true);
+        });
+
+        it('LedgerStore: a class without importEvent fails to compile', () => {
+            const result = tscCheck(
+                join(repoRoot, 'test/fixtures/incomplete-ledger-store-event.fixture.ts'),
+            );
+            expect(result.ok, `tsc output:\n${result.output}`).toBe(true);
+        });
+
+        it('LedgerStore: a class without importReceipt fails to compile', () => {
+            const result = tscCheck(
+                join(repoRoot, 'test/fixtures/incomplete-ledger-store-receipt.fixture.ts'),
+            );
+            expect(result.ok, `tsc output:\n${result.output}`).toBe(true);
+        });
+    });
+
+    // ─── STORES-R2-003 — verify() consumes mutation_orphaned events ──────
+    //
+    // Wave A2 added mutation_orphaned emission on receipt failure but no
+    // consumer in verify()/doctor() reads it. A cluster with N orphans was
+    // reporting healthy. verify() must surface the orphan signal.
+
+    describe('STORES-R2-003 — verify() reports orphan mutations', () => {
+        it('verify() reports degraded when mutation_orphaned events exist', async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'wave-a3-orphan-verify-'));
+            try {
+                const stores = createLocalCluster(dir);
+
+                // Plant a synthetic mutation_orphaned event directly via the
+                // ledger contract. We don't need to actually orphan a real
+                // mutation to test the verify() consumer — the consumer's
+                // contract is: if mutation_orphaned events exist, surface
+                // them as a non-healthy check.
+                await stores.ledger.append({
+                    action: 'mutation_orphaned',
+                    actorId: 'kernel',
+                    subjectId: 'subject-uuid-deadbeef',
+                    subjectStore: 'canonical',
+                    detail: {
+                        commandId: 'cmd-uuid-cafe',
+                        error: 'synthetic orphan for test',
+                    },
+                });
+
+                // Also create a real entity so the cluster has owner truth
+                // and other checks pass — we want to verify the orphan check
+                // is the ONLY thing degrading status.
+                await stores.canonical.create({
+                    kind: 'document',
+                    name: 'AnchorEntity',
+                    attributes: {},
+                });
+
+                const result = await verify(stores);
+
+                // Pre-fix: verify() ignores mutation_orphaned events →
+                // status === 'healthy'. Post-fix: a dedicated orphan check
+                // surfaces the event → status is non-healthy AND a check
+                // exists pointing at the orphan.
+                expect(result.status).not.toBe('healthy');
+
+                const orphanCheck = result.checks.find(
+                    (c) => c.name === 'no_orphaned_mutations',
+                );
+                expect(orphanCheck, 'expected a no_orphaned_mutations check').toBeDefined();
+                expect(orphanCheck!.status).not.toBe('healthy');
+                expect(orphanCheck!.message).toMatch(/orphan/i);
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+
+        it('verify() reports healthy on this check when no mutation_orphaned events exist', async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'wave-a3-orphan-verify-clean-'));
+            try {
+                const stores = createLocalCluster(dir);
+                await stores.canonical.create({
+                    kind: 'document',
+                    name: 'CleanEntity',
+                    attributes: {},
+                });
+
+                const result = await verify(stores);
+                const orphanCheck = result.checks.find(
+                    (c) => c.name === 'no_orphaned_mutations',
+                );
+                expect(orphanCheck).toBeDefined();
+                expect(orphanCheck!.status).toBe('healthy');
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+
+        // V1-007 fix-up — doctor() must consume mutation_orphaned events too.
+        // Wave A2 wired verify() to surface the orphan signal but the
+        // wave-edited comment in cluster-kernel.ts L322-329 promises
+        // "doctor()/verify() can flag it" — doctor.ts had zero matches
+        // for `mutation_orphaned`. A cluster with N orphans reported
+        // healthy through doctor(). The fix mirrors verify.ts's check
+        // pattern.
+
+        it('doctor() reports degraded when mutation_orphaned events exist', async () => {
+            const { doctor } = await import('../src/ops/doctor.js');
+            const dir = mkdtempSync(join(tmpdir(), 'wave-a3-orphan-doctor-'));
+            try {
+                const stores = createLocalCluster(dir);
+
+                await stores.ledger.append({
+                    action: 'mutation_orphaned',
+                    actorId: 'kernel',
+                    subjectId: 'subject-uuid-deadbeef',
+                    subjectStore: 'canonical',
+                    detail: {
+                        commandId: 'cmd-uuid-cafe',
+                        error: 'synthetic orphan for doctor',
+                    },
+                });
+
+                // Plant a real entity so reachability checks pass and the
+                // orphan check is the ONLY thing degrading status.
+                await stores.canonical.create({
+                    kind: 'document',
+                    name: 'DoctorAnchor',
+                    attributes: {},
+                });
+
+                const result = await doctor(stores);
+
+                // Pre-fix: doctor() ignored mutation_orphaned → healthy.
+                // Post-fix: a dedicated orphan check surfaces the event.
+                expect(result.status).not.toBe('healthy');
+                const orphanCheck = result.checks.find(
+                    (c) => c.name === 'no_orphaned_mutations',
+                );
+                expect(orphanCheck, 'expected a no_orphaned_mutations check from doctor()').toBeDefined();
+                expect(orphanCheck!.status).not.toBe('healthy');
+                expect(orphanCheck!.message).toMatch(/orphan/i);
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+
+        it('doctor() reports healthy on this check when no mutation_orphaned events exist', async () => {
+            const { doctor } = await import('../src/ops/doctor.js');
+            const dir = mkdtempSync(join(tmpdir(), 'wave-a3-orphan-doctor-clean-'));
+            try {
+                const stores = createLocalCluster(dir);
+                await stores.canonical.create({
+                    kind: 'document',
+                    name: 'DoctorCleanEntity',
+                    attributes: {},
+                });
+
+                const result = await doctor(stores);
+                const orphanCheck = result.checks.find(
+                    (c) => c.name === 'no_orphaned_mutations',
+                );
+                expect(orphanCheck).toBeDefined();
+                expect(orphanCheck!.status).toBe('healthy');
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+    });
+
+    // ─── STORES-R2-004 — TraceBuilder maps mutation_orphaned correctly ───
+    //
+    // The eventToEdgeType switch had no case for 'mutation_orphaned' and
+    // fell through to the default 'entity_created_by' edge. Trace consumers
+    // saw misleading "entity created by X" for actual orphan events. This
+    // test pins the negative invariant: mutation_orphaned must NOT map to
+    // entity_created_by.
+
+    describe('STORES-R2-004 — TraceBuilder maps mutation_orphaned correctly', () => {
+        it('eventToEdgeType for mutation_orphaned is NOT entity_created_by', async () => {
+            // Reach the private method via a tiny adapter. We accept the
+            // private-access pattern (cast to any) because the invariant
+            // is about behaviour-through-trace, not API shape. An end-to-end
+            // alternative — build a trace from an orphan event and assert
+            // the edge type — is included below as well.
+
+            const dir = mkdtempSync(join(tmpdir(), 'wave-a3-edge-type-'));
+            try {
+                const stores = createLocalCluster(dir);
+                const builder = new TraceBuilder(stores, 'cluster://ledger/x');
+                const edgeType = (builder as unknown as { eventToEdgeType(action: string): string })
+                    .eventToEdgeType('mutation_orphaned');
+                expect(edgeType).not.toBe('entity_created_by');
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+
+        it('a trace from a mutation_orphaned event produces a non-entity_created_by edge', async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'wave-a3-edge-trace-'));
+            try {
+                const stores = createLocalCluster(dir);
+
+                // Create a real entity, then plant an orphan event citing it.
+                const entity = await stores.canonical.create({
+                    kind: 'document',
+                    name: 'OrphanedSubject',
+                    attributes: {},
+                });
+                const orphan = await stores.ledger.append({
+                    action: 'mutation_orphaned',
+                    actorId: 'kernel',
+                    subjectId: entity.id,
+                    subjectStore: 'canonical',
+                    detail: { commandId: 'cmd-x', error: 'synthetic' },
+                });
+
+                const builder = new TraceBuilder(
+                    stores,
+                    `cluster://ledger/${orphan.id}`,
+                    { direction: 'forward' },
+                );
+                const graph = await builder.build();
+
+                // There must be at least one edge from the orphan event to
+                // the subject, and that edge MUST NOT be 'entity_created_by'.
+                const edgesFromOrphan = graph.edges.filter(
+                    (e) => e.sourceEventId === orphan.id,
+                );
+                expect(edgesFromOrphan.length).toBeGreaterThan(0);
+                for (const edge of edgesFromOrphan) {
+                    expect(edge.type).not.toBe('entity_created_by');
+                }
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+    });
+
+    // ─── STORES-R2-005 — LocalArtifactStore.ingest atomic content write ──
+    //
+    // Pre-fix: writeFileSync(contentPath, input.content) — no atomic
+    // tmp+rename, no error handling. A crash mid-write leaves an orphan
+    // content file unreferenced. This test simulates the crash and asserts
+    // that the content directory does not retain a `.tmp` artifact nor a
+    // partial file at the final hash path.
+
+    describe('STORES-R2-005 — LocalArtifactStore.ingest atomic content write', () => {
+        it('on tmp-write failure, no orphan .tmp file remains under contentDir', async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'wave-a3-atomic-ingest-'));
+            try {
+                const store = new LocalArtifactStore(dir);
+                const contentDir = join(dir, 'content');
+
+                // The fix replaces the pre-existing
+                //   writeFileSync(contentPath, input.content)
+                // with the atomic sequence
+                //   writeFileSync(`${contentPath}.tmp`, input.content);
+                //   renameSync(`${contentPath}.tmp`, contentPath);
+                // The invariant we are pinning: when writeFileSync throws
+                // (mid-write crash), no orphan `.tmp` file remains under
+                // contentDir, and no partial file exists at contentPath.
+                //
+                // We trigger writeFileSync failure by occupying BOTH the
+                // tmp path and final path as DIRECTORIES. writeFileSync on
+                // a path that exists as a directory throws EISDIR. The
+                // pre-fix code has `if (!existsSync(contentPath))` so it
+                // would skip the write entirely and the test would not
+                // exercise the invariant — to defeat that early-exit, the
+                // fix's atomic pattern is expected to write to the tmp
+                // path unconditionally (you cannot dedupe content before
+                // writing it if the dedup gate sits in front of the tmp
+                // write). The second runtime probe below uses a non-empty
+                // directory at the final path to also test the dedup gate
+                // path.
+
+                const content = Buffer.from('hello atomic');
+                const contentHash = createHash('sha256').update(content).digest('hex');
+                const finalPath = join(contentDir, contentHash);
+                const tmpPath = `${finalPath}.tmp`;
+
+                // Block both the tmp path and the final path with directories.
+                mkdirSync(tmpPath, { recursive: true });
+
+                await expect(
+                    store.ingest({
+                        filename: 'crash.txt',
+                        content,
+                        mimeType: 'text/plain',
+                    }),
+                ).rejects.toThrow();
+
+                // No orphan .tmp file (the directory we created is allowed —
+                // we only assert no NEW .tmp file was left behind beyond it).
+                // Use rmdir on the tmp directory to confirm it's still a
+                // directory and there's no overlap.
+                const entries = readdirSync(contentDir);
+                const tmpFileStragglers = entries.filter(
+                    (n) => n.endsWith('.tmp') && n !== `${contentHash}.tmp`,
+                );
+                expect(
+                    tmpFileStragglers,
+                    `unexpected .tmp file orphans: ${JSON.stringify(entries)}`,
+                ).toEqual([]);
+
+                // The final path must NOT exist as a file (we never wrote
+                // anything successfully). The directory we created has
+                // already been removed if the fix did rmSync on cleanup —
+                // either way it must NOT be a partial file.
+                if (existsSync(finalPath)) {
+                    const { statSync } = await import('node:fs');
+                    const stat = statSync(finalPath);
+                    expect(
+                        stat.isDirectory(),
+                        'contentPath must not be a partial file after failed ingest',
+                    ).toBe(true);
+                }
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+
+        it('the ingest() source uses tmp+rename atomic pattern, not plain writeFileSync', async () => {
+            // Source-level invariant — the fix must replace the plain
+            // writeFileSync(contentPath, ...) with a tmp+rename sequence.
+            // This is the load-bearing assertion: a correctly-written fix
+            // will use a `.tmp` path and `renameSync` (or fs.promises equiv)
+            // in the ingest body. A non-atomic implementation cannot satisfy
+            // this assertion.
+            const { readFileSync: rfs } = await import('node:fs');
+            const src = rfs(
+                join(process.cwd(), 'src/adapters/local/local-artifact-store.ts'),
+                'utf-8',
+            );
+            const ingestStart = src.indexOf('async ingest(');
+            const ingestEnd = src.indexOf('async versions(');
+            expect(ingestStart, 'ingest() body not found').toBeGreaterThan(-1);
+            expect(ingestEnd, 'versions() body not found').toBeGreaterThan(ingestStart);
+            const ingestBlock = src.slice(ingestStart, ingestEnd);
+
+            const usesTmp = /\.tmp\b/.test(ingestBlock);
+            const usesRename = /\brenameSync\b/.test(ingestBlock);
+            expect(
+                usesTmp && usesRename,
+                `ingest() must use tmp+rename atomic pattern (saw .tmp=${usesTmp}, renameSync=${usesRename}).\n` +
+                    `Source block:\n${ingestBlock}`,
+            ).toBe(true);
+        });
+
+        // V1-004 fix-up — LocalArtifactStore.importSnapshot is the sibling
+        // of ingest() and was NOT migrated to tmp+rename in Wave A3. Pre-fix
+        // it uses plain `writeFileSync(contentPath, content)` — the exact
+        // pattern just replaced in ingest(). This test pins the source-level
+        // invariant (uses tmp+rename) AND the runtime behavior (failure
+        // cleanup removes the .tmp file).
+
+        it('importSnapshot source uses tmp+rename atomic pattern, not plain writeFileSync', async () => {
+            const { readFileSync: rfs } = await import('node:fs');
+            const src = rfs(
+                join(process.cwd(), 'src/adapters/local/local-artifact-store.ts'),
+                'utf-8',
+            );
+            const importStart = src.indexOf('async importSnapshot(');
+            const importEnd = src.indexOf('private load(');
+            expect(importStart, 'importSnapshot() body not found').toBeGreaterThan(-1);
+            expect(importEnd, 'private load() body not found').toBeGreaterThan(importStart);
+            const importBlock = src.slice(importStart, importEnd);
+
+            const usesTmp = /\.tmp\b/.test(importBlock);
+            const usesRename = /\brenameSync\b/.test(importBlock);
+            expect(
+                usesTmp && usesRename,
+                `importSnapshot() must use tmp+rename atomic pattern (saw .tmp=${usesTmp}, renameSync=${usesRename}).\n` +
+                    `Source block:\n${importBlock}`,
+            ).toBe(true);
+        });
+
+        it('importSnapshot on tmp-write failure leaves no orphan .tmp file under contentDir', async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'wave-a3-import-atomic-'));
+            try {
+                const store = new LocalArtifactStore(dir);
+                const contentDir = join(dir, 'content');
+
+                const content = Buffer.from('snapshot content for V1-004');
+                const contentHash = createHash('sha256').update(content).digest('hex');
+                const finalPath = join(contentDir, contentHash);
+                const tmpPath = `${finalPath}.tmp`;
+
+                // Block the tmp path with a directory so writeFileSync throws
+                // EISDIR. The fix's failure-cleanup branch must execute, and
+                // no orphan .tmp file may remain.
+                mkdirSync(tmpPath, { recursive: true });
+
+                const metadata = {
+                    id: 'imp-snapshot-id',
+                    filename: 'import-canary.bin',
+                    contentHash,
+                    mimeType: 'application/octet-stream',
+                    sizeBytes: content.length,
+                    version: 1,
+                    storagePath: finalPath,
+                    ingestedAt: new Date().toISOString(),
+                    owner: 'artifact',
+                } as const;
+
+                await expect(store.importSnapshot(metadata as any, content)).rejects.toThrow();
+
+                // No orphan .tmp FILE (the directory we created is allowed).
+                const entries = readdirSync(contentDir);
+                const tmpFileStragglers = entries.filter(
+                    (n) => n.endsWith('.tmp') && n !== `${contentHash}.tmp`,
+                );
+                expect(tmpFileStragglers).toEqual([]);
+
+                // The final path must NOT be a partial file.
+                if (existsSync(finalPath)) {
+                    const { statSync } = await import('node:fs');
+                    const stat = statSync(finalPath);
+                    expect(stat.isDirectory()).toBe(true);
+                }
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+    });
+});

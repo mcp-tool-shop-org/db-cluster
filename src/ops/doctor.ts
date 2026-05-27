@@ -206,5 +206,47 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
         });
     }
 
+    // --- No orphaned mutations (V1-007 fix-up — STORES-R2-003 mirror) ---
+    // Wave A2 added mutation_orphaned events on receipt failure (KERNEL-R009).
+    // verify() consumes the signal at src/ops/verify.ts:154-189 but doctor()
+    // had no consumer — the wave-edited comment at cluster-kernel.ts:322-329
+    // promises "doctor()/verify() can flag it" but doctor.ts had zero
+    // matches for mutation_orphaned. A cluster with orphaned mutations
+    // reported healthy through doctor(). This check mirrors verify()'s
+    // pattern so both ops surfaces see the orphan signal.
+    try {
+        const orphanedEvents = await stores.ledger.listEvents({ action: 'mutation_orphaned', limit: 100 });
+        const orphanCount = orphanedEvents.length;
+
+        if (orphanCount > 0) {
+            checks.push({
+                name: 'no_orphaned_mutations',
+                store: 'ledger',
+                status: 'degraded',
+                severity: 'warning',
+                message: `${orphanCount} orphaned mutation event(s) recorded. A mutation completed against a store but its receipt write failed — the cluster has uninspectable state.`,
+                repairAvailable: false,
+            });
+        } else {
+            checks.push({
+                name: 'no_orphaned_mutations',
+                store: 'ledger',
+                status: 'healthy',
+                severity: 'info',
+                message: 'No orphaned mutation events recorded.',
+                repairAvailable: false,
+            });
+        }
+    } catch (err: any) {
+        checks.push({
+            name: 'no_orphaned_mutations',
+            store: 'ledger',
+            status: 'unreachable',
+            severity: 'error',
+            message: `Orphan check failed: ${err.message}`,
+            repairAvailable: false,
+        });
+    }
+
     return buildClusterHealth(checks);
 }

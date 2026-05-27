@@ -248,19 +248,16 @@ describe('Phase 15 — Release Readiness & Package Boundary (10 Proofs)', () => 
       const health = await doctor(stores);
       expect(health.status).toBe('healthy');
 
-      // Verify — TESTS-R006: pin the expected outcome. `verify()` currently
-      // flags provenance events whose subjectStore is 'ledger' (command
-      // lifecycle: command_validated / command_approved emitted by the SDK
-      // lifecycle calls) as orphans because the orphan probe only scans
-      // canonical+artifact. So `provenance_references_valid` is EXPECTED to
-      // be 'stale' (overall status='degraded'). When a future Stage B fix
-      // extends verify() to also check the ledger subject store, status
-      // will return 'healthy' and this assertion will fail — forcing the
-      // follow-up update rather than silently passing.
+      // KERNEL-R2-002 (Wave A3) fixed verify()'s orphan probe to skip
+      // events with subjectStore in ['ledger','index'] — those reference
+      // commandIds / index records, not canonical/artifact subjects, and
+      // were being false-flagged as orphans. After the fix, a normal
+      // SDK lifecycle (command_validated / command_approved / mutation_committed)
+      // produces no false orphans, so this cluster verifies healthy.
       const verification = await verify(stores);
-      expect(verification.status).toBe('degraded');
+      expect(verification.status).toBe('healthy');
       const provenanceCheck = verification.checks.find((c) => c.name === 'provenance_references_valid');
-      expect(provenanceCheck?.status).toBe('stale');
+      expect(provenanceCheck?.status).toBe('healthy');
       // No unreachable / corrupt stores — the cluster IS healthy in every
       // dimension verify() actually probes correctly.
       const unreachable = verification.checks.filter((c) => c.status === 'unreachable' || c.status === 'corrupt');

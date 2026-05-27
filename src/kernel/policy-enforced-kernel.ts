@@ -29,7 +29,7 @@ import type {
     CommitMutationResult,
 } from './cluster-kernel.js';
 import type { ClusterKernelInterface } from './cluster-kernel-interface.js';
-import { ClusterError } from './errors.js';
+import { ClusterError, NotFoundError } from './errors.js';
 
 // ─── Policy denial error ───────────────────────────────────────────────────
 
@@ -136,11 +136,101 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
 
     // ─── Read verbs ──────────────────────────────────────────────────
 
+    /**
+     * AGG-004 fix-up (Wave A3): mirror the inspectCommand double-enforce
+     * pattern. The pre-fix code ran a single per-resource enforce and then
+     * fetched — denied principals supplying real ids got `PolicyDeniedError`
+     * while those supplying bogus ids got `NotFoundError`. The error-type
+     * distinction was a per-resource existence oracle.
+     *
+     * Two-stage gate: a coarse pre-fetch enforce on `read_owner_truth`
+     * with `ownerStore: 'canonical'` but NO `resourceUri`, then the fetch,
+     * then refine with the resource URI for redaction. If the coarse gate
+     * denies, both existent and nonexistent ids surface PolicyDeniedError
+     * — no oracle. If the coarse gate allows, the fetch's NotFoundError
+     * propagates: the principal has already been told they can inspect
+     * entities, so existence-vs-nonexistence at that point is information
+     * they're entitled to. But if the principal carries any per-resource
+     * deny rules (`uriPatterns` / `kinds` / `commandVerbs`), we convert the
+     * NotFoundError to a PolicyDeniedError so the oracle stays closed even
+     * for the second-stage deny path.
+     */
     async inspectEntity(id: string): Promise<Entity> {
-        const decision = this.enforce('read_owner_truth', { ownerStore: 'canonical', resourceUri: `cluster://canonical/${id}` });
-        const entity = await this.kernel.inspectEntity(id);
+        // Coarse pre-fetch gate WITHOUT resourceUri — collapses the
+        // existence oracle to a single PolicyDeniedError for any denied
+        // principal regardless of the entity id supplied.
+        this.enforce('read_owner_truth', { ownerStore: 'canonical' });
+
+        let entity: Entity;
+        try {
+            entity = await this.kernel.inspectEntity(id);
+        } catch (err) {
+            if (err instanceof NotFoundError && this.hasAnyPerResourceRule('read_owner_truth')) {
+                // Principal has rules that condition on resource URI / kind
+                // — second-stage refinement could deny existent ids while
+                // nonexistent ids would surface NotFoundError. Unify both
+                // to PolicyDeniedError to close that per-resource oracle.
+                throw new PolicyDeniedError({
+                    decision: 'deny',
+                    matchedPolicyId: '__refined_deny',
+                    matchedPolicyName: 'Refined deny (per-resource gate)',
+                    capability: 'read_owner_truth',
+                    reason: 'Per-resource policy denied access.',
+                    principalId: this.context.principal.id,
+                    trustZone: this.context.trustZone ?? this.context.principal.trustZone,
+                    resourceUri: `cluster://canonical/${id}`,
+                    requiresApproval: false,
+                });
+            }
+            throw err;
+        }
+
+        // Refined per-resource enforce — may carry redaction rules. If this
+        // denies (per-resource rule fires) we surface PolicyDeniedError;
+        // existent and nonexistent ids now both yield PolicyDeniedError, no
+        // oracle remains.
+        const decision = this.enforce('read_owner_truth', {
+            ownerStore: 'canonical',
+            resourceUri: `cluster://canonical/${id}`,
+            entityKind: entity.kind,
+        });
         const rules = this.collectRedactionRules(decision);
         return rules.length > 0 ? redactEntity(entity, rules) : entity;
+    }
+
+    /**
+     * Returns true when the principal has any policy rule that conditions
+     * its match on a per-resource axis (uriPatterns, kinds, commandVerbs).
+     * Used by the double-enforce pattern to decide whether NotFoundError
+     * after a coarse-allow should be unified to PolicyDeniedError — i.e.,
+     * whether a verb-refined / kind-refined / uri-refined deny COULD have
+     * fired had the fetch succeeded.
+     *
+     * Conservative: returns true whenever any deny rule for the given
+     * capability targets one of these axes. The cost of converting an
+     * extra NotFoundError to PolicyDeniedError is acceptable; the cost of
+     * leaving a refined-deny oracle open is not.
+     */
+    private hasAnyPerResourceRule(capability: Capability): boolean {
+        const principalIds = new Set<string>([this.context.principal.id, ...this.context.principal.roles]);
+        for (const policy of this.policyOptions.policies ?? []) {
+            if (policy.decision !== 'deny') continue;
+            if (policy.match.capabilities && !policy.match.capabilities.includes(capability)) continue;
+            const policyPrincipals = policy.match.principals;
+            if (policyPrincipals && policyPrincipals.length > 0) {
+                const overlap = policyPrincipals.some((p) => principalIds.has(p));
+                if (!overlap) continue;
+            }
+            // A deny rule for this capability whose match references any
+            // per-resource axis. Such a rule COULD have fired at the
+            // refined enforce stage.
+            const hasPerResourceAxis =
+                (policy.match.uriPatterns && policy.match.uriPatterns.length > 0) ||
+                (policy.match.kinds && policy.match.kinds.length > 0) ||
+                (policy.match.commandVerbs && policy.match.commandVerbs.length > 0);
+            if (hasPerResourceAxis) return true;
+        }
+        return false;
     }
 
     async findSources(input: FindSourcesInput): Promise<FindSourcesResult> {
@@ -332,11 +422,31 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
                 continue;
             }
             if (e.subjectStore === 'ledger' || e.subjectStore === 'index') {
-                // If the event references a targetStore in its detail, derive
-                // the effective ownerStore from there and gate accordingly.
-                const targetStore = typeof e.detail?.targetStore === 'string'
-                    ? (e.detail.targetStore as 'canonical' | 'artifact' | 'index' | 'ledger')
-                    : undefined;
+                // KERNEL-R2-008: an attacker-controlled
+                // `detail.targetStore` string previously flowed through
+                // a raw TypeScript cast and into matchStores. Wildcard
+                // `allow read_derivative` policies (which have no
+                // `stores` constraint) absorbed the unknown value, so
+                // a forged event with `targetStore='malicious'` leaked
+                // through. We now validate the claim against the known
+                // store-type union; if the `detail` carries a
+                // `targetStore` claim that isn't recognised we DROP
+                // the event rather than fall back to a default-allow
+                // path. An attacker forging the targetStore in
+                // unrelated ledger detail can no longer reach the
+                // policy gate at all.
+                const ALLOWED_STORES = new Set(['canonical', 'artifact', 'index', 'ledger']);
+                const rawTarget = e.detail?.targetStore;
+                let targetStore: 'canonical' | 'artifact' | 'index' | 'ledger' | undefined;
+                if (rawTarget === undefined) {
+                    targetStore = undefined;
+                } else if (typeof rawTarget === 'string' && ALLOWED_STORES.has(rawTarget)) {
+                    targetStore = rawTarget as 'canonical' | 'artifact' | 'index' | 'ledger';
+                } else {
+                    // targetStore claim present but malformed / unknown:
+                    // event is suspicious, drop it.
+                    continue;
+                }
                 const derivativeDecision = evaluatePolicy({
                     principal: this.context.principal,
                     capability: 'read_derivative',
@@ -448,21 +558,54 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
     // ─── Receipt verbs ───────────────────────────────────────────────
 
     async inspectCommand(commandId: string): Promise<Command> {
-        // KERNEL-R006: the previous implementation called `enforce('read_command')`
-        // with no resource context, which meant store-scoped or verb-scoped
-        // policies (e.g. allow `read_command` only for `ingest_artifact`-verb
-        // commands targeting the artifact store) silently broadened to every
-        // command. Worse: synthetic commands manufactured by helpers
-        // (createEntity / ingestArtifact / linkEvidence — see KERNEL-002)
-        // carry `kind` / `name` / `entityId` in their payload, so a caller
-        // permitted to discover commands but NOT to read the owner truth
-        // could read entity names through the inspectCommand surface.
+        // KERNEL-R006 + KERNEL-R2-001: the policy gate runs BEFORE the
+        // command is fetched, otherwise a denied principal who supplies
+        // a real commandId observes `PolicyDeniedError` while one who
+        // supplies a bogus id observes `NotFoundError`. That error-type
+        // distinction is an existence oracle: a denied caller can
+        // enumerate which commandIds exist by counting which response
+        // type they get.
         //
-        // Two-step fix:
-        // 1. Resolve the command first so we can pass verb + targetStore to
-        //    the policy gate.
-        // 2. Apply payload redaction based on the resolved policy's rules.
-        const command = await this.kernel.inspectCommand(commandId);
+        // We enforce twice: a coarse pre-fetch gate WITHOUT commandVerb
+        // (so the existence oracle collapses to a single
+        // PolicyDeniedError for both cases), then — only if the coarse
+        // gate allowed — fetch the command, refine with commandVerb,
+        // and apply payload redaction.
+        //
+        // AGG-004 fix-up (Wave A3): the verb-refinement second stage
+        // can still re-introduce the oracle when the principal carries
+        // a verb-conditioned deny rule (kinds / uriPatterns /
+        // commandVerbs). Existent ids would surface PolicyDeniedError
+        // at the refined stage; nonexistent ids surface NotFoundError
+        // from the fetch. If the fetch throws NotFoundError after the
+        // coarse passes AND the principal has any per-resource rule
+        // for read_command, we unify to PolicyDeniedError so the
+        // oracle stays closed at the refined stage too.
+        this.enforce('read_command', {
+            resourceUri: `cluster://ledger/${commandId}`,
+            ownerStore: 'ledger',
+        });
+
+        let command: Command;
+        try {
+            command = await this.kernel.inspectCommand(commandId);
+        } catch (err) {
+            if (err instanceof NotFoundError && this.hasAnyPerResourceRule('read_command')) {
+                throw new PolicyDeniedError({
+                    decision: 'deny',
+                    matchedPolicyId: '__refined_deny',
+                    matchedPolicyName: 'Refined deny (per-resource gate)',
+                    capability: 'read_command',
+                    reason: 'Per-resource policy denied access.',
+                    principalId: this.context.principal.id,
+                    trustZone: this.context.trustZone ?? this.context.principal.trustZone,
+                    resourceUri: `cluster://ledger/${commandId}`,
+                    requiresApproval: false,
+                });
+            }
+            throw err;
+        }
+
         const decision = this.enforce('read_command', {
             resourceUri: `cluster://ledger/${commandId}`,
             ownerStore: 'ledger',
@@ -639,14 +782,25 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
 
     /**
      * Subject-scoped provenance trace. Caller must hold `trace_provenance`.
-     * Output is the raw event list (no redaction applied here — graph-level
-     * redaction lives in {@link traceObject}); we just gate access.
+     *
+     * KERNEL-R2-004: previously returned the raw `ProvenanceEvent[]` with
+     * no per-event redaction, so a caller with `trace_provenance` allowed
+     * (capability) but matched against a policy that carried a
+     * `provenance_actors` redaction rule would still see raw `actorId`
+     * fields. Graph-level surfaces (`traceObject` / `traceBundle`) already
+     * call `redactProvenanceActors` on the graph nodes; the flat event
+     * list was the leak. We now apply `redactProvenanceEvent` per event
+     * so `provenance_actors`, `command_payload`, and `receipt_details`
+     * rules from the matched policy / trust zone all fire here too.
      */
     async traceProvenance(subjectId: string): Promise<ProvenanceEvent[]> {
-        this.enforce('trace_provenance', {
+        const decision = this.enforce('trace_provenance', {
             resourceUri: `cluster://canonical/${subjectId}`,
         });
-        return this.kernel.traceProvenance(subjectId);
+        const events = await this.kernel.traceProvenance(subjectId);
+        const rules = this.collectRedactionRules(decision);
+        if (rules.length === 0) return events;
+        return events.map((ev) => redactProvenanceEvent(ev, rules));
     }
 
     /**

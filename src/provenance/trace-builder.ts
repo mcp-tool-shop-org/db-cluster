@@ -429,6 +429,14 @@ export class TraceBuilder {
             case 'evidence_linked': return 'evidence_linked_to';
             case 'mutation_committed': return 'mutation_committed_by';
             case 'index_rebuilt': return 'index_record_derived_from';
+            // STORES-R2-004: 'mutation_orphaned' means the store mutation
+            // landed but the receipt write failed — the provenance chain
+            // is incomplete by construction. Use 'missing_provenance' so
+            // trace consumers surface the broken chain, not a misleading
+            // "entity created by X" edge. (Adding a dedicated edge type
+            // would require touching src/types/provenance-graph.ts which
+            // is out of the Stores domain scope for this wave.)
+            case 'mutation_orphaned': return 'missing_provenance';
             default: return 'entity_created_by';
         }
     }

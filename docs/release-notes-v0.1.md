@@ -91,7 +91,7 @@ Optional: Postgres canonical backend via `createCluster({ backends: { canonical:
 
 ## Status
 
-15 development phases complete. 623+ tests passing (post-Wave-A2 count finalized in the amend report). Integration gate with repo-knowledge proven. Package boundary deliberate and documented. Dogfood-swarm Stage A surfaced and corrected drift across CI, examples, and docs through two amend waves (A1 and A2).
+15 development phases complete. 699+ tests passing across 63 files (post-Wave-A3 count finalized in the amend report). Integration gate with repo-knowledge proven. Package boundary deliberate and documented. Dogfood-swarm Stage A surfaced and corrected drift across CI, examples, and docs through three amend waves (A1, A2, and A3 — A3 introduced the v2 architecture with lens-specialized adversarial verifier ensemble).
 
 ## License
 

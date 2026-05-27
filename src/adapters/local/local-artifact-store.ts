@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Artifact } from '../../types/artifact.js';
 import type {
@@ -93,10 +93,35 @@ export class LocalArtifactStore implements ArtifactStore {
             owner: 'artifact',
         };
 
-        // Write content by hash — content-addressed, deduplicates identical content
+        // Write content by hash — content-addressed, deduplicates identical content.
+        //
+        // STORES-R2-005: write atomically via tmp + rename so a crash
+        // mid-write does not leave a partial content file. The pre-fix
+        // plain `writeFileSync(contentPath, ...)` left an orphan partial
+        // file if the process died after `writeFileSync` opened/truncated
+        // the target but before it finished writing. The metadata persist
+        // path is already atomic — this brings the content write into
+        // symmetry. On failure we unlink the tmp file (best-effort) so no
+        // `.tmp` orphan accumulates and rethrow so the caller sees the
+        // failure (matches the previous semantics).
         const contentPath = join(this.contentDir, contentHash);
         if (!existsSync(contentPath)) {
-            writeFileSync(contentPath, input.content);
+            const tmpContentPath = `${contentPath}.tmp`;
+            try {
+                writeFileSync(tmpContentPath, input.content);
+                renameSync(tmpContentPath, contentPath);
+            } catch (err) {
+                // Best-effort cleanup — if the tmp file was created before
+                // the failure, remove it so we don't leak `.tmp` orphans.
+                try {
+                    if (existsSync(tmpContentPath)) {
+                        unlinkSync(tmpContentPath);
+                    }
+                } catch {
+                    // Cleanup is best-effort. The primary error wins.
+                }
+                throw err;
+            }
         }
 
         this.artifacts.set(artifact.id, artifact);
@@ -133,9 +158,32 @@ export class LocalArtifactStore implements ArtifactStore {
         }
 
         // Write content by hash — safe to join now that we've validated the hash shape.
+        //
+        // V1-004 fix (Wave A3 fix-up): mirror the STORES-R2-005 atomic
+        // tmp+rename pattern that ingest() uses. Pre-fix this sibling
+        // helper still used plain `writeFileSync(contentPath, content)`,
+        // which leaves an orphan partial file if the process dies after
+        // writeFileSync opens/truncates the target but before it finishes
+        // writing. The restore path now matches the ingest path: write to
+        // tmp, rename atomically, clean up tmp on failure.
         const contentPath = join(this.contentDir, metadata.contentHash);
         if (!existsSync(contentPath)) {
-            writeFileSync(contentPath, content);
+            const tmpContentPath = `${contentPath}.tmp`;
+            try {
+                writeFileSync(tmpContentPath, content);
+                renameSync(tmpContentPath, contentPath);
+            } catch (err) {
+                // Best-effort cleanup — if the tmp file was created before
+                // the failure, remove it so we don't leak `.tmp` orphans.
+                try {
+                    if (existsSync(tmpContentPath)) {
+                        unlinkSync(tmpContentPath);
+                    }
+                } catch {
+                    // Cleanup is best-effort. The primary error wins.
+                }
+                throw err;
+            }
         }
 
         // Preserve original metadata including ID; rewrite storagePath to the

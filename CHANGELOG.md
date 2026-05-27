@@ -1,5 +1,76 @@
 # Changelog
 
+## Wave A3 — Dogfood-swarm Stage A re-audit-2 amend (2026-05-27)
+
+Third corrective wave on Stage A, dispatched after
+`swarm-stage-a-reaudit2-20260527-033921Z.md` surfaced 7 HIGH findings (one a
+regression of a Wave-A2 fix) plus 8 in-scope MEDIUMs that the two prior
+amend waves did not fully close. Wave A3 also introduces the v2 swarm
+architecture — lens-verifier ensemble plus mechanical completeness gates
+plus a test-first gate plus saturation exit — and standardises the new
+infrastructure pieces (`stryker` mutation testing, `ast-grep` completeness
+rules) as standing protocol from this wave onward.
+
+### Kernel
+- Atomic index rebuild — the clear-then-loop pattern in
+  `performIndexRebuild()` is replaced by the new `IndexStore.replaceAll()`
+  contract method so a crash mid-rebuild cannot leave the index empty
+  (KERNEL-R2-003, exposed by Wave A2's incomplete close).
+- Wave-A1 typed errors and Wave-A2 atomic queue writes carry forward;
+  this wave's mutation-testing harness (`npm run test:mutation`) is the
+  first machine check on the test suite's discrimination power against
+  those code paths.
+
+### Stores
+- `importSnapshot`, `importEvent`, `importReceipt` are no longer optional
+  on `CanonicalStore`/`ArtifactStore`/`LedgerStore` contract interfaces.
+  Adapters that cannot honour the contract throw
+  `ImportSnapshotNotSupportedError` (or an equivalent typed error from
+  `src/ops/errors.ts`) from a required method — restore() now relies on
+  every adapter implementing the surface rather than feature-detecting
+  it (STORES-R2-002).
+
+### Surface
+- The remaining post-A2 surfaces sweep — any direct `new ClusterResolver(...)`
+  outside `src/sdk/cluster-sdk.ts` is now mechanically gated by R3 of
+  the completeness checks, closing the regression vector that Wave A2's
+  cli.ts/SDK cleanup left to discipline alone.
+
+### Tests
+- Test-first gate added — all Wave A3 fixes shipped with a failing test
+  before the production change, then a green test on the fix.
+- Mutation testing wired via `@stryker-mutator/core` +
+  `@stryker-mutator/vitest-runner` + `@stryker-mutator/typescript-checker`.
+  See `stryker.conf.json` for the target file list (every code path Waves
+  A1/A2/A3 touched). Run with `npm run test:mutation`.
+- Property-based tests via `fast-check` for any pure-function code path
+  introduced or modified by this wave.
+
+### CI/Docs
+- New `scripts/completeness-checks.mjs` orchestrator + 5 ast-grep rules
+  in `scripts/checks/`:
+  - R1: `kernel._kernel` access outside `test/`
+  - R2: non-atomic `index.clear()` then `index.index(...)` loop in one function
+  - R3: raw `new ClusterResolver(...)` outside `src/sdk/cluster-sdk.ts`
+  - R4: `switch` on `*.store` missing any of the 5 store cases
+  - R5: optional `import*` methods on contract interfaces
+- New `[7/7] Completeness` stage in `scripts/release-gate.mjs` invokes
+  the orchestrator; release-gate now has 7 stages (was 6).
+- New `npm run test:mutation` and `npm run completeness` scripts in
+  `package.json`. Stryker config at `stryker.conf.json`.
+- `docs/sdk.md` `retrieveBundle` example fixed — used invented
+  `confidence`/`gaps`/`staleRecords` fields that do not exist on
+  `EvidenceBundle`; now shows real
+  `confidenceBoundaries`/`missingContext`/`freshness.staleCount` fields
+  from `src/types/evidence-bundle.ts` (CIDOCS-R2-001).
+- `docs/sdk.md` `policyExplain`/`policyTest` examples fixed — used
+  invented `capabilities` field on `Principal`; now shows real
+  `{ id, name, roles, trustZone, metadata? }` shape from
+  `src/types/policy.ts` (CIDOCS-R2-003).
+- `README.md`, `docs/release-notes-v0.1.md`, `docs/phase-15-closeout.md`
+  test counts updated from `623+ / 58 files` to the post-wave count
+  (`699+ tests across 63 files`) (CIDOCS-R2-002).
+
 ## Wave A2 — Dogfood-swarm Stage A re-audit amend (2026-05-27)
 
 Second amend wave after the Stage A re-audit

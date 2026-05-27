@@ -21,14 +21,21 @@ export interface LedgerStore {
      * Import an event preserving the original `id` and `timestamp`.
      * Used by backup/restore — STORES-002 requires this so re-running restore
      * is idempotent (otherwise every run inserts new copies under fresh UUIDs).
+     *
+     * REQUIRED on the contract (STORES-R2-002): every adapter must
+     * implement this. backup.ts::restore() throws
+     * ImportSnapshotNotSupportedError at runtime when missing — promoting
+     * to a contract requirement closes the compile-time gap.
      */
-    importEvent?(event: ProvenanceEvent): Promise<ProvenanceEvent>;
+    importEvent(event: ProvenanceEvent): Promise<ProvenanceEvent>;
 
     /**
      * Import a receipt preserving the original `id` and `committedAt`.
      * Same rationale as {@link importEvent} but for receipts.
+     *
+     * REQUIRED on the contract (STORES-R2-002).
      */
-    importReceipt?(receipt: Receipt): Promise<Receipt>;
+    importReceipt(receipt: Receipt): Promise<Receipt>;
 }
 
 export interface LedgerFilter {

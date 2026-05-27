@@ -68,15 +68,21 @@ const result = await sdk.findSources('database architecture');
 
 #### `retrieveBundle(query, options?)`
 
-Structured evidence bundle with freshness and gaps.
+Structured evidence bundle with freshness, missing context, and confidence
+boundaries. The real `EvidenceBundle` shape is defined in
+`src/types/evidence-bundle.ts` — `confidence` is not a single field; it is
+expressed via per-claim `confidenceBoundaries`, and gaps are surfaced via
+`missingContext`/`freshness`.
 
 ```typescript
 const bundle = await sdk.retrieveBundle('LLM safety claims', { limit: 10 });
 
-console.log(bundle.confidence);        // 'high' | 'medium' | 'low' | 'none'
-console.log(bundle.resolvedEntities);  // owner truth entities
-console.log(bundle.gaps);              // missing references
-console.log(bundle.staleRecords);      // stale index entries
+console.log(bundle.resolvedEntities);        // owner truth entities
+console.log(bundle.resolvedArtifacts);       // owner truth artifacts
+console.log(bundle.confidenceBoundaries);    // [{ claim, reason, level }] — verified | partial | unverified
+console.log(bundle.missingContext);          // [{ description, store, expectedId?, impact }]
+console.log(bundle.freshness.staleCount);    // stale index records in this bundle
+console.log(bundle.freshness.allFresh);      // boolean — every record fresh?
 ```
 
 #### `explainRetrieval(bundle)`
@@ -215,11 +221,19 @@ for (const r of receipts) {
 
 #### `policyExplain(input)`
 
-Explain effective policy for a principal.
+Explain effective policy for a principal. The `Principal` shape is defined
+in `src/types/policy.ts` — `{ id, name, roles, trustZone, metadata? }`.
+Capabilities are not attached to the principal; they are granted via roles
+and trust-zone defaults (see `docs/policy-and-redaction.md`).
 
 ```typescript
 const result = sdk.policyExplain({
-    principal: { id: 'agent', trustZone: 'agent', capabilities: ['read'] },
+    principal: {
+        id: 'agent',
+        name: 'Agent',
+        roles: ['agent'],
+        trustZone: 'agent',
+    },
     resource: 'cluster://canonical/entity-id',
 });
 ```
@@ -230,7 +244,12 @@ Test policy actions.
 
 ```typescript
 const result = sdk.policyTest({
-    principal: { id: 'external', trustZone: 'external', capabilities: ['read'] },
+    principal: {
+        id: 'external',
+        name: 'External Caller',
+        roles: ['external'],
+        trustZone: 'external',
+    },
     actions: [
         { verb: 'read', store: 'canonical' },
         { verb: 'write', store: 'canonical' },

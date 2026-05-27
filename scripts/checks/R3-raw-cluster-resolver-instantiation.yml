@@ -1,0 +1,16 @@
+id: raw-cluster-resolver-instantiation
+language: typescript
+severity: error
+message: |
+  Raw `new ClusterResolver(...)` instantiation outside the SDK is forbidden.
+  Use ClusterSDK or PolicyEnforcedKernel — they own resolver construction so
+  the policy/sanitization layer is never bypassed. The SDK itself is the only
+  permitted instantiator (src/sdk/cluster-sdk.ts), and tests under test/ may
+  construct one for unit coverage.
+rule:
+  pattern: new ClusterResolver($$$)
+files:
+  - "src/**/*.ts"
+ignores:
+  - "src/sdk/cluster-sdk.ts"
+  - "test/**"

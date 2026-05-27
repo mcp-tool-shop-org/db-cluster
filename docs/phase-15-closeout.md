@@ -41,7 +41,7 @@ Prepare db-cluster for a real versioned release without weakening the product th
 ## Test evidence
 
 - 10/10 Phase 15 proofs pass
-- 623+ tests pass across full suite (post-Wave-A2)
+- 699+ tests pass across full suite, 63 files (post-Wave-A3)
 - Fresh install smoke: 9/9 from tarball
 - `npx tsc --noEmit` clean
 - `npm pack --dry-run` shows no test/scripts/src leakage

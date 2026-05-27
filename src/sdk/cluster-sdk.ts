@@ -16,7 +16,12 @@ import type { Entity } from '../types/entity.js';
 import {
     sanitizeArtifactForOutput,
     sanitizeEntityForOutput,
+    sanitizeReceiptForOutput,
 } from '../mcp/sanitize.js';
+import {
+    sanitizeIndexRecordForOutput,
+    sanitizeProvenanceEventForOutput,
+} from '../policy/store-output-sanitizers.js';
 
 export interface SDKOptions {
     clusterDir: string;
@@ -109,6 +114,15 @@ export interface PolicyTestResult {
  * Every operation goes through the kernel.
  */
 export class ClusterSDK {
+    /**
+     * The internal trusted principal (cluster-admin / internal trust zone).
+     * Re-exported as a static so callers can explicitly opt in to the
+     * legacy default principal without the silent-fallback warning
+     * (SURFACE-R2-004): pass `principal: ClusterSDK.INTERNAL_TRUSTED_PRINCIPAL`
+     * when you really want this — least privilege wants a custom principal.
+     */
+    static readonly INTERNAL_TRUSTED_PRINCIPAL: Principal = INTERNAL_TRUSTED_PRINCIPAL;
+
     private readonly kernel: KernelLike;
     private readonly resolver: ClusterResolver;
     private readonly policyOptions: PolicyEngineOptions | null;
@@ -133,7 +147,23 @@ export class ClusterSDK {
         );
 
         if (policyConfigured) {
-            const principal = options.principal ?? INTERNAL_TRUSTED_PRINCIPAL;
+            // SURFACE-R2-004 fix: warn loudly when a caller configures
+            // policies but forgets to set a principal. The SDK silently
+            // falls back to INTERNAL_TRUSTED_PRINCIPAL (cluster admin),
+            // which defeats least-privilege deployment intent. Callers that
+            // really want the trusted principal MUST pass it explicitly via
+            // `principal: ClusterSDK.INTERNAL_TRUSTED_PRINCIPAL` to silence
+            // the warning.
+            let principal: Principal;
+            if (options.principal === undefined) {
+                console.warn(
+                    'ClusterSDK: policies provided without principal — using INTERNAL_TRUSTED_PRINCIPAL. ' +
+                    'Pass `principal: ClusterSDK.INTERNAL_TRUSTED_PRINCIPAL` to silence.',
+                );
+                principal = INTERNAL_TRUSTED_PRINCIPAL;
+            } else {
+                principal = options.principal;
+            }
             this.kernel = new PolicyEnforcedKernel(
                 stores,
                 { principal },
@@ -188,20 +218,45 @@ export class ClusterSDK {
      * other internal fields. The MCP boundary still sanitizes — these layers
      * are independent and intentionally redundant.
      *
-     * When policies are NOT configured the SDK returns raw owner truth,
-     * preserving the historical behavior for the ~614 baseline tests.
+     * SURFACE-R2-003 fix: the previous SDK.resolve sanitizer covered only
+     * artifact + canonical. The resolver returns five store types (the two
+     * already covered plus `ledger`, `index`, and `receipt`) and the three
+     * uncovered types leaked raw ProvenanceEvent / IndexRecord / Receipt
+     * objects with `actorId`/`detail.payload`/`metadata`/`resultSummary`
+     * fields. The branches below now cover all five.
+     *
+     * AGG-002 fix-up (Wave A3): sanitization now runs UNCONDITIONALLY,
+     * not only when policy-enforced. The previous `if (this.policyEnforced)`
+     * guard meant the ~614 baseline-tests path returned raw owner truth
+     * for every store type — storagePath on artifact, actorId+detail on
+     * ledger, metadata on index, resultSummary on receipt. The
+     * `_sourceType` markers and field stripping are an unconditional
+     * boundary invariant, not a policy-gated one. The `default: never`
+     * arm makes a future 6th ResolvedObject store type a compile error
+     * rather than a silent raw-return regression.
      */
     async resolve(uri: string): Promise<{ store: string; object: unknown }> {
         const resolved = await this.resolver.resolve(uri);
-        if (this.policyEnforced) {
-            if (resolved.store === 'artifact') {
+        switch (resolved.store) {
+            case 'artifact':
                 return { store: resolved.store, object: sanitizeArtifactForOutput(resolved.object as Artifact) };
-            }
-            if (resolved.store === 'canonical') {
+            case 'canonical':
                 return { store: resolved.store, object: sanitizeEntityForOutput(resolved.object as Entity) };
+            case 'receipt':
+                return { store: resolved.store, object: sanitizeReceiptForOutput(resolved.object) };
+            case 'ledger':
+                return { store: resolved.store, object: sanitizeProvenanceEventForOutput(resolved.object) };
+            case 'index':
+                return { store: resolved.store, object: sanitizeIndexRecordForOutput(resolved.object) };
+            default: {
+                // Exhaustiveness guard — adding a new ResolvedObject store
+                // type to the union must surface as a TS compile error here.
+                // Falls back to raw object only at runtime as a last resort.
+                const _exhaustive: never = resolved;
+                void _exhaustive;
+                return { store: (resolved as { store: string }).store, object: (resolved as { object: unknown }).object };
             }
         }
-        return { store: resolved.store, object: resolved.object };
     }
 
     // ─── Provenance ────────────────────────────────────────────────
