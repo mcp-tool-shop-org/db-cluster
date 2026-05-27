@@ -153,7 +153,7 @@ async function runMutation(
  * JSDoc discipline used elsewhere in the SDK surface.
  *
  * @example
- * import { ingestRepoKnowledge } from 'db-cluster/integrations/repo-knowledge';
+ * import { ingestRepoKnowledge } from '@mcptoolshop/db-cluster/integrations/repo-knowledge';
  *
  * const result = await ingestRepoKnowledge(kernel, [
  *   { kind: 'memory_file', path: 'memory/full-treatment.md', content: '...' },

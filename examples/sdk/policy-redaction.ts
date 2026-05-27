@@ -11,14 +11,14 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ClusterSDK } from 'db-cluster/sdk';
+import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
 import {
     DEFAULT_POLICIES,
     DEFAULT_TRUST_ZONES,
     DEFAULT_VISIBILITY_RULES,
     INTERNAL_TRUSTED_PRINCIPAL,
-} from 'db-cluster/policy';
-import type { Principal } from 'db-cluster/policy';
+} from '@mcptoolshop/db-cluster/policy';
+import type { Principal } from '@mcptoolshop/db-cluster/policy';
 
 async function main() {
     const dataDir = mkdtempSync(join(tmpdir(), 'db-cluster-policy-'));

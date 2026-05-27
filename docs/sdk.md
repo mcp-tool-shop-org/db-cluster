@@ -5,7 +5,7 @@ The `ClusterSDK` provides programmatic access to db-cluster. It wraps the kernel
 ## Setup
 
 ```typescript
-import { ClusterSDK } from 'db-cluster/sdk';
+import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
 
 const sdk = new ClusterSDK({ clusterDir: '.db-cluster' });
 ```
@@ -21,13 +21,13 @@ When `policies` is set, the SDK routes reads and writes through a
 is omitted the SDK uses a raw `ClusterKernel`.
 
 ```typescript
-import { ClusterSDK } from 'db-cluster/sdk';
+import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
 import {
     DEFAULT_POLICIES,
     DEFAULT_TRUST_ZONES,
     DEFAULT_VISIBILITY_RULES,
-} from 'db-cluster/policy';
-import type { Principal } from 'db-cluster/policy';
+} from '@mcptoolshop/db-cluster/policy';
+import type { Principal } from '@mcptoolshop/db-cluster/policy';
 
 const operator: Principal = {
     id: 'operator',

@@ -17,9 +17,9 @@ export const config: SiteConfig = {
     primaryCta: { href: 'https://github.com/mcp-tool-shop-org/db-cluster', label: 'View on GitHub' },
     secondaryCta: { href: 'handbook/', label: 'Read the Handbook' },
     previews: [
-      { label: 'Install', code: 'npm install db-cluster' },
-      { label: 'Initialize', code: 'npx db-cluster init' },
-      { label: 'Retrieve', code: 'npx db-cluster retrieve "your query"' },
+      { label: 'Install', code: 'npm install @mcptoolshop/db-cluster' },
+      { label: 'Initialize', code: 'npx @mcptoolshop/db-cluster init' },
+      { label: 'Retrieve', code: 'npx @mcptoolshop/db-cluster retrieve "your query"' },
     ],
   },
 
@@ -55,15 +55,15 @@ export const config: SiteConfig = {
       cards: [
         {
           title: 'Install',
-          code: 'npm install db-cluster',
+          code: 'npm install @mcptoolshop/db-cluster',
         },
         {
           title: 'Initialize and ingest',
-          code: 'npx db-cluster init\nnpx db-cluster ingest ./evidence.md\nnpx db-cluster retrieve "what we know about X"',
+          code: 'npx @mcptoolshop/db-cluster init\nnpx @mcptoolshop/db-cluster ingest ./evidence.md\nnpx @mcptoolshop/db-cluster retrieve "what we know about X"',
         },
         {
           title: 'Programmatic SDK',
-          code: "import { ClusterSDK } from 'db-cluster/sdk';\n\nconst sdk = new ClusterSDK({ clusterDir: './.db-cluster' });\nconst bundle = await sdk.retrieveBundle('your query');\nconsole.log(bundle.confidenceBoundaries);",
+          code: "import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';\n\nconst sdk = new ClusterSDK({ clusterDir: './.db-cluster' });\nconst bundle = await sdk.retrieveBundle('your query');\nconsole.log(bundle.confidenceBoundaries);",
         },
         {
           title: 'MCP server (for AI agents)',

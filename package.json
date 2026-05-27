@@ -1,5 +1,5 @@
 {
-  "name": "db-cluster",
+  "name": "@mcptoolshop/db-cluster",
   "version": "1.0.0",
   "description": "AI-native federated database cluster with typed errors, mutation receipts, and MCP/SDK/CLI surfaces — for AI agents needing trustworthy retrieval and operators needing safe writes.",
   "type": "module",

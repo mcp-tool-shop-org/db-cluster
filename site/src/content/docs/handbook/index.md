@@ -13,7 +13,7 @@ This handbook is the canonical operator + developer + AI-integrator guide. The C
 
 - **AI agents** consuming the MCP surface — `cluster_find_sources`, `cluster_retrieve_bundle`, `cluster_propose_mutation`, etc. — and needing to branch on structured `AiErrorEnvelope` responses.
 - **Operators** running the cluster locally or with a Postgres canonical backend, who want typed exit codes, doctor / verify diagnostics, and safe backup / restore.
-- **Developers** embedding db-cluster as a library via `import 'db-cluster/sdk'` and the `PolicyEnforcedKernel` surface.
+- **Developers** embedding db-cluster as a library via `import '@mcptoolshop/db-cluster/sdk'` and the `PolicyEnforcedKernel` surface.
 
 ## What's in this handbook
 

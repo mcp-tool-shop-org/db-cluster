@@ -19,12 +19,12 @@
  *     source doc.
  *
  *   Layer 2 — Import name verification.
- *     Greps every `from 'db-cluster'` and `from 'db-cluster/<subpath>'` in
+ *     Greps every `from '@mcptoolshop/db-cluster'` and `from '@mcptoolshop/db-cluster/<subpath>'` in
  *     docs/**\/*.md, extracts the named imports, and verifies each name is
  *     present in the actual exported surface (by parsing the index.ts of
  *     the relevant subpath). Catches drift like `import { ClusterKernel }
- *     from 'db-cluster'` after ClusterKernel was made non-public (the
- *     KERNEL-013 wave) or `import { doctor } from 'db-cluster/ops/doctor'`
+ *     from '@mcptoolshop/db-cluster'` after ClusterKernel was made non-public (the
+ *     KERNEL-013 wave) or `import { doctor } from '@mcptoolshop/db-cluster/ops/doctor'`
  *     where the subpath doesn't exist in the exports map.
  *
  * Wiring:
@@ -35,8 +35,8 @@
  * Pairing with existing Stage [5/8]:
  *   The existing [5/8] `scanForDrift` in release-gate.mjs catches `from
  *   '../../src/...'` imports in shipped directories (examples/, dashboard/lib/)
- *   that should be db-cluster-public-API imports. This new detector is the
- *   inverse — it catches db-cluster-public-API imports of names that don't
+ *   that should be @mcptoolshop/db-cluster-public-API imports. This new detector is the
+ *   inverse — it catches @mcptoolshop/db-cluster-public-API imports of names that don't
  *   actually exist in the public surface. Complementary, not overlapping.
  *
  * Usage: node scripts/doc-drift.mjs [--verbose]
@@ -62,12 +62,12 @@ const VERBOSE = process.argv.includes('--verbose');
 
 // ---------------------------------------------------------------------------
 // Subpath → exports-source-file map. Maps the public subpath the doc imports
-// from (e.g. `db-cluster/sdk`) to the relative path of the file that defines
+// from (e.g. `@mcptoolshop/db-cluster/sdk`) to the relative path of the file that defines
 // the public exports (e.g. `src/sdk/index.ts`). The set of named exports in
 // that file IS the source of truth for the layer-2 import-name check.
 //
 // Subpaths not in this map are looked up dynamically via package.json
-// `exports`, but the index file path is computed by stripping `db-cluster/`
+// `exports`, but the index file path is computed by stripping `@mcptoolshop/db-cluster/`
 // and looking under src/<rest>/index.ts. The explicit map covers cases where
 // the dist path → src path mapping isn't 1:1.
 //
@@ -76,11 +76,11 @@ const VERBOSE = process.argv.includes('--verbose');
 // ---------------------------------------------------------------------------
 
 const SUBPATH_TO_SRC = {
-    'db-cluster': 'src/index.ts',
-    'db-cluster/sdk': 'src/sdk/index.ts',
-    'db-cluster/mcp': 'src/mcp/index.ts',
-    'db-cluster/policy': 'src/policy/index.ts',
-    'db-cluster/types': 'src/types/index.ts',
+    '@mcptoolshop/db-cluster': 'src/index.ts',
+    '@mcptoolshop/db-cluster/sdk': 'src/sdk/index.ts',
+    '@mcptoolshop/db-cluster/mcp': 'src/mcp/index.ts',
+    '@mcptoolshop/db-cluster/policy': 'src/policy/index.ts',
+    '@mcptoolshop/db-cluster/types': 'src/types/index.ts',
 };
 
 // ---------------------------------------------------------------------------
@@ -524,7 +524,7 @@ function runLayer1Typecheck(blocks) {
 }
 
 // ---------------------------------------------------------------------------
-// Layer 2 — Verify db-cluster imports in docs reference real exports
+// Layer 2 — Verify @mcptoolshop/db-cluster imports in docs reference real exports
 // ---------------------------------------------------------------------------
 
 /**
@@ -602,7 +602,7 @@ function parseExportedNames(filePath) {
 }
 
 /**
- * Resolve a db-cluster subpath to its src index file. Tries the explicit
+ * Resolve a @mcptoolshop/db-cluster subpath to its src index file. Tries the explicit
  * SUBPATH_TO_SRC map first; falls back to a path-shaped convention.
  *
  * Returns null if the subpath cannot be resolved — the doc-drift detector
@@ -612,9 +612,9 @@ function resolveSubpathToSrc(subpath) {
     if (SUBPATH_TO_SRC[subpath]) {
         return join(ROOT, SUBPATH_TO_SRC[subpath]);
     }
-    // Fallback convention: db-cluster/<a> → src/<a>/index.ts
-    const rest = subpath.replace(/^db-cluster\//, '');
-    if (rest === subpath) return null; // not a db-cluster path
+    // Fallback convention: @mcptoolshop/db-cluster/<a> → src/<a>/index.ts
+    const rest = subpath.replace(/^@mcptoolshop\/db-cluster\//, '');
+    if (rest === subpath) return null; // not a @mcptoolshop/db-cluster path
     // Try src/<rest>/index.ts
     const candidate = join(ROOT, 'src', rest, 'index.ts');
     if (existsSync(candidate)) return candidate;
@@ -625,7 +625,7 @@ function resolveSubpathToSrc(subpath) {
 }
 
 /**
- * Extract `import { ... } from 'db-cluster'` and similar imports from a
+ * Extract `import { ... } from '@mcptoolshop/db-cluster'` and similar imports from a
  * markdown file's typescript blocks, then verify each named import is in
  * the actual exported surface.
  */
@@ -633,9 +633,9 @@ function checkLayer2Imports(blocks) {
     /** @type {Array<{ docFile: string; docLine: number; subpath: string; missing: string[] }>} */
     const failures = [];
 
-    // Allow `import { ... } from 'db-cluster[/subpath]'` and
+    // Allow `import { ... } from '@mcptoolshop/db-cluster[/subpath]'` and
     // `import type { ... } from '...'`.
-    const importRe = /import\s+(?:type\s+)?\{\s*([^}]+)\s*\}\s+from\s+['"](db-cluster(?:\/[\w-]+)?)['"]/g;
+    const importRe = /import\s+(?:type\s+)?\{\s*([^}]+)\s*\}\s+from\s+['"](@mcptoolshop\/db-cluster(?:\/[\w-]+)?)['"]/g;
 
     for (const block of blocks) {
         let m;
@@ -732,7 +732,7 @@ function main() {
     console.log('\n[2/2] Layer 2 — Import-name verification');
     const layer2Failures = checkLayer2Imports(allBlocks);
     if (layer2Failures.length === 0) {
-        console.log('  OK — all db-cluster imports reference real exports');
+        console.log('  OK — all @mcptoolshop/db-cluster imports reference real exports');
     } else {
         console.log(`  FAIL — ${layer2Failures.length} import drift(s)`);
         for (const f of layer2Failures) {

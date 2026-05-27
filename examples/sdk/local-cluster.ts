@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ClusterSDK } from 'db-cluster/sdk';
+import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
 
 async function main() {
     // Create a temporary cluster — SDK owns store wiring.

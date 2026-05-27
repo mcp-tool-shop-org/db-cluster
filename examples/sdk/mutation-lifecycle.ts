@@ -8,7 +8,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ClusterSDK } from 'db-cluster/sdk';
+import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
 
 async function main() {
     const dataDir = mkdtempSync(join(tmpdir(), 'db-cluster-mutation-'));

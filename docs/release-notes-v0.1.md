@@ -59,7 +59,7 @@ A database cluster where specialized truth stores (canonical, artifact, index, l
 ## Install
 
 ```bash
-npm install db-cluster
+npm install @mcptoolshop/db-cluster
 ```
 
 ## Quick start
@@ -75,9 +75,9 @@ db-cluster doctor
 ## Package exports
 
 ```typescript
-import { createLocalCluster, createCluster, doctor, verify, backup, restore } from 'db-cluster';
-import { ClusterSDK } from 'db-cluster/sdk';
-import { PolicyEnforcedKernel } from 'db-cluster/policy';
+import { createLocalCluster, createCluster, doctor, verify, backup, restore } from '@mcptoolshop/db-cluster';
+import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
+import { PolicyEnforcedKernel } from '@mcptoolshop/db-cluster/policy';
 ```
 
 The raw `ClusterKernel` class is no longer publicly exported (KERNEL-013); drive

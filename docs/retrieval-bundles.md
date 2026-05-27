@@ -13,7 +13,7 @@ Retrieval in db-cluster is not vector similarity search. It is structured resolu
 ## The EvidenceBundle
 
 The canonical type lives at `src/types/evidence-bundle.ts` and is re-exported
-through `db-cluster/types`:
+through `@mcptoolshop/db-cluster/types`:
 
 ```typescript
 import type {
@@ -22,7 +22,7 @@ import type {
     FreshnessAssessment,
     MissingContext,
     ConfidenceBoundary,
-} from 'db-cluster/types';
+} from '@mcptoolshop/db-cluster/types';
 ```
 
 The shape:

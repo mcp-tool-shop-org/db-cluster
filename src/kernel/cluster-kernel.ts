@@ -210,8 +210,8 @@ export interface CommandLifecycleEnvelope {
  * see the contract there.
  *
  * @example
- *   import { ClusterKernel } from 'db-cluster/kernel';
- *   import { createLocalCluster } from 'db-cluster/adapters/local';
+ *   import { ClusterKernel } from '@mcptoolshop/db-cluster/kernel';
+ *   import { createLocalCluster } from '@mcptoolshop/db-cluster/adapters/local';
  *
  *   const stores = await createLocalCluster('.db-cluster');
  *   const kernel = new ClusterKernel(stores, { dataDir: '.db-cluster' });

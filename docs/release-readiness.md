@@ -9,11 +9,11 @@ Assessment of whether db-cluster is ready for a versioned release.
 | Package exports are intentional | ✓ | `exports` field in package.json, documented in package-boundary.md |
 | CLI bin works from installed package | ✓ | smoke-install.mjs: `db-cluster --help`, `init`, `doctor` pass |
 | MCP bin exists and is runnable | ✓ | smoke-install.mjs: bin found in node_modules/.bin |
-| SDK import works | ✓ | smoke-install.mjs: `import { ClusterSDK } from 'db-cluster/sdk'` succeeds |
+| SDK import works | ✓ | smoke-install.mjs: `import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk'` succeeds |
 | Subpath exports work | ✓ | smoke-install.mjs: sdk, policy, types imports succeed |
 | Quickstart runs from package | ✓ | smoke-install.mjs: ingest + create + retrieve cycle works |
 | Docs match runtime CLI/SDK/MCP | ✓ | docs/cli.md, docs/sdk.md, docs/mcp.md updated post-Wave-A1 |
-| Examples use package imports | ✓ | All examples import from `'db-cluster'`, not `'../../src/'` (release-gate enforces this) |
+| Examples use package imports | ✓ | All examples import from `'@mcptoolshop/db-cluster'`, not `'../../src/'` (release-gate enforces this) |
 | Examples typecheck | ✓ | `tsconfig.examples.json` runs `tsc --noEmit` against `examples/**`; wired into `npm run lint` |
 | No raw adapters leak | ✓ | Only factory functions exported, not store implementations |
 | Package excludes test/scripts | ✓ | `files` field restricts to dist/docs/examples/dashboard |

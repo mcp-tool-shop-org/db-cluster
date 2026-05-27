@@ -81,7 +81,7 @@ console.log(explanation);
 ## The provenance graph
 
 Traces return a `ProvenanceGraph`. The canonical type lives at
-`src/types/provenance-graph.ts` and is re-exported through `db-cluster/types`:
+`src/types/provenance-graph.ts` and is re-exported through `@mcptoolshop/db-cluster/types`:
 
 ```typescript
 import type {
@@ -95,7 +95,7 @@ import type {
     TraceGap,
     TraceWarning,
     TraceSummary,
-} from 'db-cluster/types';
+} from '@mcptoolshop/db-cluster/types';
 ```
 
 The shape:

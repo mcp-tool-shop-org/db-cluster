@@ -8,18 +8,18 @@
  *   - Ops (doctor, verify, backup, restore)
  *   - URI utilities
  *
- * SUBPATH EXPORTS (import from 'db-cluster/sdk', 'db-cluster/mcp', etc.):
- *   - db-cluster/sdk — ClusterSDK high-level client (recommended for application code)
- *   - db-cluster/mcp — MCP server tools + handler
- *   - db-cluster/policy — PolicyEnforcedKernel + redaction (use this for in-process callers
+ * SUBPATH EXPORTS (import from '@mcptoolshop/db-cluster/sdk', '@mcptoolshop/db-cluster/mcp', etc.):
+ *   - @mcptoolshop/db-cluster/sdk — ClusterSDK high-level client (recommended for application code)
+ *   - @mcptoolshop/db-cluster/mcp — MCP server tools + handler
+ *   - @mcptoolshop/db-cluster/policy — PolicyEnforcedKernel + redaction (use this for in-process callers
  *                          who need direct kernel access — DO NOT bypass with raw ClusterKernel)
- *   - db-cluster/types — all type re-exports
+ *   - @mcptoolshop/db-cluster/types — all type re-exports
  *
  * NOT PUBLIC (internal, not exported):
  *   - Raw `ClusterKernel` class (KERNEL-013): exporting this publicly bypassed
  *     PolicyEnforcedKernel entirely. The only legitimate ways to drive the
- *     kernel are now via ClusterSDK (db-cluster/sdk) or PolicyEnforcedKernel
- *     (db-cluster/policy). Tests / dogfood scripts that still need the raw
+ *     kernel are now via ClusterSDK (@mcptoolshop/db-cluster/sdk) or PolicyEnforcedKernel
+ *     (@mcptoolshop/db-cluster/policy). Tests / dogfood scripts that still need the raw
  *     class import it from the internal-only `./kernel/cluster-kernel.js`
  *     path inside this package.
  *   - Raw adapter implementations (local stores, postgres store)
@@ -66,7 +66,7 @@ export type {
 
 // --- Kernel typed-error hierarchy (Wave C1-Amend KERNEL-C-006) ---
 // All 14 typed-error classes + the ClusterErrorCode union surface here so
-// consumers can `import { ContentHashMismatchError } from 'db-cluster'`
+// consumers can `import { ContentHashMismatchError } from '@mcptoolshop/db-cluster'`
 // without deep-importing through the kernel barrel.
 export {
     ClusterError,

@@ -35,7 +35,7 @@ db-cluster resolve cluster://canonical/<id>
 ```
 
 ```typescript
-import { ClusterSDK } from 'db-cluster/sdk';
+import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
 
 const sdk = new ClusterSDK({ clusterDir: '.db-cluster' });
 const { store, object } = await sdk.resolve('cluster://canonical/<id>');
@@ -79,7 +79,7 @@ The `targetStore` field identifies which store owns the mutation target.
 ## Parsing and formatting
 
 ```typescript
-import { parseClusterUri, formatClusterUri, isClusterUri } from 'db-cluster';
+import { parseClusterUri, formatClusterUri, isClusterUri } from '@mcptoolshop/db-cluster';
 
 const uri = formatClusterUri('canonical', 'abc-123');
 // 'cluster://canonical/abc-123'

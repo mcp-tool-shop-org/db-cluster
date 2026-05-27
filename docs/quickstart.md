@@ -17,7 +17,7 @@ Optional (for Postgres canonical backend):
 ## Install
 
 ```bash
-npm install db-cluster
+npm install @mcptoolshop/db-cluster
 ```
 
 Or clone and build from source:

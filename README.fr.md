@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/db-cluster/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/db-cluster/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://www.npmjs.com/package/db-cluster"><img src="https://img.shields.io/npm/v/db-cluster.svg" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@mcptoolshop/db-cluster"><img src="https://img.shields.io/npm/v/@mcptoolshop/db-cluster.svg" alt="npm version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License: MIT" /></a>
   <a href="https://mcp-tool-shop-org.github.io/db-cluster/handbook/"><img src="https://img.shields.io/badge/handbook-online-blue.svg" alt="Handbook" /></a>
 </p>
@@ -33,9 +33,22 @@
 ## Démarrage rapide (3 étapes)
 
 ```bash
-npx db-cluster init                # 1. initialize .db-cluster/
-npx db-cluster ingest ./file.md    # 2. ingest an artifact
-npx db-cluster retrieve "query"    # 3. retrieve an evidence bundle
+npx @mcptoolshop/db-cluster init                # 1. initialize .db-cluster/
+npx @mcptoolshop/db-cluster ingest ./file.md    # 2. ingest an artifact
+npx @mcptoolshop/db-cluster retrieve "query"    # 3. retrieve an evidence bundle
+```
+
+Ou installez globalement et utilisez directement les exécutables `db-cluster` et `db-cluster-mcp` :
+
+```bash
+npm install -g @mcptoolshop/db-cluster
+db-cluster init
+```
+
+Ou exécutez via Docker (aucune installation de Node.js n'est requise) :
+
+```bash
+docker run --rm -v "$PWD:/workspace" ghcr.io/mcp-tool-shop-org/db-cluster:latest init
 ```
 
 Chemin complet : [`docs/quickstart.md`](docs/quickstart.md) (5 minutes).

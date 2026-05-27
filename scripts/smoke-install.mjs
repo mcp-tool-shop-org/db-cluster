@@ -2,7 +2,7 @@
 /**
  * Fresh install smoke test.
  *
- * Creates a temp directory, installs db-cluster from tarball,
+ * Creates a temp directory, installs @mcptoolshop/db-cluster from tarball,
  * and verifies: CLI help, SDK import, MCP bin, init, basic ops.
  *
  * Usage: node scripts/smoke-install.mjs <path-to-tgz>
@@ -18,10 +18,17 @@ import { execSync } from 'node:child_process';
 // version bumps. The SURFACE-B-013 family probe stopped at src/ and missed
 // scripts/; here was a hardcoded fallback string referencing the literal
 // tarball path that would silently miss the actual tarball after any bump.
+//
+// Scoped-package tarball convention: `npm pack` strips the leading `@` and
+// replaces `/` with `-`, so `@mcptoolshop/db-cluster` produces
+// `mcptoolshop-db-cluster-<version>.tgz`. Compute that name from PKG.name
+// rather than concatenating PKG.name directly (the latter yields a path with
+// a literal `@` and `/` that does not exist on disk).
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, '..');
 const PKG = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf-8'));
-const DEFAULT_TGZ = join(REPO_ROOT, `${PKG.name}-${PKG.version}.tgz`);
+const TGZ_BASENAME = PKG.name.replace(/^@/, '').replace(/\//g, '-');
+const DEFAULT_TGZ = join(REPO_ROOT, `${TGZ_BASENAME}-${PKG.version}.tgz`);
 
 const tgzPath = resolve(process.argv[2] || DEFAULT_TGZ);
 if (!existsSync(tgzPath)) {
@@ -105,9 +112,9 @@ test('db-cluster-mcp --help or startup', () => {
 
 // --- SDK import smoke ---
 console.log('\n4. SDK import smoke:');
-test('import db-cluster main', () => {
+test('import @mcptoolshop/db-cluster main', () => {
     const script = `
-        import { ClusterSDK } from 'db-cluster/sdk';
+        import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
         import { mkdtempSync } from 'node:fs';
         import { tmpdir } from 'node:os';
         import { join } from 'node:path';
@@ -120,9 +127,9 @@ test('import db-cluster main', () => {
     assert(out.includes('sdk ok: true'), 'Should construct SDK');
 });
 
-test('import db-cluster/sdk', () => {
+test('import @mcptoolshop/db-cluster/sdk', () => {
     const script = `
-        import { ClusterSDK } from 'db-cluster/sdk';
+        import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
         console.log('sdk ok:', typeof ClusterSDK === 'function');
     `;
     writeFileSync(join(testDir, 'test-sdk.mjs'), script);
@@ -130,9 +137,9 @@ test('import db-cluster/sdk', () => {
     assert(out.includes('sdk ok: true'), 'Should import SDK');
 });
 
-test('import db-cluster/policy', () => {
+test('import @mcptoolshop/db-cluster/policy', () => {
     const script = `
-        import { PolicyEnforcedKernel } from 'db-cluster/policy';
+        import { PolicyEnforcedKernel } from '@mcptoolshop/db-cluster/policy';
         console.log('policy ok:', typeof PolicyEnforcedKernel === 'function');
     `;
     writeFileSync(join(testDir, 'test-policy.mjs'), script);
@@ -140,10 +147,10 @@ test('import db-cluster/policy', () => {
     assert(out.includes('policy ok: true'), 'Should import policy');
 });
 
-test('import db-cluster/types', () => {
+test('import @mcptoolshop/db-cluster/types', () => {
     // Types are compile-time only, but the JS module should still be importable
     const script = `
-        import * as types from 'db-cluster/types';
+        import * as types from '@mcptoolshop/db-cluster/types';
         console.log('types ok:', typeof types === 'object');
     `;
     writeFileSync(join(testDir, 'test-types.mjs'), script);
@@ -155,7 +162,7 @@ test('import db-cluster/types', () => {
 console.log('\n5. Quickstart smoke:');
 test('create cluster + propose + validate + approve + commit + retrieve', () => {
     const script = `
-        import { ClusterSDK } from 'db-cluster/sdk';
+        import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
         import { mkdtempSync } from 'node:fs';
         import { tmpdir } from 'node:os';
         import { join } from 'node:path';

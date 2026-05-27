@@ -59,7 +59,7 @@ user-facing — they document what each phase shipped + what it deferred.
 ## Doc-drift guard
 
 Every `typescript` code block in this directory is typechecked by
-`scripts/doc-drift.mjs` (release-gate stage [8/8]). Every `from 'db-cluster'`
-or `from 'db-cluster/<subpath>'` named import is verified against the actual
+`scripts/doc-drift.mjs` (release-gate stage [8/8]). Every `from '@mcptoolshop/db-cluster'`
+or `from '@mcptoolshop/db-cluster/<subpath>'` named import is verified against the actual
 public exports. Drift fails the release-gate. See `docs/release-readiness.md`
 for the stage map.

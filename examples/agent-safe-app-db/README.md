@@ -13,7 +13,7 @@ An application database where an **AI agent proposes mutations** and an **operat
 
 - Node.js 20+
 - npm or pnpm
-- `db-cluster` installed (`npm install db-cluster` or local `npm link`)
+- `@mcptoolshop/db-cluster` installed (`npm install @mcptoolshop/db-cluster` or local `npm link`)
 
 ## Run
 

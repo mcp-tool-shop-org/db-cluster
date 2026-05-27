@@ -27,8 +27,15 @@ const TAIL_BYTES = 8000;
 // stays in sync with bumps. The SURFACE-B-013 family probe stopped at src/
 // and missed scripts/, leaving these hardcoded literals to break the release
 // gate after every version bump.
+//
+// Scoped-package tarball convention: `npm pack` strips the leading `@` and
+// replaces `/` with `-`, so `@mcptoolshop/db-cluster` produces
+// `mcptoolshop-db-cluster-<version>.tgz`. Compute that name from PKG.name
+// rather than concatenating PKG.name directly (the latter yields a path with
+// a literal `@` and `/` that does not exist on disk).
 const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8'));
-const TGZ_NAME = `${PKG.name}-${PKG.version}.tgz`;
+const TGZ_BASENAME = PKG.name.replace(/^@/, '').replace(/\//g, '-');
+const TGZ_NAME = `${TGZ_BASENAME}-${PKG.version}.tgz`;
 
 mkdirSync(LOG_DIR, { recursive: true });
 
@@ -197,7 +204,7 @@ console.log('\n[7/9] Completeness');
 run('completeness-checks', `node ${join(ROOT, 'scripts', 'completeness-checks.mjs')}`, { stageNum: 7, timeout: 180_000 });
 
 // 8. Doc-drift detector — typechecks every typescript block in docs/ and
-// verifies every `from 'db-cluster[/sub]'` named import resolves to a real
+// verifies every `from '@mcptoolshop/db-cluster[/sub]'` named import resolves to a real
 // export. Wave B1-Amend §2d (CIDOCS-B-001). The pattern recurred 4 waves
 // in a row before this detector landed.
 console.log('\n[8/9] Doc-drift');

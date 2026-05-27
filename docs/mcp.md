@@ -161,12 +161,12 @@ When policy denies access:
 
 When an MCP tool call fails, the server returns a typed error envelope. AI integrators should pattern-match on `code` and branch on `retryable` / `next_valid_actions` instead of parsing prose.
 
-The canonical TypeScript shape lives at [`src/types/ai-envelope.ts`](../src/types/ai-envelope.ts) — re-exported from `db-cluster/types` as `AiErrorEnvelope`. The shape is:
+The canonical TypeScript shape lives at [`src/types/ai-envelope.ts`](../src/types/ai-envelope.ts) — re-exported from `@mcptoolshop/db-cluster/types` as `AiErrorEnvelope`. The shape is:
 
 ```typescript
-import type { AiErrorEnvelope, EmptyResultMeta } from 'db-cluster/types';
+import type { AiErrorEnvelope, EmptyResultMeta } from '@mcptoolshop/db-cluster/types';
 
-// Reference shape (informational — the real type lives in db-cluster/types):
+// Reference shape (informational — the real type lives in @mcptoolshop/db-cluster/types):
 type AiErrorEnvelopeShape = {
     /** Stable code — see CLUSTER_ERROR_CODES for the closed union. */
     code: string;
@@ -206,7 +206,7 @@ The MCP transport wraps the envelope in the standard MCP error response:
 ### AI agent branching pattern
 
 ```typescript
-import type { AiErrorEnvelope } from 'db-cluster/types';
+import type { AiErrorEnvelope } from '@mcptoolshop/db-cluster/types';
 declare const mcpClient: { call: (tool: string, args: any) => Promise<any> };
 declare const commandId: string;
 declare function askOperator(hint: string, ctx: Record<string, unknown>): Promise<void>;
@@ -307,9 +307,9 @@ void branch;
 Read tools that can return empty arrays carry an `_meta.empty_reason` distinguishing the three causes of emptiness:
 
 ```typescript
-import type { EmptyResultMeta } from 'db-cluster/types';
+import type { EmptyResultMeta } from '@mcptoolshop/db-cluster/types';
 
-// Reference shape (informational — the real type lives in db-cluster/types):
+// Reference shape (informational — the real type lives in @mcptoolshop/db-cluster/types):
 type EmptyResultMetaShape = {
     _meta: {
         empty_reason: 'no_data' | 'no_match' | 'all_filtered_by_policy';

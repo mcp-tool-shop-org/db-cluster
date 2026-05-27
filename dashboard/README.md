@@ -34,7 +34,7 @@ The UI consumes `DashboardObject` — a shaped model produced by `src/dashboard/
 Every component takes a `state: ComponentState<T>` prop that distinguishes the four load states the panel can be in:
 
 ```typescript
-import type { ComponentState } from 'db-cluster/types';
+import type { ComponentState } from '@mcptoolshop/db-cluster/types';
 
 type ComponentState<T> =
     | { status: 'loading' }
@@ -107,7 +107,7 @@ Renders the same `DashboardObject` from four principal views: operator / agent /
 | `object` | `DashboardObject` | Yes | The object to render. |
 | `view` | `'operator' \| 'agent' \| 'observer' \| 'external'` | Yes | The principal view. |
 
-**Redaction marker rendering:** the panel uses `isRedactedMarker(value)` from `db-cluster/types` to detect redacted fields and render the `[Access restricted]` placeholder — never `[object Object]` JSON literals.
+**Redaction marker rendering:** the panel uses `isRedactedMarker(value)` from `@mcptoolshop/db-cluster/types` to detect redacted fields and render the `[Access restricted]` placeholder — never `[object Object]` JSON literals.
 
 ## Screenshots
 

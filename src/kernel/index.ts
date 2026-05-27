@@ -7,8 +7,8 @@
  * exported and the command-lifecycle helpers were not surfaced.
  * Developers had to deep-import to call `validTransitions` or
  * `instanceof` on subclasses. This file is the single import path —
- * `import { PolicyDeniedError, validTransitions } from 'db-cluster/kernel'`
- * (or, for repos that import the package root, `from 'db-cluster'`).
+ * `import { PolicyDeniedError, validTransitions } from '@mcptoolshop/db-cluster/kernel'`
+ * (or, for repos that import the package root, `from '@mcptoolshop/db-cluster'`).
  */
 
 export { ClusterKernel } from './cluster-kernel.js';

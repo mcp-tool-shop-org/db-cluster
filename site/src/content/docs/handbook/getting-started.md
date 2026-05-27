@@ -21,7 +21,13 @@ Optional for the Postgres canonical backend:
 ## Install
 
 ```bash
-npm install db-cluster
+npm install @mcptoolshop/db-cluster
+```
+
+Or run via Docker (no Node install required):
+
+```bash
+docker run --rm -v "$PWD:/workspace" ghcr.io/mcp-tool-shop-org/db-cluster:latest init
 ```
 
 Or clone and build from source:

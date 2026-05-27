@@ -14,7 +14,7 @@ A development team's project memory â€” meeting notes, decisions, repos, tasks â
 
 - Node.js 20+
 - npm or pnpm
-- `db-cluster` installed (`npm install db-cluster` or local `npm link`)
+- `@mcptoolshop/db-cluster` installed (`npm install @mcptoolshop/db-cluster` or local `npm link`)
 
 ## Run
 

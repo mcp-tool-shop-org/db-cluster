@@ -141,7 +141,7 @@ The kernel coordinates all operations. It does not replace the stores.
 ### 4.1 Install
 
 ```bash
-npm install db-cluster
+npm install @mcptoolshop/db-cluster
 ```
 
 ### 4.2 Initialize a cluster
@@ -675,7 +675,7 @@ The SDK exposes cluster verbs, not raw stores. It enforces the same laws as CLI 
 ### 12.2 Setup
 
 ```typescript
-import { ClusterSDK } from 'db-cluster/sdk';
+import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
 
 const sdk = new ClusterSDK({ clusterDir: '.db-cluster' });
 ```
@@ -683,13 +683,13 @@ const sdk = new ClusterSDK({ clusterDir: '.db-cluster' });
 With policies (PolicyEnforcedKernel wired in):
 
 ```typescript
-import { ClusterSDK } from 'db-cluster/sdk';
+import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
 import {
     DEFAULT_POLICIES,
     DEFAULT_TRUST_ZONES,
     DEFAULT_VISIBILITY_RULES,
-} from 'db-cluster/policy';
-import type { Principal } from 'db-cluster/policy';
+} from '@mcptoolshop/db-cluster/policy';
+import type { Principal } from '@mcptoolshop/db-cluster/policy';
 
 const operator: Principal = {
     id: 'operator',
@@ -753,7 +753,7 @@ await sdk.compensateMutation(cmd.id, 'operator', 'Name was wrong');
 ### 12.6 Operations
 
 ```typescript
-import { doctor, verify, backup, restore, createLocalCluster } from 'db-cluster';
+import { doctor, verify, backup, restore, createLocalCluster } from '@mcptoolshop/db-cluster';
 
 const stores = createLocalCluster('.db-cluster');
 const health = await doctor(stores);

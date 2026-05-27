@@ -13,9 +13,9 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ClusterSDK } from 'db-cluster/sdk';
-import { DEFAULT_POLICIES, DEFAULT_TRUST_ZONES, DEFAULT_VISIBILITY_RULES } from 'db-cluster/policy';
-import type { Principal } from 'db-cluster/policy';
+import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
+import { DEFAULT_POLICIES, DEFAULT_TRUST_ZONES, DEFAULT_VISIBILITY_RULES } from '@mcptoolshop/db-cluster/policy';
+import type { Principal } from '@mcptoolshop/db-cluster/policy';
 
 async function main() {
     const dataDir = mkdtempSync(join(tmpdir(), 'agent-safe-db-'));

@@ -16,7 +16,7 @@ branded, documented, and indexed.
 
 ### User-visible changes
 
-- **First published version on npm.** `npm install db-cluster` works; the `db-cluster` and `db-cluster-mcp` bins are usable from `npx` without a clone.
+- **First published version on npm.** `npm install @mcptoolshop/db-cluster` works; the `db-cluster` and `db-cluster-mcp` bins are usable from `npx @mcptoolshop/db-cluster ...` without a clone. Multi-arch Docker image at `ghcr.io/mcp-tool-shop-org/db-cluster:1.0.0` (also `:1.0`, `:1`, `:latest`) for operators who prefer not to install Node.
 - **Landing page** at https://mcp-tool-shop-org.github.io/db-cluster/ — scaffolded via `@mcptoolshop/site-theme`. Hero block, four feature cards, four code cards (install / init+ingest+retrieve / SDK / MCP wire-up).
 - **Starlight handbook** at https://mcp-tool-shop-org.github.io/db-cluster/handbook/ — 8 pages (index / getting-started / architecture / operations / policy-and-redaction / mcp / sdk / cli) with pagefind search across all of them. Cyan accent matching the brand logo.
 - **README translations** in 7 languages — Japanese, Chinese (Simplified), Spanish, French, Hindi, Italian, Brazilian Portuguese — via polyglot-mcp's TranslateGemma 12B pipeline. Language nav bar injected above the logo in all 8 source-plus-translated READMEs.

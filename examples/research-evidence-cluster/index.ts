@@ -13,8 +13,8 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ClusterSDK } from 'db-cluster/sdk';
-import { createLocalCluster, doctor } from 'db-cluster';
+import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
+import { createLocalCluster, doctor } from '@mcptoolshop/db-cluster';
 
 async function main() {
     const dataDir = mkdtempSync(join(tmpdir(), 'research-cluster-'));

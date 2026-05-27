@@ -10,11 +10,11 @@ The SDK is the in-process equivalent of the MCP surface. Use it when embedding d
 ## Install + import
 
 ```bash
-npm install db-cluster
+npm install @mcptoolshop/db-cluster
 ```
 
 ```ts
-import { ClusterSDK } from 'db-cluster/sdk';
+import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
 ```
 
 `db-cluster/sdk` is the canonical subpath. `db-cluster` (the bare import) exports the same SDK plus the `PolicyEnforcedKernel` factory + store contracts + URI helpers + types.
@@ -130,8 +130,8 @@ console.log(test.effect, test.matchedPolicyId);
 Every method throws a `ClusterError` subclass on failure. Catch and branch on `err.code`:
 
 ```ts
-import { ClusterError, PolicyDeniedError, CommandNotValidatedError } from 'db-cluster';
-import { formatForUser } from 'db-cluster';
+import { ClusterError, PolicyDeniedError, CommandNotValidatedError } from '@mcptoolshop/db-cluster';
+import { formatForUser } from '@mcptoolshop/db-cluster';
 
 try {
     await sdk.commitMutation(cmd.id, 'committer-1');

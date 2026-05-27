@@ -123,7 +123,7 @@ db-cluster verify-schema
 All operations are available as functions from the package root:
 
 ```typescript
-import { doctor, verify, backup, restore } from 'db-cluster';
+import { doctor, verify, backup, restore } from '@mcptoolshop/db-cluster';
 
 const health = await doctor(stores);
 const verified = await verify(stores);
@@ -137,7 +137,7 @@ subpath if you need to drive these in-process; otherwise the CLI surface
 verbs:
 
 ```typescript
-import { PolicyEnforcedKernel } from 'db-cluster/policy';
+import { PolicyEnforcedKernel } from '@mcptoolshop/db-cluster/policy';
 
 declare const kernel: PolicyEnforcedKernel; // see SDK + adapter docs for setup
 await kernel.rebuildIndex('operator');
