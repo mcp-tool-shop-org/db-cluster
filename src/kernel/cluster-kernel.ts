@@ -7,13 +7,14 @@ import type { Command } from '../types/command.js';
 import type { Receipt } from '../types/receipt.js';
 import type { EvidenceBundle } from '../types/evidence-bundle.js';
 import type { ProvenanceGraph, TraceOptions, TraceSummary } from '../types/provenance-graph.js';
-import { proposeCommand, validateCommand, approveCommand, rejectCommand, markCommitted, markRejected, markCompensated, isValidTransition } from './commands.js';
+import { proposeCommand, validateCommand, approveCommand, rejectCommand, markCommitted, markRejected, markCompensated } from './commands.js';
 import { recordProvenance, traceSubjectProvenance } from './provenance.js';
 import { emitReceipt } from './receipts.js';
-import { NotFoundError, CommandNotValidatedError, CommandRejectedError } from './errors.js';
+import { NotFoundError, CommandNotValidatedError, CommandRejectedError, ReceiptFailedError } from './errors.js';
 import { CommandQueue } from './command-queue.js';
 import { RetrievalPlanner } from '../retrieval/retrieval-planner.js';
 import { TraceBuilder } from '../provenance/trace-builder.js';
+import type { ClusterKernelInterface } from './cluster-kernel-interface.js';
 
 export interface KernelOptions {
     /** Directory for kernel working state (command queue). If omitted, commands live in-memory only. */
@@ -70,7 +71,7 @@ export interface CommitMutationResult {
  * Routes all operations through typed verbs. No caller accesses stores directly.
  * Every write produces provenance. Every committed command produces a receipt.
  */
-export class ClusterKernel {
+export class ClusterKernel implements ClusterKernelInterface {
     private commandQueue: CommandQueue | null;
     private memoryCommands = new Map<string, Command>();
 
@@ -97,6 +98,40 @@ export class ClusterKernel {
     }
 
     /**
+     * Best-effort record an `mutation_orphaned` ledger event when the
+     * post-mutation provenance/receipt sequence fails after the store has
+     * already mutated. We swallow secondary failures here — if the ledger
+     * itself is the failing component, there is no place to record the
+     * orphan. The caller then throws {@link ReceiptFailedError} so the
+     * audit lens sees both the cause and the orphan record (if any).
+     */
+    private async recordOrphanMutation(
+        subjectId: string,
+        subjectStore: ProvenanceEvent['subjectStore'],
+        commandId: string | undefined,
+        cause: Error,
+        detail: Record<string, unknown> = {},
+    ): Promise<void> {
+        try {
+            await recordProvenance(
+                this.stores.ledger,
+                'mutation_orphaned',
+                'kernel',
+                subjectId,
+                subjectStore,
+                {
+                    ...detail,
+                    commandId,
+                    error: cause.message,
+                    errorName: cause.name,
+                },
+            );
+        } catch {
+            // Secondary failure — nothing we can do safely here.
+        }
+    }
+
+    /**
      * Ingest a source artifact into the cluster.
      * Writes: artifact store, index store, ledger.
      */
@@ -106,7 +141,7 @@ export class ClusterKernel {
         provenance: ProvenanceEvent;
         receipt: Receipt;
     }> {
-        // 1. Write artifact
+        // 1. Write artifact (truth mutation — once this returns, the store is dirty)
         const artifact = await this.stores.artifact.ingest({
             filename: input.filename,
             content: input.content,
@@ -126,29 +161,46 @@ export class ClusterKernel {
             },
         });
 
-        // 3. Record provenance
-        const provenance = await recordProvenance(
-            this.stores.ledger,
-            'artifact_ingested',
-            input.actorId,
-            artifact.id,
-            'artifact',
-            { filename: input.filename, version: artifact.version },
-        );
-
-        // 4. Emit receipt via internal command
+        // 3-5. Provenance + synthetic command persistence + receipt — all wrapped
+        // so a ledger blip doesn't leave the artifact store dirty without an
+        // inspectable command + receipt (see KERNEL-005, KERNEL-002).
         const cmd = markCommitted(
             validateCommand(
                 proposeCommand('ingest_artifact', 'artifact', { artifactId: artifact.id }, input.actorId),
             ),
         );
-        const receipt = await emitReceipt(
-            this.stores.ledger,
-            cmd,
-            `Ingested artifact: ${input.filename} v${artifact.version}`,
-            [artifact.id, indexRecord.id],
-            provenance.id,
-        );
+        let provenance: ProvenanceEvent;
+        let receipt: Receipt;
+        try {
+            provenance = await recordProvenance(
+                this.stores.ledger,
+                'artifact_ingested',
+                input.actorId,
+                artifact.id,
+                'artifact',
+                { filename: input.filename, version: artifact.version },
+            );
+
+            // Persist the synthetic command so inspectCommand(receipt.commandId)
+            // resolves. Prior versions manufactured cmd inline and never saved it.
+            this.saveCommand(cmd);
+
+            receipt = await emitReceipt(
+                this.stores.ledger,
+                cmd,
+                `Ingested artifact: ${input.filename} v${artifact.version}`,
+                [artifact.id, indexRecord.id],
+                provenance.id,
+            );
+        } catch (err) {
+            const cause = err as Error;
+            await this.recordOrphanMutation(artifact.id, 'artifact', cmd.id, cause, {
+                verb: 'ingest_artifact',
+                filename: input.filename,
+                actorId: input.actorId,
+            });
+            throw new ReceiptFailedError(artifact.id, cmd.id, cause);
+        }
 
         return { artifact, indexRecord, provenance, receipt };
     }
@@ -163,7 +215,7 @@ export class ClusterKernel {
         provenance: ProvenanceEvent;
         receipt: Receipt;
     }> {
-        // 1. Write entity
+        // 1. Write entity (truth mutation — canonical store is now dirty)
         const entity = await this.stores.canonical.create({
             kind: input.kind,
             name: input.name,
@@ -178,29 +230,44 @@ export class ClusterKernel {
             metadata: { kind: entity.kind, ...entity.attributes },
         });
 
-        // 3. Record provenance
-        const provenance = await recordProvenance(
-            this.stores.ledger,
-            'entity_created',
-            input.actorId,
-            entity.id,
-            'canonical',
-            { kind: input.kind, name: input.name },
-        );
-
-        // 4. Emit receipt
+        // 3-5. Provenance + synthetic command persistence + receipt
+        // (see KERNEL-002, KERNEL-005)
         const cmd = markCommitted(
             validateCommand(
                 proposeCommand('create_entity', 'canonical', { entityId: entity.id, kind: input.kind, name: input.name }, input.actorId),
             ),
         );
-        const receipt = await emitReceipt(
-            this.stores.ledger,
-            cmd,
-            `Created entity: ${input.kind}/${input.name}`,
-            [entity.id, indexRecord.id],
-            provenance.id,
-        );
+        let provenance: ProvenanceEvent;
+        let receipt: Receipt;
+        try {
+            provenance = await recordProvenance(
+                this.stores.ledger,
+                'entity_created',
+                input.actorId,
+                entity.id,
+                'canonical',
+                { kind: input.kind, name: input.name },
+            );
+
+            this.saveCommand(cmd);
+
+            receipt = await emitReceipt(
+                this.stores.ledger,
+                cmd,
+                `Created entity: ${input.kind}/${input.name}`,
+                [entity.id, indexRecord.id],
+                provenance.id,
+            );
+        } catch (err) {
+            const cause = err as Error;
+            await this.recordOrphanMutation(entity.id, 'canonical', cmd.id, cause, {
+                verb: 'create_entity',
+                kind: input.kind,
+                name: input.name,
+                actorId: input.actorId,
+            });
+            throw new ReceiptFailedError(entity.id, cmd.id, cause);
+        }
 
         return { entity, indexRecord, provenance, receipt };
     }
@@ -213,7 +280,7 @@ export class ClusterKernel {
         provenance: ProvenanceEvent;
         receipt: Receipt;
     }> {
-        // Verify both exist
+        // Verify both exist before touching the ledger (pre-mutation, safe to throw)
         if (!(await this.stores.artifact.exists(input.artifactId))) {
             throw new NotFoundError('artifact', input.artifactId);
         }
@@ -221,7 +288,21 @@ export class ClusterKernel {
             throw new NotFoundError('canonical', input.entityId);
         }
 
-        // Record the link as a provenance event
+        // Provenance + synthetic command persistence + receipt
+        // (see KERNEL-002, KERNEL-005). Note: this verb only writes to the
+        // ledger so the "mutation already happened" window opens only AFTER
+        // recordProvenance succeeds. If recordProvenance itself throws,
+        // nothing was committed and we just re-throw.
+        const cmd = markCommitted(
+            validateCommand(
+                proposeCommand(
+                    'link_evidence',
+                    'ledger',
+                    { artifactId: input.artifactId, entityId: input.entityId },
+                    input.actorId,
+                ),
+            ),
+        );
         const provenance = await recordProvenance(
             this.stores.ledger,
             'evidence_linked',
@@ -235,24 +316,28 @@ export class ClusterKernel {
             },
         );
 
-        // Emit receipt
-        const cmd = markCommitted(
-            validateCommand(
-                proposeCommand(
-                    'link_evidence',
-                    'ledger',
-                    { artifactId: input.artifactId, entityId: input.entityId },
-                    input.actorId,
-                ),
-            ),
-        );
-        const receipt = await emitReceipt(
-            this.stores.ledger,
-            cmd,
-            `Linked artifact ${input.artifactId} as evidence for entity ${input.entityId}`,
-            [input.artifactId, input.entityId],
-            provenance.id,
-        );
+        let receipt: Receipt;
+        try {
+            this.saveCommand(cmd);
+
+            receipt = await emitReceipt(
+                this.stores.ledger,
+                cmd,
+                `Linked artifact ${input.artifactId} as evidence for entity ${input.entityId}`,
+                [input.artifactId, input.entityId],
+                provenance.id,
+            );
+        } catch (err) {
+            const cause = err as Error;
+            await this.recordOrphanMutation(input.entityId, 'canonical', cmd.id, cause, {
+                verb: 'link_evidence',
+                artifactId: input.artifactId,
+                entityId: input.entityId,
+                provenanceEventId: provenance.id,
+                actorId: input.actorId,
+            });
+            throw new ReceiptFailedError(input.entityId, cmd.id, cause);
+        }
 
         return { provenance, receipt };
     }
@@ -324,32 +409,34 @@ export class ClusterKernel {
             throw new CommandNotValidatedError(commandId);
         }
 
-        // Accept proposed, validated, or approved
-        const committableStatuses = ['proposed', 'validated', 'approved'];
+        // Only validated or approved commands are committable.
+        // We deliberately DROP 'proposed' (see KERNEL-006) — callers must call
+        // validateMutation() explicitly. This makes the validate→commit gate
+        // visible in the lifecycle instead of letting commitMutation silently
+        // validate-inline, which used to allow approval to be skipped entirely.
+        const committableStatuses: Command['status'][] = ['validated', 'approved'];
         if (!committableStatuses.includes(command.status)) {
             if (command.status === 'rejected') {
                 throw new CommandRejectedError(commandId, command.rejectionReason ?? 'Previously rejected');
             }
+            if (command.status === 'proposed') {
+                throw new CommandNotValidatedError(commandId);
+            }
             throw new CommandNotValidatedError(commandId);
         }
 
-        // Validate if still proposed
-        let readyCommand: Command;
-        if (command.status === 'proposed') {
-            try {
-                readyCommand = validateCommand(command);
-            } catch (err) {
-                const rejected = markRejected(command);
-                this.saveCommand(rejected);
-                throw new CommandRejectedError(commandId, (err as Error).message);
-            }
-        } else {
-            readyCommand = command; // already validated or approved
-        }
+        const readyCommand: Command = command; // already validated or approved
 
-        // Execute the mutation against the target store
+        // Execute the mutation against the target store.
+        // We track affectedIds + the pre-mutation phase separately from the
+        // post-mutation phase. Any exception inside the switch is a clean
+        // failure — the store has not yet mutated (or has not yet completed
+        // mutation). The post-mutation phase (provenance + saveCommand +
+        // receipt) is wrapped in try/catch to catch the orphan-mutation
+        // window (see KERNEL-005).
         const affectedIds: string[] = [];
         let resultSummary = '';
+        let primarySubjectStore: ProvenanceEvent['subjectStore'] = readyCommand.targetStore;
 
         switch (readyCommand.verb) {
             case 'update_entity': {
@@ -357,9 +444,18 @@ export class ClusterKernel {
                     entityId: string;
                     patch: Record<string, unknown>;
                 };
-                const updated = await this.stores.canonical.update(entityId, patch as any);
+                // KERNEL-017 alignment: only forward the fields CanonicalStore.update
+                // accepts (`name`, `attributes`). Other keys are dropped to
+                // honour the contract typing instead of bypassing with `as any`.
+                const allowedPatch: { name?: string; attributes?: Record<string, unknown> } = {};
+                if (typeof patch.name === 'string') allowedPatch.name = patch.name;
+                if (patch.attributes && typeof patch.attributes === 'object') {
+                    allowedPatch.attributes = patch.attributes as Record<string, unknown>;
+                }
+                const updated = await this.stores.canonical.update(entityId, allowedPatch);
                 affectedIds.push(updated.id);
                 resultSummary = `Updated entity: ${updated.name}`;
+                primarySubjectStore = 'canonical';
                 // Refresh index: remove stale record, re-index with current truth
                 const staleRecords = await this.stores.index.search({ text: '', metadata: {} });
                 const matching = staleRecords.filter((r) => r.sourceId === entityId && r.sourceStore === 'canonical');
@@ -383,6 +479,7 @@ export class ClusterKernel {
                 const entity = await this.stores.canonical.create({ kind, name, attributes: attributes ?? {} });
                 affectedIds.push(entity.id);
                 resultSummary = `Created entity: ${kind}/${name}`;
+                primarySubjectStore = 'canonical';
                 // Auto-index: same behavior as createEntity()
                 await this.stores.index.index({
                     sourceId: entity.id,
@@ -401,6 +498,21 @@ export class ClusterKernel {
                 const artifact = await this.stores.artifact.ingest({ filename, content, mimeType });
                 affectedIds.push(artifact.id);
                 resultSummary = `Ingested artifact: ${filename}`;
+                primarySubjectStore = 'artifact';
+                // KERNEL-008: switch arm must index the artifact too, matching
+                // the helper. Previously this was a silent inconsistency: helper
+                // indexed, switch arm did not.
+                await this.stores.index.index({
+                    sourceId: artifact.id,
+                    sourceStore: 'artifact',
+                    text: `${artifact.filename} [${artifact.mimeType}]`,
+                    metadata: {
+                        filename: artifact.filename,
+                        mimeType: artifact.mimeType,
+                        contentHash: artifact.contentHash,
+                        version: artifact.version,
+                    },
+                });
                 break;
             }
             case 'link_evidence': {
@@ -408,43 +520,82 @@ export class ClusterKernel {
                     artifactId: string;
                     entityId: string;
                 };
+                // KERNEL-007: this arm WAS a no-op. The helper linkEvidence()
+                // verifies existence + appends an evidence_linked provenance
+                // event. The switch arm must do the same — otherwise the
+                // command path produces only a generic mutation_committed
+                // event and TraceBuilder.traceEntity (which matches on
+                // action === 'evidence_linked') sees no link.
+                if (!(await this.stores.artifact.exists(artifactId))) {
+                    throw new NotFoundError('artifact', artifactId);
+                }
+                if (!(await this.stores.canonical.exists(entityId))) {
+                    throw new NotFoundError('canonical', entityId);
+                }
+                await recordProvenance(
+                    this.stores.ledger,
+                    'evidence_linked',
+                    actorId,
+                    entityId,
+                    'canonical',
+                    { artifactId, entityId },
+                );
                 affectedIds.push(artifactId, entityId);
                 resultSummary = `Linked evidence: ${artifactId} → ${entityId}`;
+                primarySubjectStore = 'canonical';
                 break;
             }
             case 'reindex': {
                 resultSummary = 'Reindex requested';
+                primarySubjectStore = 'index';
                 break;
             }
             default: {
-                const rejected = markRejected(readyCommand);
+                const rejected = markRejected(readyCommand, actorId, `Unknown verb: ${readyCommand.verb}`);
                 this.saveCommand(rejected);
                 throw new CommandRejectedError(commandId, `Unknown verb: ${readyCommand.verb}`);
             }
         }
 
-        // Mark committed
+        // Mark committed (in memory only — persistence + receipt are wrapped
+        // in try/catch so a saveCommand-then-ledger-fail does not leave the
+        // command marked 'committed' without a receipt).
         const committed = markCommitted(readyCommand, actorId);
-        this.saveCommand(committed);
 
-        // Record provenance
-        const provenance = await recordProvenance(
-            this.stores.ledger,
-            'mutation_committed',
-            actorId,
-            affectedIds[0] ?? commandId,
-            readyCommand.targetStore,
-            { commandId, verb: readyCommand.verb, payload: readyCommand.payload },
-        );
+        let provenance: ProvenanceEvent;
+        let receipt: Receipt;
+        try {
+            provenance = await recordProvenance(
+                this.stores.ledger,
+                'mutation_committed',
+                actorId,
+                affectedIds[0] ?? commandId,
+                readyCommand.targetStore,
+                { commandId, verb: readyCommand.verb, payload: readyCommand.payload },
+            );
 
-        // Emit receipt
-        const receipt = await emitReceipt(
-            this.stores.ledger,
-            committed,
-            resultSummary,
-            affectedIds,
-            provenance.id,
-        );
+            // Persist the committed-state command AFTER provenance so we never
+            // have a 'committed' record without an associated provenance event.
+            this.saveCommand(committed);
+
+            receipt = await emitReceipt(
+                this.stores.ledger,
+                committed,
+                resultSummary,
+                affectedIds,
+                provenance.id,
+            );
+        } catch (err) {
+            const cause = err as Error;
+            await this.recordOrphanMutation(
+                affectedIds[0] ?? commandId,
+                primarySubjectStore,
+                commandId,
+                cause,
+                { verb: readyCommand.verb, payload: readyCommand.payload, actorId },
+            );
+            throw new ReceiptFailedError(affectedIds[0] ?? commandId, commandId, cause);
+        }
 
         return { command: committed, receipt };
     }
@@ -465,9 +616,10 @@ export class ClusterKernel {
             this.saveCommand(validated);
             return validated;
         } catch (err) {
-            const rejected = markRejected(command);
+            const reason = (err as Error).message;
+            const rejected = markRejected(command, 'kernel:validator', reason);
             this.saveCommand(rejected);
-            throw new CommandRejectedError(commandId, (err as Error).message);
+            throw new CommandRejectedError(commandId, reason);
         }
     }
 
@@ -551,32 +703,53 @@ export class ClusterKernel {
         // Fast-track: validate + commit the compensating command
         const validated = validateCommand(compensatingCmd);
         const committed = markCommitted(validated, compensatedBy);
-        this.saveCommand(committed);
 
-        // Mark the original as compensated
-        const compensated = markCompensated(original, committed.id, compensatedBy);
-        this.saveCommand(compensated);
+        let provenance: ProvenanceEvent;
+        let receipt: Receipt;
+        try {
+            this.saveCommand(committed);
 
-        // Record provenance for compensation
-        const provenance = await recordProvenance(
-            this.stores.ledger,
-            'command_compensated',
-            compensatedBy,
-            originalCommandId,
-            'ledger',
-            { compensatingCommandId: committed.id, reason },
-        );
+            // Mark the original as compensated
+            const compensated = markCompensated(original, committed.id, compensatedBy);
+            this.saveCommand(compensated);
 
-        // Emit receipt for compensation
-        const receipt = await emitReceipt(
-            this.stores.ledger,
-            committed,
-            `Compensated command ${originalCommandId}: ${reason}`,
-            [originalCommandId],
-            provenance.id,
-        );
+            // Record provenance for compensation
+            provenance = await recordProvenance(
+                this.stores.ledger,
+                'command_compensated',
+                compensatedBy,
+                originalCommandId,
+                'ledger',
+                { compensatingCommandId: committed.id, reason },
+            );
 
-        return { compensatingCommand: committed, originalCommand: compensated, receipt };
+            // Emit receipt for compensation
+            receipt = await emitReceipt(
+                this.stores.ledger,
+                committed,
+                `Compensated command ${originalCommandId}: ${reason}`,
+                [originalCommandId],
+                provenance.id,
+            );
+
+            return { compensatingCommand: committed, originalCommand: compensated, receipt };
+        } catch (err) {
+            const cause = err as Error;
+            await this.recordOrphanMutation(
+                originalCommandId,
+                'ledger',
+                committed.id,
+                cause,
+                {
+                    verb: 'compensate',
+                    originalCommandId,
+                    compensatingCommandId: committed.id,
+                    reason,
+                    actorId: compensatedBy,
+                },
+            );
+            throw new ReceiptFailedError(originalCommandId, committed.id, cause);
+        }
     }
 
     /**
@@ -601,7 +774,9 @@ export class ClusterKernel {
      * Returns the count of records rebuilt.
      */
     async rebuildIndex(actorId: string): Promise<{ rebuilt: number; provenance: ProvenanceEvent; receipt: Receipt }> {
-        // Clear
+        // NOTE: see STORES-008 — clear-then-rebuild leaves an empty index window
+        // on mid-rebuild crash. That hazard is owned by ops/rebuild.ts /
+        // IndexStore contract changes (out of scope for the kernel agent).
         await this.stores.index.clear();
 
         let rebuilt = 0;
@@ -635,29 +810,44 @@ export class ClusterKernel {
             rebuilt++;
         }
 
-        // Record provenance
-        const provenance = await recordProvenance(
-            this.stores.ledger,
-            'index_rebuilt',
-            actorId,
-            'index',
-            'index',
-            { rebuilt, clearedFirst: true },
-        );
-
-        // Emit receipt
+        // Provenance + synthetic command persistence + receipt
+        // (see KERNEL-002, KERNEL-005). Index mutation has already happened
+        // at this point.
         const cmd = markCommitted(
             validateCommand(
                 proposeCommand('reindex', 'index', { rebuilt }, actorId),
             ),
         );
-        const receipt = await emitReceipt(
-            this.stores.ledger,
-            cmd,
-            `Index rebuilt: ${rebuilt} records from owner stores`,
-            [],
-            provenance.id,
-        );
+        let provenance: ProvenanceEvent;
+        let receipt: Receipt;
+        try {
+            provenance = await recordProvenance(
+                this.stores.ledger,
+                'index_rebuilt',
+                actorId,
+                'index',
+                'index',
+                { rebuilt, clearedFirst: true },
+            );
+
+            this.saveCommand(cmd);
+
+            receipt = await emitReceipt(
+                this.stores.ledger,
+                cmd,
+                `Index rebuilt: ${rebuilt} records from owner stores`,
+                [],
+                provenance.id,
+            );
+        } catch (err) {
+            const cause = err as Error;
+            await this.recordOrphanMutation('index', 'index', cmd.id, cause, {
+                verb: 'reindex',
+                rebuilt,
+                actorId,
+            });
+            throw new ReceiptFailedError('index', cmd.id, cause);
+        }
 
         return { rebuilt, provenance, receipt };
     }

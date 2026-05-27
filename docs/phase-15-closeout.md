@@ -1,8 +1,17 @@
 # Phase 15 Closeout — Release Readiness & Package Boundary
 
-**Status**: PASS  
-**Date**: 2026-05-26  
+**Status**: PASS (with Wave A1 amend)
+**Date**: 2026-05-26 (amended after dogfood-swarm Stage A)
 **Tag**: `phase-15-release-readiness`
+
+**Wave A1 amend note (2026-05-26):** Phase 15 originally self-declared PASS
+without continuous verification; Stage A audit (`swarm-stage-a-audit-20260526-225638Z.md`)
+showed no `.github/` directory, no Node-native drift check, and broken
+TypeScript examples. Wave A1 added CI workflows, a portable release-gate
+drift scan, `tsconfig.examples.json` + `lint:examples`, and rewrote all
+examples against the current public API. The PASS verdict now rests on
+continuous verification, not a self-declaration. See
+`docs/release-readiness.md` for the updated checklist.
 
 ## Objective
 

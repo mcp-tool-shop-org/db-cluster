@@ -96,11 +96,14 @@ export function approveCommand(command: Command, approvedBy: string, note?: stri
 }
 
 /**
- * Reject a command — can happen from 'proposed' or 'validated' status.
+ * Reject a command — can happen from any non-terminal status (proposed, validated, approved).
+ *
+ * The valid-from set MUST stay in sync with {@link validTransitions} and
+ * {@link isValidTransition} — see KERNEL-010 for the historical contradiction.
  */
 export function rejectCommand(command: Command, rejectedBy: string, reason: string): Command {
-    if (command.status !== 'proposed' && command.status !== 'validated') {
-        throw new Error(`Cannot reject command in status: ${command.status}. Must be 'proposed' or 'validated'.`);
+    if (!isValidTransition(command.status, 'rejected')) {
+        throw new Error(`Cannot reject command in status: ${command.status}. Must be one of: ${REJECTABLE_FROM.join(', ')}.`);
     }
     return {
         ...command,
@@ -110,6 +113,8 @@ export function rejectCommand(command: Command, rejectedBy: string, reason: stri
         rejectionReason: reason,
     };
 }
+
+const REJECTABLE_FROM: CommandStatus[] = ['proposed', 'validated', 'approved'];
 
 export function markCommitted(command: Command, committedBy?: string): Command {
     if (command.status !== 'validated' && command.status !== 'approved') {
@@ -123,8 +128,23 @@ export function markCommitted(command: Command, committedBy?: string): Command {
     };
 }
 
-export function markRejected(command: Command): Command {
-    return { ...command, status: 'rejected', rejectedAt: new Date().toISOString() };
+/**
+ * Mark a command as rejected from any pre-terminal status.
+ *
+ * Unlike {@link rejectCommand} (which enforces the proposed → validated → rejected
+ * transition table), this is the internal escape hatch the kernel uses when a
+ * runtime check fails — e.g. validation throws inside commitMutation or an
+ * unknown verb is seen in the switch arm. It must still record WHO failed the
+ * command and WHY so the receipt audit isn't lossy (see KERNEL-009).
+ */
+export function markRejected(command: Command, rejectedBy: string, reason: string): Command {
+    return {
+        ...command,
+        status: 'rejected',
+        rejectedBy,
+        rejectedAt: new Date().toISOString(),
+        rejectionReason: reason,
+    };
 }
 
 /**

@@ -663,23 +663,35 @@ The SDK exposes cluster verbs, not raw stores. It enforces the same laws as CLI 
 
 ```typescript
 import { ClusterSDK } from 'db-cluster/sdk';
-import { createLocalCluster } from 'db-cluster';
 
-const stores = createLocalCluster('.db-cluster');
-const sdk = new ClusterSDK({ stores, dataDir: '.db-cluster' });
+const sdk = new ClusterSDK({ clusterDir: '.db-cluster' });
 ```
 
-With Postgres:
+With policies (PolicyEnforcedKernel wired in):
 
 ```typescript
-import { createCluster } from 'db-cluster';
+import { ClusterSDK } from 'db-cluster/sdk';
+import {
+    DEFAULT_POLICIES,
+    DEFAULT_TRUST_ZONES,
+    DEFAULT_VISIBILITY_RULES,
+} from 'db-cluster/policy';
+import type { Principal } from 'db-cluster/policy';
 
-const { stores } = createCluster({
-    rootDir: '.db-cluster',
-    backends: { canonical: 'postgres' },
-    postgresUrl: process.env.DB_CLUSTER_POSTGRES_URL!,
+const operator: Principal = {
+    id: 'operator',
+    name: 'Operator',
+    roles: ['operator'],
+    trustZone: 'internal',
+};
+
+const sdk = new ClusterSDK({
+    clusterDir: '.db-cluster',
+    policies: DEFAULT_POLICIES,
+    trustZones: DEFAULT_TRUST_ZONES,
+    visibilityRules: DEFAULT_VISIBILITY_RULES,
+    principal: operator,
 });
-const sdk = new ClusterSDK({ stores, dataDir: '.db-cluster' });
 ```
 
 ### 12.3 Retrieval

@@ -9,6 +9,7 @@ import type {
     VisibilityRule,
     Scope,
 } from '../types/policy.js';
+import { parseClusterUri, isClusterUri } from '../uri/cluster-uri.js';
 
 // ─── Default deny decision ─────────────────────────────────────────────────
 
@@ -51,17 +52,23 @@ export function sortPoliciesByPriority(policies: Policy[]): Policy[] {
 /**
  * Check if a policy's match conditions apply to a given request.
  * Omitted fields in PolicyMatch are wildcards (match anything).
+ *
+ * Underspecification handling (SURFACE-004):
+ * When the policy constrains a field that the request omits:
+ *   - For `allow` policies: refuse to match (caller must specify context to be granted).
+ *   - For `deny` policies: still match (err on the safe side — might apply, so deny).
  */
 export function matchPolicy(request: PolicyEvaluationRequest, policy: Policy): boolean {
     const match = policy.match;
+    const effect = policy.decision;
 
     if (!matchPrincipals(request, match)) return false;
     if (!matchTrustZones(request, match)) return false;
     if (!matchCapabilities(request, match)) return false;
-    if (!matchStores(request, match)) return false;
-    if (!matchKinds(request, match)) return false;
-    if (!matchUriPatterns(request, match)) return false;
-    if (!matchCommandVerbs(request, match)) return false;
+    if (!matchStores(request, match, effect)) return false;
+    if (!matchKinds(request, match, effect)) return false;
+    if (!matchUriPatterns(request, match, effect)) return false;
+    if (!matchCommandVerbs(request, match, effect)) return false;
 
     return true;
 }
@@ -84,28 +91,38 @@ function matchCapabilities(request: PolicyEvaluationRequest, match: PolicyMatch)
     return match.capabilities.includes(request.capability);
 }
 
-function matchStores(request: PolicyEvaluationRequest, match: PolicyMatch): boolean {
+function matchStores(request: PolicyEvaluationRequest, match: PolicyMatch, effect: 'allow' | 'deny'): boolean {
     if (!match.stores || match.stores.length === 0) return true;
     if (match.stores.includes('*')) return true;
-    if (!request.ownerStore) return true; // no store constraint on request = pass
+    if (!request.ownerStore) {
+        // Constraint present, request underspecified.
+        // deny: still match (might apply, be safe); allow: refuse to match (require explicit context).
+        return effect === 'deny';
+    }
     return match.stores.includes(request.ownerStore);
 }
 
-function matchKinds(request: PolicyEvaluationRequest, match: PolicyMatch): boolean {
+function matchKinds(request: PolicyEvaluationRequest, match: PolicyMatch, effect: 'allow' | 'deny'): boolean {
     if (!match.kinds || match.kinds.length === 0) return true;
-    if (!request.entityKind) return true; // no kind constraint on request = pass
+    if (!request.entityKind) {
+        return effect === 'deny';
+    }
     return match.kinds.includes(request.entityKind);
 }
 
-function matchUriPatterns(request: PolicyEvaluationRequest, match: PolicyMatch): boolean {
+function matchUriPatterns(request: PolicyEvaluationRequest, match: PolicyMatch, effect: 'allow' | 'deny'): boolean {
     if (!match.uriPatterns || match.uriPatterns.length === 0) return true;
-    if (!request.resourceUri) return true; // no URI on request = pass
+    if (!request.resourceUri) {
+        return effect === 'deny';
+    }
     return match.uriPatterns.some((pattern) => request.resourceUri!.startsWith(pattern));
 }
 
-function matchCommandVerbs(request: PolicyEvaluationRequest, match: PolicyMatch): boolean {
+function matchCommandVerbs(request: PolicyEvaluationRequest, match: PolicyMatch, effect: 'allow' | 'deny'): boolean {
     if (!match.commandVerbs || match.commandVerbs.length === 0) return true;
-    if (!request.commandVerb) return true; // no verb on request = pass
+    if (!request.commandVerb) {
+        return effect === 'deny';
+    }
     return match.commandVerbs.includes(request.commandVerb);
 }
 
@@ -160,6 +177,22 @@ export function evaluatePolicy(
     request: PolicyEvaluationRequest,
     options: PolicyEngineOptions,
 ): PolicyDecision {
+    // Auto-derive ownerStore from resourceUri when the caller did not set it.
+    // Helps callers that pass a URI but forget to set ownerStore; prevents
+    // store-scoped policies from being dodged via underspecification.
+    if (!request.ownerStore && request.resourceUri && isClusterUri(request.resourceUri)) {
+        try {
+            const parsed = parseClusterUri(request.resourceUri);
+            const store = parsed.store;
+            // Only forward the four "real" owner stores to the request shape.
+            if (store === 'canonical' || store === 'artifact' || store === 'index' || store === 'ledger') {
+                request = { ...request, ownerStore: store };
+            }
+        } catch {
+            // Malformed URI — leave the request alone and let downstream evaluation handle it.
+        }
+    }
+
     const sorted = sortPoliciesByPriority(options.policies);
 
     for (const policy of sorted) {

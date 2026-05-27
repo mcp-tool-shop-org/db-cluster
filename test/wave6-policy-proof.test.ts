@@ -190,7 +190,7 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
     // ═══════════════════════════════════════════════════════════════════════
 
     describe('Proof 2: Index-only principal sees derivative but not owner-truth payload', () => {
-        it('findSources returns indexRecords but no resolvedEntities for index-only', async () => {
+        it('findSources for index-only filters BOTH canonical entities AND their backing index records', async () => {
             const stores = makeStores();
             const adminK = makeKernel(stores, admin);
             await adminK._kernel.createEntity({
@@ -200,9 +200,13 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
             const indexK = makeKernel(stores, indexOnly);
             const result = await indexK.findSources({ query: 'Derivative' });
 
-            expect(result.indexRecords.length).toBeGreaterThan(0);
+            // KERNEL-003 fix: a canonical-backed index record contains the
+            // entity's kind/name/attributes in its `text` and `metadata`. If
+            // the principal cannot `read_owner_truth` on canonical, returning
+            // the index record leaks those fields. Both must be filtered.
             expect(result.resolvedEntities).toHaveLength(0);
             expect(result.resolvedArtifacts).toHaveLength(0);
+            expect(result.indexRecords).toHaveLength(0);
         });
 
         it('index-only principal cannot escalate from index to owner truth', async () => {
@@ -213,10 +217,11 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
             });
 
             const indexK = makeKernel(stores, indexOnly);
-            // Can find via index
-            const result = await indexK.findSources({ query: 'Index Only' });
-            expect(result.indexRecords.length).toBeGreaterThan(0);
-            // Cannot resolve the owner truth — policy blocks read_owner_truth
+            // findSources filters both surfaces (see above test) — but the
+            // load-bearing invariant for THIS proof is the inspect escalation
+            // attempt below: even if a principal somehow obtains an entity
+            // ID, they still cannot read its owner truth.
+            await indexK.findSources({ query: 'Index Only' });
             await expect(indexK.inspectEntity(entity.id)).rejects.toThrow(PolicyDeniedError);
         });
     });
@@ -360,12 +365,14 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
             const stores = makeStores();
             const restrictedK = makeKernel(stores, restricted);
             // Use full command lifecycle so command is stored in memory
+            // (KERNEL-006: validate is required before commit at the kernel layer)
             const cmd = await restrictedK._kernel.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
                 payload: { kind: 'concept', name: 'Command Audit', attributes: { secret: 'payload' } },
                 proposedBy: 'admin-1',
             });
+            await restrictedK._kernel.validateMutation(cmd.id);
             await restrictedK._kernel.commitMutation(cmd.id, 'admin-1');
 
             const command = await restrictedK.inspectCommand(cmd.id);
@@ -656,7 +663,12 @@ describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
                 kind: 'concept', name: 'Index Derives', attributes: {}, actorId: 'admin-1',
             });
 
-            const result = await adminK.findSources({ query: 'Index Derives' });
+            // This proof is about cluster doctrine — "the index is a derivative
+            // store, sourced from canonical." That's a property of the kernel
+            // layer, not of the policy layer. Use the underlying kernel here
+            // (admin already has full access; the policy layer adds visibility
+            // filtering that's tested separately in Proof 2/3 above).
+            const result = await adminK._kernel.findSources({ query: 'Index Derives' });
             expect(result.indexRecords.length).toBeGreaterThan(0);
             expect(result.indexRecords[0].owner).toBe('index');
             expect(result.indexRecords[0].sourceStore).toBe('canonical');

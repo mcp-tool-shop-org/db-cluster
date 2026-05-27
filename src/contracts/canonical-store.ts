@@ -11,6 +11,18 @@ export interface CanonicalStore {
     exists(id: string): Promise<boolean>;
     create(entity: Omit<Entity, 'id' | 'createdAt' | 'updatedAt' | 'owner'>): Promise<Entity>;
     update(id: string, patch: Partial<Pick<Entity, 'name' | 'attributes'>>): Promise<Entity>;
+    /**
+     * Import a full entity snapshot preserving the original `id`, `createdAt`,
+     * `updatedAt`. Used by backup/restore — STORES-001 / -003 require this so
+     * restored entities keep their original IDs (otherwise their provenance
+     * chain breaks because events still carry the original subjectId).
+     *
+     * Optional on the contract because not every adapter must support it
+     * today (postgres parity ships in a follow-up wave); but every adapter
+     * intended for production use SHOULD implement it. The restore op surfaces
+     * an explicit error when this is missing.
+     */
+    importSnapshot?(entity: Entity): Promise<Entity>;
 }
 
 export interface EntityFilter {

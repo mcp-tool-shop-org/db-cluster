@@ -5,11 +5,21 @@
 
 /**
  * Normalize text into lowercase tokens, removing punctuation and extra whitespace.
+ *
+ * Uses Unicode property escapes (`\p{L}`, `\p{N}`) with the `u` flag so non-ASCII
+ * content (Latin diacritics like café, CJK, Cyrillic, Arabic, etc.) is preserved
+ * rather than stripped to whitespace. The earlier `\w` pattern matched only
+ * `[A-Za-z0-9_]` and silently neutered indexing for any non-English content
+ * (STORES-004).
+ *
+ * Replace runs BEFORE toLowerCase so the regex is evaluated against the original
+ * text — order is functionally equivalent here because the property escapes are
+ * case-insensitive, but lowercasing afterwards keeps token output consistent.
  */
 export function tokenize(text: string): string[] {
     return text
+        .replace(/[^\p{L}\p{N}\s_-]/gu, ' ')
         .toLowerCase()
-        .replace(/[^\w\s-]/g, ' ')
         .split(/\s+/)
         .filter((t) => t.length > 1);
 }

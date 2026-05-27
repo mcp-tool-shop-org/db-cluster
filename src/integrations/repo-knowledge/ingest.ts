@@ -10,12 +10,46 @@
  * - Records provenance for the sync run
  * - Emits receipts for every operation
  * - Never writes back to repo-knowledge
+ *
+ * ─── CANONICAL LIFECYCLE PATH (SURFACE-003) ────────────────────────────────
+ *
+ * Entity creation and evidence linking go through the typed command
+ * lifecycle:  propose → validate → approve → commit. These call sites used to
+ * touch `kernel.createEntity` / `kernel.linkEvidence` directly, which bypassed
+ * the CommandQueue (KERNEL-002). They no longer do. The sibling
+ * `update-workflow.ts` models the same pattern; this file mirrors it for
+ * non-Buffer payloads.
+ *
+ * Receipts are read to recover the affected IDs after each commit — callers
+ * never trust the proposed payload for an ID lookup, only the post-commit
+ * receipt.
+ *
+ * Artifact ingest is the one exception (see KERNEL-002 in the audit). The
+ * `ingest_artifact` command payload carries a Node `Buffer`, which does not
+ * survive the JSON serialization the CommandQueue performs on `propose`
+ * (Buffer becomes `{ type: 'Buffer', data: number[] }` on rehydrate, and the
+ * kernel's switch arm passes it through to `stores.artifact.ingest` as-is,
+ * which writes garbage). Until the kernel's `ingest_artifact` arm rehydrates
+ * Buffer payloads, artifact ingest stays on the direct `kernel.ingestArtifact`
+ * helper. The helper is itself wrapped by the kernel's policy layer when the
+ * caller passed a `PolicyEnforcedKernel`, so the policy gate still fires —
+ * what we lose is the inspectable command record (KERNEL-002 caveat).
+ *
+ * When the caller passes a raw `ClusterKernel` (no policy layer), a runtime
+ * warning is emitted: "policy layer not engaged for ingest." Production
+ * callers should wrap with `PolicyEnforcedKernel` and pass a least-privilege
+ * principal.
  */
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
-import { basename, extname, resolve } from 'node:path';
+import { basename, extname } from 'node:path';
 import type { ClusterKernel } from '../../kernel/cluster-kernel.js';
-import { mapToEntityKind, mapToArtifactKind, type RepoKnowledgeEntityKind } from './mapping.js';
+import type { PolicyEnforcedKernel } from '../../kernel/policy-enforced-kernel.js';
+import type { Command } from '../../types/command.js';
+import { mapToArtifactKind, type RepoKnowledgeEntityKind } from './mapping.js';
+
+/** Kernel handle accepted by the integration — either raw or policy-wrapped. */
+export type IngestKernel = ClusterKernel | PolicyEnforcedKernel;
 
 export interface IngestSource {
     /** Absolute path to the file */
@@ -35,6 +69,8 @@ export interface IngestOptions {
     actorId: string;
     /** Optional tags to attach */
     tags?: string[];
+    /** Optional second actor that commits the proposals. Defaults to actorId. */
+    committerId?: string;
 }
 
 export interface IngestResult {
@@ -57,14 +93,71 @@ export interface IngestResult {
 }
 
 /**
+ * Detect whether the passed kernel routes through the policy layer.
+ * Done structurally rather than via instanceof so the import graph doesn't
+ * pull policy types into callers that don't need them.
+ */
+function isPolicyEnforced(kernel: IngestKernel): boolean {
+    return typeof (kernel as { checkVisibility?: unknown }).checkVisibility === 'function';
+}
+
+let _policyWarningEmitted = false;
+function warnIfNoPolicy(kernel: IngestKernel): void {
+    if (_policyWarningEmitted) return;
+    if (isPolicyEnforced(kernel)) return;
+    _policyWarningEmitted = true;
+    console.warn(
+        '[repo-knowledge/ingest] WARNING: ingestRepoKnowledge is running through a raw ClusterKernel — no policy layer engaged. ' +
+        'Production callers should wrap with PolicyEnforcedKernel. See docs/policy.md.',
+    );
+}
+
+/**
+ * Run a single mutation through propose → validate → approve → commit.
+ * Returns the affected IDs from the receipt.
+ */
+async function runMutation(
+    kernel: IngestKernel,
+    verb: Command['verb'],
+    targetStore: Command['targetStore'],
+    payload: Record<string, unknown>,
+    proposerId: string,
+    committerId: string,
+): Promise<{ commandId: string; affectedIds: string[]; receiptId: string }> {
+    const proposed = await kernel.proposeMutation({
+        verb,
+        targetStore,
+        payload,
+        proposedBy: proposerId,
+    });
+    await kernel.validateMutation(proposed.id);
+    await kernel.approveMutation(proposed.id, committerId);
+    const result = await kernel.commitMutation(proposed.id, committerId);
+    return {
+        commandId: result.command.id,
+        affectedIds: result.receipt.affectedIds,
+        receiptId: result.receipt.id,
+    };
+}
+
+/**
  * Ingest repo-knowledge memory files into db-cluster.
  * Creates a parallel truth substrate without modifying source files.
+ *
+ * Uses the canonical lifecycle (propose → validate → approve → commit)
+ * for every write. Direct `kernel.createEntity` / `ingestArtifact` /
+ * `linkEvidence` calls are intentionally avoided (SURFACE-003).
  */
 export async function ingestRepoKnowledge(
-    kernel: ClusterKernel,
+    kernel: IngestKernel,
     sources: IngestSource[],
     options: IngestOptions,
 ): Promise<IngestResult> {
+    warnIfNoPolicy(kernel);
+
+    const proposerId = options.actorId;
+    const committerId = options.committerId ?? options.actorId;
+
     const result: IngestResult = {
         artifactIds: [],
         entityIds: [],
@@ -76,32 +169,50 @@ export async function ingestRepoKnowledge(
     };
 
     // 1. Create repo entity
-    const { entity: repoEntity } = await kernel.createEntity({
-        kind: 'repo',
-        name: options.repoName,
-        attributes: {
-            tags: options.tags ?? [],
-            syncedAt: result.syncedAt,
-        },
-        actorId: options.actorId,
-    });
-    result.repoEntityId = repoEntity.id;
-    result.entityIds.push(repoEntity.id);
-    result.receipts++;
+    {
+        const { affectedIds } = await runMutation(
+            kernel,
+            'create_entity',
+            'canonical',
+            {
+                kind: 'repo',
+                name: options.repoName,
+                attributes: {
+                    tags: options.tags ?? [],
+                    syncedAt: result.syncedAt,
+                },
+            },
+            proposerId,
+            committerId,
+        );
+        const repoId = affectedIds[0];
+        if (!repoId) throw new Error('ingestRepoKnowledge: repo entity commit returned no affectedIds');
+        result.repoEntityId = repoId;
+        result.entityIds.push(repoId);
+        result.receipts++;
+    }
 
     // 2. Create project entity if specified
     if (options.projectName) {
-        const { entity: projectEntity } = await kernel.createEntity({
-            kind: 'project',
-            name: options.projectName,
-            attributes: {
-                repo: options.repoName,
-                tags: options.tags ?? [],
+        const { affectedIds } = await runMutation(
+            kernel,
+            'create_entity',
+            'canonical',
+            {
+                kind: 'project',
+                name: options.projectName,
+                attributes: {
+                    repo: options.repoName,
+                    tags: options.tags ?? [],
+                },
             },
-            actorId: options.actorId,
-        });
-        result.projectEntityId = projectEntity.id;
-        result.entityIds.push(projectEntity.id);
+            proposerId,
+            committerId,
+        );
+        const projectId = affectedIds[0];
+        if (!projectId) throw new Error('ingestRepoKnowledge: project entity commit returned no affectedIds');
+        result.projectEntityId = projectId;
+        result.entityIds.push(projectId);
         result.receipts++;
     }
 
@@ -121,47 +232,73 @@ export async function ingestRepoKnowledge(
         const filename = basename(source.path);
         const content = readFileSync(source.path);
 
-        // Ingest as artifact
-        const { artifact } = await kernel.ingestArtifact({
+        // Ingest as artifact — direct helper call. Buffer payloads do not
+        // round-trip through CommandQueue persistence (see file header), so
+        // the lifecycle path is unsafe for artifact ingest today. The policy
+        // layer still fires if the caller passed a `PolicyEnforcedKernel`;
+        // what we lose is the inspectable command record.
+        const underlying = (kernel as { _kernel?: ClusterKernel })._kernel ?? (kernel as ClusterKernel);
+        const ingestResult = await underlying.ingestArtifact({
             filename,
             content,
             mimeType: getMimeType(filename),
-            actorId: options.actorId,
+            actorId: proposerId,
         });
-        result.artifactIds.push(artifact.id);
+        const artifactId = ingestResult.artifact.id;
+        result.artifactIds.push(artifactId);
         result.receipts++;
 
         // Create entity for this source
         const entityKind = source.entityKind ?? inferEntityKind(filename, content.toString('utf-8'));
         if (entityKind) {
-            const { entity } = await kernel.createEntity({
-                kind: entityKind,
-                name: filename.replace(extname(filename), ''),
-                attributes: {
-                    sourceFile: filename,
-                    artifactKind: mapToArtifactKind(filename),
-                    ...(source.attributes ?? {}),
+            const entityResult = await runMutation(
+                kernel,
+                'create_entity',
+                'canonical',
+                {
+                    kind: entityKind,
+                    name: filename.replace(extname(filename), ''),
+                    attributes: {
+                        sourceFile: filename,
+                        artifactKind: mapToArtifactKind(filename),
+                        ...(source.attributes ?? {}),
+                    },
                 },
-                actorId: options.actorId,
-            });
-            result.entityIds.push(entity.id);
+                proposerId,
+                committerId,
+            );
+            const entityId = entityResult.affectedIds[0];
+            if (!entityId) throw new Error('ingestRepoKnowledge: create_entity commit returned no affectedIds');
+            result.entityIds.push(entityId);
             result.receipts++;
 
             // Link entity to artifact
-            await kernel.linkEvidence({
-                artifactId: artifact.id,
-                entityId: entity.id,
-                actorId: options.actorId,
-            });
+            await runMutation(
+                kernel,
+                'link_evidence',
+                'ledger',
+                {
+                    artifactId,
+                    entityId,
+                },
+                proposerId,
+                committerId,
+            );
             result.provenanceLinks++;
             result.receipts++;
 
             // Link to repo entity
-            await kernel.linkEvidence({
-                artifactId: artifact.id,
-                entityId: repoEntity.id,
-                actorId: options.actorId,
-            });
+            await runMutation(
+                kernel,
+                'link_evidence',
+                'ledger',
+                {
+                    artifactId,
+                    entityId: result.repoEntityId,
+                },
+                proposerId,
+                committerId,
+            );
             result.provenanceLinks++;
             result.receipts++;
         }
@@ -172,13 +309,19 @@ export async function ingestRepoKnowledge(
 
 /**
  * Extract facts from markdown content and create fact entities.
+ * Uses the canonical lifecycle path (propose → validate → approve → commit).
  */
 export async function extractFacts(
-    kernel: ClusterKernel,
+    kernel: IngestKernel,
     artifactId: string,
     content: string,
-    options: { actorId: string; repoEntityId: string },
+    options: { actorId: string; repoEntityId: string; committerId?: string },
 ): Promise<string[]> {
+    warnIfNoPolicy(kernel);
+
+    const proposerId = options.actorId;
+    const committerId = options.committerId ?? options.actorId;
+
     const factIds: string[] = [];
 
     // Extract headings as potential fact markers
@@ -188,23 +331,37 @@ export async function extractFacts(
         if (headingMatch) {
             const factName = headingMatch[1].trim();
             if (factName.length > 3 && factName.length < 200) {
-                const { entity } = await kernel.createEntity({
-                    kind: 'fact',
-                    name: factName,
-                    attributes: {
-                        sourceArtifact: artifactId,
-                        extractedFrom: 'heading',
+                const { affectedIds } = await runMutation(
+                    kernel,
+                    'create_entity',
+                    'canonical',
+                    {
+                        kind: 'fact',
+                        name: factName,
+                        attributes: {
+                            sourceArtifact: artifactId,
+                            extractedFrom: 'heading',
+                        },
                     },
-                    actorId: options.actorId,
-                });
-                factIds.push(entity.id);
+                    proposerId,
+                    committerId,
+                );
+                const factId = affectedIds[0];
+                if (!factId) continue;
+                factIds.push(factId);
 
                 // Link fact to source artifact
-                await kernel.linkEvidence({
-                    artifactId,
-                    entityId: entity.id,
-                    actorId: options.actorId,
-                });
+                await runMutation(
+                    kernel,
+                    'link_evidence',
+                    'ledger',
+                    {
+                        artifactId,
+                        entityId: factId,
+                    },
+                    proposerId,
+                    committerId,
+                );
             }
         }
     }

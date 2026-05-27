@@ -35,6 +35,7 @@ describe('Wave 4: Command-created entities auto-index', () => {
             payload: { kind: 'phase', name: 'Command Phase', attributes: {} },
             proposedBy: 'operator',
         });
+        await kernel.validateMutation(proposal.id);
         const { command } = await kernel.commitMutation(proposal.id, 'operator');
 
         // Both should be searchable
@@ -55,6 +56,7 @@ describe('Wave 4: Command-created entities auto-index', () => {
             payload: { kind: 'decision', name: 'Owner Truth Test', attributes: { rationale: 'test' } },
             proposedBy: 'agent',
         });
+        await kernel.validateMutation(proposal.id);
         const { receipt } = await kernel.commitMutation(proposal.id, 'operator');
         const entityId = receipt.affectedIds[0];
 
@@ -74,6 +76,7 @@ describe('Wave 4: Command-created entities auto-index', () => {
             payload: { kind: 'finding', name: 'Bundle Retrieval Test', attributes: {} },
             proposedBy: 'agent',
         });
+        await kernel.validateMutation(proposal.id);
         await kernel.commitMutation(proposal.id, 'operator');
 
         // Should appear in retrieval
@@ -93,6 +96,7 @@ describe('Wave 4: Command-created entities auto-index', () => {
             payload: { kind: 'milestone', name: 'Trace Test Milestone', attributes: {} },
             proposedBy: 'agent',
         });
+        await kernel.validateMutation(proposal.id);
         const { receipt } = await kernel.commitMutation(proposal.id, 'operator');
         const entityId = receipt.affectedIds[0];
 
@@ -116,6 +120,7 @@ describe('Wave 4: Command-created entities auto-index', () => {
             payload: { kind: 'finding', name: 'NoDupe Test', attributes: {} },
             proposedBy: 'agent',
         });
+        await kernel.validateMutation(proposal.id);
         await kernel.commitMutation(proposal.id, 'operator');
 
         // Rebuild index
@@ -147,6 +152,7 @@ describe('Wave 4: Command-created entities auto-index', () => {
             payload: { entityId: entity.id, patch: { name: 'Updated Name', attributes: { v: 2 } } },
             proposedBy: 'operator',
         });
+        await kernel.validateMutation(proposal.id);
         await kernel.commitMutation(proposal.id, 'operator');
 
         // Old name should not be in index

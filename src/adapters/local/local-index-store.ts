@@ -1,13 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import type { IndexRecord } from '../../types/index-record.js';
 import type { IndexStore, IndexQuery } from '../../contracts/index-store.js';
+import { CorruptStoreError } from './errors.js';
 
 /**
  * Local index store — file-backed derivative index.
  * Proves: derivative records, clear/rebuild-ready behavior.
  * This store can be blown away and rebuilt from canonical + artifact + ledger stores.
+ *
+ * Writes are atomic via tmp + rename. Reads fail loudly with CorruptStoreError
+ * on malformed JSON — the index is derivative so the recovery is always
+ * "delete the file and rebuild," but we still refuse to start with a half-loaded map.
  */
 export class LocalIndexStore implements IndexStore {
     private readonly filePath: string;
@@ -76,17 +81,52 @@ export class LocalIndexStore implements IndexStore {
         return this.records.size;
     }
 
+    /**
+     * Atomically replace the entire record set. Used by rebuildIndex to swap
+     * a freshly-built index over the live one without an empty window between
+     * clear() and the first index() call (STORES-008).
+     */
+    async replaceAll(records: Omit<IndexRecord, 'id' | 'indexedAt' | 'owner'>[]): Promise<void> {
+        const next = new Map<string, IndexRecord>();
+        const now = new Date().toISOString();
+        for (const r of records) {
+            const full: IndexRecord = {
+                id: randomUUID(),
+                ...r,
+                indexedAt: now,
+                owner: 'index',
+            };
+            next.set(full.id, full);
+        }
+        this.records = next;
+        this.persist();
+    }
+
     private load(): Map<string, IndexRecord> {
         if (!existsSync(this.filePath)) {
             return new Map();
         }
-        const raw = readFileSync(this.filePath, 'utf-8');
-        const arr: IndexRecord[] = JSON.parse(raw);
-        return new Map(arr.map((r) => [r.id, r]));
+        let raw: string;
+        try {
+            raw = readFileSync(this.filePath, 'utf-8');
+        } catch (err) {
+            throw new CorruptStoreError(this.filePath, err);
+        }
+        try {
+            const arr: IndexRecord[] = JSON.parse(raw);
+            if (!Array.isArray(arr)) {
+                throw new Error(`expected JSON array, got ${typeof arr}`);
+            }
+            return new Map(arr.map((r) => [r.id, r]));
+        } catch (err) {
+            throw new CorruptStoreError(this.filePath, err);
+        }
     }
 
     private persist(): void {
         const arr = Array.from(this.records.values());
-        writeFileSync(this.filePath, JSON.stringify(arr, null, 2));
+        const tmpPath = `${this.filePath}.tmp`;
+        writeFileSync(tmpPath, JSON.stringify(arr, null, 2));
+        renameSync(tmpPath, this.filePath);
     }
 }

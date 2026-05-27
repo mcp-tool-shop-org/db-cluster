@@ -91,6 +91,7 @@ describe('Dogfood mutation', () => {
             proposedBy: 'ai-agent',
         });
 
+        await cluster.kernel.validateMutation(proposal.id);
         const { command, receipt } = await cluster.kernel.commitMutation(proposal.id, 'operator');
         expect(command.status).toBe('committed');
         expect(receipt).toBeDefined();
@@ -109,6 +110,7 @@ describe('Dogfood mutation', () => {
             proposedBy: 'ai-agent',
         });
 
+        await cluster.kernel.validateMutation(proposal.id);
         const { command, receipt } = await cluster.kernel.commitMutation(proposal.id, 'operator');
         expect(receipt.commandId).toBe(command.id);
         expect(receipt.affectedIds.length).toBeGreaterThan(0);
@@ -127,6 +129,7 @@ describe('Dogfood mutation', () => {
             proposedBy: 'ai-agent',
         });
 
+        await cluster.kernel.validateMutation(proposal.id);
         const { command, receipt } = await cluster.kernel.commitMutation(proposal.id, 'operator');
 
         // The command should be committed

@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Artifact } from '../../types/artifact.js';
 import type {
@@ -7,6 +7,7 @@ import type {
     ArtifactFilter,
     ArtifactIngestInput,
 } from '../../contracts/artifact-store.js';
+import { CorruptStoreError, InvalidContentHashError, isValidContentHash } from './errors.js';
 
 /**
  * Local artifact store — filesystem-backed immutable artifact persistence.
@@ -14,6 +15,9 @@ import type {
  * Metadata is stored in artifacts.json.
  * Proves: immutable write, content addressing, version identity.
  * NO update method. Re-ingesting the same filename creates a new version.
+ *
+ * Writes to artifacts.json are atomic via tmp + rename. Reads fail loudly
+ * with CorruptStoreError on malformed JSON.
  */
 export class LocalArtifactStore implements ArtifactStore {
     private readonly metaPath: string;
@@ -101,18 +105,37 @@ export class LocalArtifactStore implements ArtifactStore {
     /**
      * Import a full artifact snapshot preserving original ID and metadata.
      * Used by restore to recreate artifacts exactly as backed up.
+     *
+     * SECURITY: validates `metadata.contentHash` against /^[a-f0-9]{64}$/ BEFORE
+     * using it as a path component. Without this check, a tampered backup with
+     * `contentHash = '../../escape'` would write outside the artifact contentDir
+     * (STORES-006). InvalidContentHashError is thrown on bad input.
+     *
+     * Idempotent: returns the existing record if an artifact with the same id
+     * is already present.
      */
     async importSnapshot(metadata: Artifact, content: Buffer): Promise<Artifact> {
-        // Write content by hash
+        if (!isValidContentHash(metadata.contentHash)) {
+            throw new InvalidContentHashError(String(metadata.contentHash));
+        }
+
+        const existing = this.artifacts.get(metadata.id);
+        if (existing) {
+            return existing;
+        }
+
+        // Write content by hash — safe to join now that we've validated the hash shape.
         const contentPath = join(this.contentDir, metadata.contentHash);
         if (!existsSync(contentPath)) {
             writeFileSync(contentPath, content);
         }
 
-        // Preserve original metadata including ID
+        // Preserve original metadata including ID; rewrite storagePath to the
+        // current cluster's contentDir so the restored artifact is reachable.
         const artifact: Artifact = {
             ...metadata,
-            storagePath: join(this.contentDir, metadata.contentHash),
+            storagePath: contentPath,
+            owner: 'artifact',
         };
 
         this.artifacts.set(artifact.id, artifact);
@@ -124,13 +147,27 @@ export class LocalArtifactStore implements ArtifactStore {
         if (!existsSync(this.metaPath)) {
             return new Map();
         }
-        const raw = readFileSync(this.metaPath, 'utf-8');
-        const arr: Artifact[] = JSON.parse(raw);
-        return new Map(arr.map((a) => [a.id, a]));
+        let raw: string;
+        try {
+            raw = readFileSync(this.metaPath, 'utf-8');
+        } catch (err) {
+            throw new CorruptStoreError(this.metaPath, err);
+        }
+        try {
+            const arr: Artifact[] = JSON.parse(raw);
+            if (!Array.isArray(arr)) {
+                throw new Error(`expected JSON array, got ${typeof arr}`);
+            }
+            return new Map(arr.map((a) => [a.id, a]));
+        } catch (err) {
+            throw new CorruptStoreError(this.metaPath, err);
+        }
     }
 
     private persist(): void {
         const arr = Array.from(this.artifacts.values());
-        writeFileSync(this.metaPath, JSON.stringify(arr, null, 2));
+        const tmpPath = `${this.metaPath}.tmp`;
+        writeFileSync(tmpPath, JSON.stringify(arr, null, 2));
+        renameSync(tmpPath, this.metaPath);
     }
 }

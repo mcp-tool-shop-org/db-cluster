@@ -270,7 +270,7 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
     // ─── Proof 2: index-only can discover but not resolve owner truth ─
 
     describe('Proof 2: index-only principal can discover derivative but not resolve owner truth', () => {
-        it('index reader can findSources (discover_existence)', async () => {
+        it('index reader can findSources (discover_existence) — but cannot see canonical-backed records', async () => {
             const pk = makePolicyKernel(indexOnlyReader);
             // Seed via internal kernel
             await pk._kernel.createEntity({
@@ -281,10 +281,15 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
             });
 
             const result = await pk.findSources({ query: 'Discoverable' });
-            // Index records should be returned (derivative), but resolved entities filtered out
-            // because index-reader does NOT have read_owner_truth for canonical
-            expect(result.indexRecords.length).toBeGreaterThan(0);
+            // KERNEL-003 fix: index records that mirror canonical truth are
+            // filtered by the SAME policy that gates the underlying canonical
+            // object. indexOnlyReader has `read_derivative` but is denied
+            // `read_owner_truth` on canonical AND the canonical store is
+            // hidden by visibility — so the canonical-backed index record is
+            // also dropped. Previously the record leaked kind/name/attributes
+            // through `text` and `metadata`.
             expect(result.resolvedEntities).toHaveLength(0);
+            expect(result.indexRecords).toHaveLength(0);
         });
 
         it('index reader cannot inspectEntity', async () => {
@@ -427,6 +432,7 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
                 proposedBy: 'admin-1',
             });
 
+            await pk.validateMutation(cmd.id);
             const result = await pk.commitMutation(cmd.id, 'admin-1');
             expect(result.command.status).toBe('committed');
             expect(result.receipt).toBeTruthy();
@@ -491,9 +497,16 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
             });
 
             const result = await pk.findSources({ query: 'Filtered' });
-            // Index records present (derivative), but entities filtered (no read_owner_truth on canonical)
-            expect(result.indexRecords.length).toBeGreaterThan(0);
+            // KERNEL-003 fix: index records that mirror canonical/artifact truth
+            // are filtered by the SAME policy that gates the underlying object.
+            // indexOnlyReader has `read_derivative` but NOT `read_owner_truth`
+            // on canonical (and the canonical store is hidden by visibility for
+            // their trust zone). Previously the index record leaked the entity
+            // kind/name/attributes through `text` and `metadata`. Now both the
+            // entity AND its index record are filtered, which is the stronger
+            // and correct enforcement.
             expect(result.resolvedEntities).toHaveLength(0);
+            expect(result.indexRecords).toHaveLength(0);
         });
     });
 

@@ -2,7 +2,6 @@
  * db-cluster — public API surface.
  *
  * PUBLIC (exported here):
- *   - ClusterKernel + input/result types
  *   - Store contracts (interfaces)
  *   - Domain types (Entity, Artifact, IndexRecord, ProvenanceEvent, Command, Receipt)
  *   - Store factory (createCluster, createClusterFromEnv, createLocalCluster)
@@ -10,12 +9,19 @@
  *   - URI utilities
  *
  * SUBPATH EXPORTS (import from 'db-cluster/sdk', 'db-cluster/mcp', etc.):
- *   - db-cluster/sdk — ClusterSDK high-level client
+ *   - db-cluster/sdk — ClusterSDK high-level client (recommended for application code)
  *   - db-cluster/mcp — MCP server tools + handler
- *   - db-cluster/policy — PolicyEnforcedKernel + redaction
+ *   - db-cluster/policy — PolicyEnforcedKernel + redaction (use this for in-process callers
+ *                          who need direct kernel access — DO NOT bypass with raw ClusterKernel)
  *   - db-cluster/types — all type re-exports
  *
  * NOT PUBLIC (internal, not exported):
+ *   - Raw `ClusterKernel` class (KERNEL-013): exporting this publicly bypassed
+ *     PolicyEnforcedKernel entirely. The only legitimate ways to drive the
+ *     kernel are now via ClusterSDK (db-cluster/sdk) or PolicyEnforcedKernel
+ *     (db-cluster/policy). Tests / dogfood scripts that still need the raw
+ *     class import it from the internal-only `./kernel/cluster-kernel.js`
+ *     path inside this package.
  *   - Raw adapter implementations (local stores, postgres store)
  *   - Test helpers
  *   - Dashboard demo internals
@@ -43,8 +49,9 @@ export type {
     ClusterStores,
 } from './contracts/index.js';
 
-// --- Kernel ---
-export { ClusterKernel } from './kernel/cluster-kernel.js';
+// --- Kernel-shaped public types (no class; use SDK or PolicyEnforcedKernel) ---
+// The `ClusterKernel` class is intentionally NOT exported here (KERNEL-013).
+// Input/result types remain public so callers can satisfy the SDK signature.
 export type {
     KernelOptions,
     IngestArtifactInput,

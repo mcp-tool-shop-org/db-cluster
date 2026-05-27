@@ -16,6 +16,19 @@ export interface LedgerStore {
     appendReceipt(receipt: Omit<Receipt, 'id' | 'committedAt'>): Promise<Receipt>;
     getReceipt(id: string): Promise<Receipt | null>;
     listReceipts(filter?: ReceiptFilter): Promise<Receipt[]>;
+
+    /**
+     * Import an event preserving the original `id` and `timestamp`.
+     * Used by backup/restore — STORES-002 requires this so re-running restore
+     * is idempotent (otherwise every run inserts new copies under fresh UUIDs).
+     */
+    importEvent?(event: ProvenanceEvent): Promise<ProvenanceEvent>;
+
+    /**
+     * Import a receipt preserving the original `id` and `committedAt`.
+     * Same rationale as {@link importEvent} but for receipts.
+     */
+    importReceipt?(receipt: Receipt): Promise<Receipt>;
 }
 
 export interface LedgerFilter {

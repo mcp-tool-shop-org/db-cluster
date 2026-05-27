@@ -4,7 +4,8 @@
  */
 
 import type { ClusterStores } from '../contracts/index.js';
-import { indexArtifactContent } from '../indexing/content-indexer.js';
+import type { IndexRecord } from '../types/index-record.js';
+import { buildArtifactIndexText } from '../indexing/content-indexer.js';
 
 export interface RebuildResult {
     rebuilt: number;
@@ -20,48 +21,106 @@ export interface StaleRecord {
     message: string;
 }
 
+/** A staged index record — same shape as IndexStore.index() input. */
+type StagedRecord = Omit<IndexRecord, 'id' | 'indexedAt' | 'owner'>;
+
 /**
  * Rebuild the index from canonical + artifact owner truth.
  * Uses content-aware indexing for artifacts.
  * Does NOT mutate canonical, artifact, or ledger.
+ *
+ * Strategy (STORES-008): build the full list of replacement records in memory
+ * BEFORE touching the live index, then either
+ *   - call `replaceAll` (if available) for an atomic in-place swap, or
+ *   - fall back to clear() + index() in tight succession.
+ * Both paths keep the "empty index" window as short as possible. The old code
+ * cleared the index unconditionally at the top of the function, leaving readers
+ * to see a fully-empty index if the function crashed mid-way through reindexing.
  */
 export async function rebuildIndex(stores: ClusterStores, options?: { dryRun?: boolean }): Promise<RebuildResult> {
     const dryRun = options?.dryRun ?? false;
     const errors: string[] = [];
     let rebuilt = 0;
-    let removed = 0;
+    const removed = 0;
 
-    // Clear existing index (unless dry run)
-    if (!dryRun) {
-        await stores.index.clear();
-    }
+    // 1. STAGE — build replacement records without touching the live index.
+    const staged: StagedRecord[] = [];
 
-    // Re-index all canonical entities
+    // Canonical entities
     const entities = await stores.canonical.list({});
     for (const entity of entities) {
         try {
-            if (!dryRun) {
-                await stores.index.index({
-                    sourceId: entity.id,
-                    sourceStore: 'canonical',
-                    text: `${entity.kind}: ${entity.name}`,
-                    metadata: { kind: entity.kind, ...entity.attributes },
-                });
-            }
+            staged.push({
+                sourceId: entity.id,
+                sourceStore: 'canonical',
+                text: `${entity.kind}: ${entity.name}`,
+                metadata: { kind: entity.kind, ...entity.attributes },
+            });
             rebuilt++;
         } catch (err: any) {
-            errors.push(`Failed to index entity ${entity.id}: ${err.message}`);
+            errors.push(`Failed to stage entity ${entity.id}: ${err.message}`);
         }
     }
 
-    // Re-index all artifacts with content-aware text
-    if (!dryRun) {
-        const contentResult = await indexArtifactContent(stores);
-        rebuilt += contentResult.indexed;
-        errors.push(...contentResult.errors);
+    // Artifacts (content-aware text extraction)
+    const artifacts = await stores.artifact.list({});
+    for (const artifact of artifacts) {
+        try {
+            const contentBuf = await stores.artifact.getContent(artifact.id);
+            let indexText: string;
+            if (
+                contentBuf &&
+                (artifact.mimeType.startsWith('text/') ||
+                    artifact.filename.endsWith('.md') ||
+                    artifact.filename.endsWith('.txt'))
+            ) {
+                const content = contentBuf.toString('utf-8');
+                indexText = buildArtifactIndexText(artifact, content);
+            } else {
+                indexText = `${artifact.filename} v${artifact.version}`;
+            }
+            staged.push({
+                sourceId: artifact.id,
+                sourceStore: 'artifact',
+                text: indexText,
+                metadata: {
+                    filename: artifact.filename,
+                    mimeType: artifact.mimeType,
+                    version: artifact.version,
+                },
+            });
+            rebuilt++;
+        } catch (err: any) {
+            errors.push(`Failed to stage artifact ${artifact.id}: ${err.message}`);
+        }
+    }
+
+    if (dryRun) {
+        return { rebuilt, removed, errors, dryRun };
+    }
+
+    // 2. SWAP — atomic if the store supports replaceAll, otherwise clear+index
+    //    in tight succession. The empty-index window is one filesystem rename
+    //    on the replaceAll path; on the fallback path it is the time taken to
+    //    re-emit `staged.length` records (small but non-zero).
+    const indexStore = stores.index as unknown as {
+        replaceAll?: (records: StagedRecord[]) => Promise<void>;
+    };
+    if (typeof indexStore.replaceAll === 'function') {
+        try {
+            await indexStore.replaceAll(staged);
+        } catch (err: any) {
+            errors.push(`Atomic index swap failed: ${err.message}`);
+        }
     } else {
-        const artifacts = await stores.artifact.list({});
-        rebuilt += artifacts.length;
+        await stores.index.clear();
+        for (const record of staged) {
+            try {
+                await stores.index.index(record);
+            } catch (err: any) {
+                errors.push(`Failed to write index record for ${record.sourceId}: ${err.message}`);
+            }
+        }
     }
 
     return { rebuilt, removed, errors, dryRun };

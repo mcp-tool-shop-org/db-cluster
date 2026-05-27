@@ -1,13 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Entity } from '../../types/entity.js';
 import type { CanonicalStore, EntityFilter } from '../../contracts/canonical-store.js';
+import { CorruptStoreError } from './errors.js';
 
 /**
  * Local canonical store — file-backed entity persistence.
  * Stores entities as a single JSON file (entities.json).
  * Proves: stable records, create/read/list, controlled update.
+ *
+ * Writes are atomic: serialize to a sibling `.tmp` then `renameSync` over the
+ * real path. Crash mid-write leaves the previous good file intact.
+ * Reads fail loudly with a typed CorruptStoreError if JSON.parse fails.
  */
 export class LocalCanonicalStore implements CanonicalStore {
     private readonly filePath: string;
@@ -77,17 +82,53 @@ export class LocalCanonicalStore implements CanonicalStore {
         return updated;
     }
 
+    /**
+     * Import a full entity snapshot preserving original id, createdAt, updatedAt.
+     * Used by restore to recreate entities exactly as backed up so that
+     * provenance events that cite the original subjectId still resolve (STORES-001).
+     *
+     * Idempotent: if an entity with the same id already exists, the existing
+     * record is returned unchanged.
+     */
+    async importSnapshot(entity: Entity): Promise<Entity> {
+        const existing = this.entities.get(entity.id);
+        if (existing) {
+            return existing;
+        }
+        const snapshot: Entity = {
+            ...entity,
+            owner: 'canonical',
+        };
+        this.entities.set(snapshot.id, snapshot);
+        this.persist();
+        return snapshot;
+    }
+
     private load(): Map<string, Entity> {
         if (!existsSync(this.filePath)) {
             return new Map();
         }
-        const raw = readFileSync(this.filePath, 'utf-8');
-        const arr: Entity[] = JSON.parse(raw);
-        return new Map(arr.map((e) => [e.id, e]));
+        let raw: string;
+        try {
+            raw = readFileSync(this.filePath, 'utf-8');
+        } catch (err) {
+            throw new CorruptStoreError(this.filePath, err);
+        }
+        try {
+            const arr: Entity[] = JSON.parse(raw);
+            if (!Array.isArray(arr)) {
+                throw new Error(`expected JSON array, got ${typeof arr}`);
+            }
+            return new Map(arr.map((e) => [e.id, e]));
+        } catch (err) {
+            throw new CorruptStoreError(this.filePath, err);
+        }
     }
 
     private persist(): void {
         const arr = Array.from(this.entities.values());
-        writeFileSync(this.filePath, JSON.stringify(arr, null, 2));
+        const tmpPath = `${this.filePath}.tmp`;
+        writeFileSync(tmpPath, JSON.stringify(arr, null, 2));
+        renameSync(tmpPath, this.filePath);
     }
 }

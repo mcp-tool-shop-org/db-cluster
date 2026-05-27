@@ -97,18 +97,17 @@ test('db-cluster-mcp --help or startup', () => {
 console.log('\n4. SDK import smoke:');
 test('import db-cluster main', () => {
     const script = `
-        import { ClusterKernel, createLocalCluster } from 'db-cluster';
+        import { ClusterSDK } from 'db-cluster/sdk';
         import { mkdtempSync } from 'node:fs';
         import { tmpdir } from 'node:os';
         import { join } from 'node:path';
         const dir = mkdtempSync(join(tmpdir(), 'sdk-smoke-'));
-        const stores = createLocalCluster(dir);
-        const kernel = new ClusterKernel(stores, { dataDir: dir });
-        console.log('kernel ok:', typeof kernel.findSources === 'function');
+        const sdk = new ClusterSDK({ clusterDir: dir });
+        console.log('sdk ok:', typeof sdk.findSources === 'function');
     `;
     writeFileSync(join(testDir, 'test-main.mjs'), script);
     const out = run('node test-main.mjs');
-    assert(out.includes('kernel ok: true'), 'Should create kernel');
+    assert(out.includes('sdk ok: true'), 'Should construct SDK');
 });
 
 test('import db-cluster/sdk', () => {
@@ -144,33 +143,31 @@ test('import db-cluster/types', () => {
 
 // --- Quickstart ---
 console.log('\n5. Quickstart smoke:');
-test('create cluster + ingest + retrieve', () => {
+test('create cluster + propose + commit + retrieve', () => {
     const script = `
-        import { ClusterKernel, createLocalCluster } from 'db-cluster';
+        import { ClusterSDK } from 'db-cluster/sdk';
         import { mkdtempSync } from 'node:fs';
         import { tmpdir } from 'node:os';
         import { join } from 'node:path';
 
         const dir = mkdtempSync(join(tmpdir(), 'quickstart-'));
-        const stores = createLocalCluster(dir);
-        const kernel = new ClusterKernel(stores, { dataDir: dir });
+        const sdk = new ClusterSDK({ clusterDir: dir });
 
-        const { artifact } = await kernel.ingestArtifact({
-            filename: 'test.md',
-            content: Buffer.from('# Hello World'),
-            mimeType: 'text/markdown',
-            actorId: 'smoke-test',
+        const command = await sdk.proposeMutation({
+            verb: 'create_entity',
+            targetStore: 'canonical',
+            payload: {
+                kind: 'fact',
+                name: 'hello-world',
+                attributes: { source: 'smoke' },
+            },
+            proposedBy: 'smoke-test',
         });
 
-        const { entity } = await kernel.createEntity({
-            kind: 'fact',
-            name: 'hello-world',
-            attributes: { source: 'smoke' },
-            actorId: 'smoke-test',
-        });
+        await sdk.commitMutation(command.id, 'smoke-test');
 
-        const results = await kernel.findSources({ query: 'hello' });
-        console.log('quickstart ok:', results.resolvedEntities.length >= 1 || results.resolvedArtifacts.length >= 1);
+        const results = await sdk.findSources('hello');
+        console.log('quickstart ok:', results.resolvedEntities.length >= 1);
     `;
     writeFileSync(join(testDir, 'test-quickstart.mjs'), script);
     const out = run('node test-quickstart.mjs');

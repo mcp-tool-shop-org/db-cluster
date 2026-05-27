@@ -81,18 +81,52 @@ describe('Wave 5 — Proof Tests', () => {
     });
 
     describe('No mutation without command proof', () => {
-        it('kernel does not expose raw store write access', () => {
-            // The kernel surface only has typed verbs — no direct store refs
-            const kernelKeys = Object.getOwnPropertyNames(
-                Object.getPrototypeOf(kernel),
-            ).filter((k) => k !== 'constructor');
+        it('every helper-method receipt cites an inspectable command', async () => {
+            // KERNEL-002 fix: synthetic commands manufactured inside the
+            // helper write methods (ingestArtifact / createEntity / linkEvidence /
+            // rebuildIndex) must be persisted via saveCommand so the resulting
+            // receipt.commandId resolves through inspectCommand. The old proof
+            // here checked prototype names — a structural no-op that passed
+            // regardless of whether stores were exposed. The real invariant is
+            // "every receipt cites a real command on the inspectable surface."
+            const { artifact, receipt: artifactReceipt } = await kernel.ingestArtifact({
+                filename: 'no-orphan.md',
+                content: Buffer.from('# Truth has receipts'),
+                mimeType: 'text/markdown',
+                actorId: 'user-1',
+            });
+            const artifactCmd = await kernel.inspectCommand(artifactReceipt.commandId);
+            expect(artifactCmd).toBeDefined();
+            expect(artifactCmd.status).toBe('committed');
+            expect(artifactCmd.verb).toBe('ingest_artifact');
+            expect(artifactCmd.proposedBy).toBe('user-1');
 
-            // None of the kernel methods should expose raw stores
-            expect(kernelKeys).not.toContain('stores');
-            expect(kernelKeys).not.toContain('canonical');
-            expect(kernelKeys).not.toContain('artifact');
-            expect(kernelKeys).not.toContain('index');
-            expect(kernelKeys).not.toContain('ledger');
+            const { entity, receipt: entityReceipt } = await kernel.createEntity({
+                kind: 'thesis',
+                name: 'No orphans',
+                attributes: { conf: 'high' },
+                actorId: 'user-1',
+            });
+            const entityCmd = await kernel.inspectCommand(entityReceipt.commandId);
+            expect(entityCmd).toBeDefined();
+            expect(entityCmd.status).toBe('committed');
+            expect(entityCmd.verb).toBe('create_entity');
+
+            const { receipt: linkReceipt } = await kernel.linkEvidence({
+                artifactId: artifact.id,
+                entityId: entity.id,
+                actorId: 'user-1',
+            });
+            const linkCmd = await kernel.inspectCommand(linkReceipt.commandId);
+            expect(linkCmd).toBeDefined();
+            expect(linkCmd.status).toBe('committed');
+            expect(linkCmd.verb).toBe('link_evidence');
+
+            const { receipt: rebuildReceipt } = await kernel.rebuildIndex('user-1');
+            const rebuildCmd = await kernel.inspectCommand(rebuildReceipt.commandId);
+            expect(rebuildCmd).toBeDefined();
+            expect(rebuildCmd.status).toBe('committed');
+            expect(rebuildCmd.verb).toBe('reindex');
         });
 
         it('proposeMutation produces zero store writes', async () => {
@@ -146,7 +180,10 @@ describe('Wave 5 — Proof Tests', () => {
             const beforeCommit = await kernel.inspectEntity(entity.id);
             expect(beforeCommit.name).toBe('Original');
 
-            // Commit: entity changes
+            // KERNEL-006 fix: commitMutation now requires the command to be
+            // validated (or approved) — proposed-direct-to-committed is no
+            // longer permitted at the kernel layer. Walk the full lifecycle.
+            await kernel.validateMutation(cmd.id);
             await kernel.commitMutation(cmd.id, 'user-1');
             const afterCommit = await kernel.inspectEntity(entity.id);
             expect(afterCommit.name).toBe('Updated');
@@ -243,6 +280,8 @@ describe('Wave 5 — Proof Tests', () => {
                 payload: { kind: 'test', name: 'Four', attributes: {} },
                 proposedBy: 'user-1',
             });
+            // KERNEL-006: commit now requires validated/approved.
+            await kernel.validateMutation(cmd.id);
             await kernel.commitMutation(cmd.id, 'user-1');
 
             // 5 write operations = 5 receipts
@@ -357,6 +396,63 @@ describe('Wave 5 — Proof Tests', () => {
         });
     });
 
+    describe('Drift detection proof (TESTS-008 — always-on local equivalent of Phase 8 Proof 3)', () => {
+        it('direct adapter mutation is detectable as drift (no receipt, verify() flags it)', async () => {
+            // Seed: create an entity through the kernel — receipt emitted.
+            const { entity } = await kernel.createEntity({
+                kind: 'drifted',
+                name: 'Original',
+                attributes: { v: 1 },
+                actorId: 'user-1',
+            });
+
+            // Snapshot the receipt count BEFORE the bypass.
+            const beforeReceipts = await kernel.listReceipts();
+            const updateBefore = beforeReceipts.filter((r) =>
+                r.resultSummary.includes('Updated entity'),
+            );
+            expect(updateBefore).toHaveLength(0);
+
+            // Bypass kernel: write directly to the canonical adapter.
+            // This is the local-adapter equivalent of phase8-proof Proof 3,
+            // which only runs against Postgres. Without an always-on local
+            // version, the "no mutation without command" drift signal was
+            // invisible on the default test path.
+            await cluster.canonical.update(entity.id, {
+                name: 'Drifted',
+                attributes: { v: 99 },
+            });
+
+            // Data changed in canonical truth.
+            const raw = await cluster.canonical.get(entity.id);
+            expect(raw).not.toBeNull();
+            expect(raw!.name).toBe('Drifted');
+            expect(raw!.attributes).toEqual({ v: 99 });
+
+            // No "Updated entity" receipt was emitted for this change — the
+            // bypass is detectable as drift.
+            const afterReceipts = await kernel.listReceipts();
+            const updateAfter = afterReceipts.filter((r) =>
+                r.resultSummary.includes('Updated entity'),
+            );
+            expect(updateAfter).toHaveLength(0);
+
+            // The index still has the OLD text (`drifted: Original`) but the
+            // canonical entity now reads "Drifted" — verify() should surface
+            // this as a stale index entry, an orphan, or both.
+            const { verify } = await import('../src/ops/verify.js');
+            const health = await verify(cluster);
+
+            // Aggregate health must not be a clean "healthy".
+            // (`buildClusterHealth` derives an overall status from the per-check
+            // statuses; any non-healthy check should push aggregate off `healthy`.)
+            const hasUnhealthyCheck = health.checks.some((c) =>
+                c.status === 'stale' || c.status === 'corrupt' || c.status === 'unreachable',
+            );
+            expect(hasUnhealthyCheck).toBe(true);
+        });
+    });
+
     describe('Golden path regression fixture', () => {
         it('full lifecycle: ingest → entity → link → find → inspect → trace → propose → commit → receipts', async () => {
             // 1. Ingest
@@ -411,7 +507,8 @@ describe('Wave 5 — Proof Tests', () => {
             expect(eventsAfter).toEqual(eventsBefore);
             expect(cmd.status).toBe('proposed');
 
-            // 8. Commit
+            // 8. Validate + Commit (KERNEL-006: validation is now required)
+            await kernel.validateMutation(cmd.id);
             const { receipt } = await kernel.commitMutation(cmd.id, 'operator');
             expect(receipt.commandId).toBe(cmd.id);
 

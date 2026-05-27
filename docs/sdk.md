@@ -6,24 +6,50 @@ The `ClusterSDK` provides programmatic access to db-cluster. It wraps the kernel
 
 ```typescript
 import { ClusterSDK } from 'db-cluster/sdk';
-import { createLocalCluster } from 'db-cluster';
 
-const stores = createLocalCluster('.db-cluster');
-const sdk = new ClusterSDK({ stores, dataDir: '.db-cluster' });
+const sdk = new ClusterSDK({ clusterDir: '.db-cluster' });
 ```
 
-With Postgres canonical backend:
+The SDK owns its store wiring — pass `clusterDir` and the SDK constructs the
+local cluster internally. No raw `stores` parameter is exposed: the package
+boundary keeps adapter construction inside the SDK.
+
+### With policies (PolicyEnforcedKernel under the hood)
+
+When `policies` is set, the SDK routes reads and writes through a
+`PolicyEnforcedKernel` configured for the supplied `principal`. When `policies`
+is omitted the SDK uses a raw `ClusterKernel`.
 
 ```typescript
-import { createCluster } from 'db-cluster';
+import { ClusterSDK } from 'db-cluster/sdk';
+import {
+    DEFAULT_POLICIES,
+    DEFAULT_TRUST_ZONES,
+    DEFAULT_VISIBILITY_RULES,
+} from 'db-cluster/policy';
+import type { Principal } from 'db-cluster/policy';
 
-const { stores } = createCluster({
-    rootDir: '.db-cluster',
-    backends: { canonical: 'postgres' },
-    postgresUrl: process.env.DB_CLUSTER_POSTGRES_URL!,
+const operator: Principal = {
+    id: 'operator',
+    name: 'Operator',
+    roles: ['operator'],
+    trustZone: 'internal',
+};
+
+const sdk = new ClusterSDK({
+    clusterDir: '.db-cluster',
+    policies: DEFAULT_POLICIES,
+    trustZones: DEFAULT_TRUST_ZONES,
+    visibilityRules: DEFAULT_VISIBILITY_RULES,
+    principal: operator,
 });
-const sdk = new ClusterSDK({ stores, dataDir: '.db-cluster' });
 ```
+
+### Postgres canonical backend
+
+For a Postgres canonical backend, configure the cluster directory's adapter
+factory (see `docs/store-contracts.md` and `createCluster`). The SDK reads
+the resulting cluster from `clusterDir`.
 
 ## Methods
 

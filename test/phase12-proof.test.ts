@@ -178,6 +178,7 @@ describe('Phase 12 proof suite', () => {
             payload: { kind: 'milestone', name: 'Auto-Index Proof', attributes: {} },
             proposedBy: 'agent',
         });
+        await k.validateMutation(proposal.id);
         const { receipt } = await k.commitMutation(proposal.id, 'operator');
         const entityId = receipt.affectedIds[0];
 
@@ -205,6 +206,7 @@ describe('Phase 12 proof suite', () => {
             payload: { kind: 'decision', name: 'Retrievable Decision Proof', attributes: {} },
             proposedBy: 'agent',
         });
+        await k.validateMutation(proposal.id);
         await k.commitMutation(proposal.id, 'operator');
 
         const bundle = await k.retrieveBundle('Retrievable Decision');
@@ -225,6 +227,7 @@ describe('Phase 12 proof suite', () => {
             payload: { kind: 'finding', name: 'Trace Proof Entity', attributes: {} },
             proposedBy: 'agent',
         });
+        await k.validateMutation(proposal.id);
         const { receipt } = await k.commitMutation(proposal.id, 'operator');
         const entityId = receipt.affectedIds[0];
 
@@ -317,7 +320,9 @@ describe('Phase 12 proof suite', () => {
         const freshDir = mkdtempSync(join(tmpdir(), 'p12-p14-'));
         const sdk = new ClusterSDK({ clusterDir: freshDir });
 
-        // Create via mutation
+        // Create via mutation. The SDK auto-walks proposed → validated →
+        // approved → committed (see ClusterSDK.commitMutation), so callers
+        // that don't care about intermediate states still get a one-call commit.
         const proposal = await sdk.proposeMutation({
             verb: 'create_entity',
             targetStore: 'canonical',

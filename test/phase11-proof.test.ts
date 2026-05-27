@@ -110,7 +110,8 @@ describe('Phase 11 proof suite', () => {
         });
         expect(proposal.status).toBe('proposed');
 
-        // Must commit to write
+        // Must validate + commit to write (KERNEL-006)
+        await cluster.kernel.validateMutation(proposal.id);
         const { command, receipt } = await cluster.kernel.commitMutation(proposal.id, 'operator');
         expect(command.status).toBe('committed');
         expect(receipt).toBeDefined();

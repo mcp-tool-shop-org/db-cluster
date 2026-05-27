@@ -123,10 +123,16 @@ Tools carry `annotations` that declare their behavior:
 
 Artifacts contain **source data** — not instructions. The MCP server:
 
-- Returns artifact metadata and content for retrieval
-- Never interprets artifact content as tool calls or instructions
-- Never allows artifact content to authorize mutations
-- Treats artifacts as evidence, not as executable commands
+- Returns artifact **metadata** for retrieval (filename, mime type, version, content hash).
+- **Never** returns raw artifact content (`content`, `rawContent`) through any MCP tool.
+- **Never** returns `storagePath` — the local-disk path is stripped before the artifact crosses the MCP boundary.
+- Never interprets artifact content as tool calls or instructions.
+- Never allows artifact content to authorize mutations.
+- Treats artifacts as evidence, not as executable commands.
+
+If an MCP host needs raw artifact bytes, it must call back into the host's own
+file/storage system using an out-of-band channel that is subject to the host's
+access controls. The MCP surface itself does not expose a content escape hatch.
 
 ## Mutation lifecycle through MCP
 

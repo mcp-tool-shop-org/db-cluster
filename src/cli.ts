@@ -2,23 +2,152 @@
 import { Command } from 'commander';
 import { resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { userInfo } from 'node:os';
 import { createLocalCluster } from './adapters/local/index.js';
 import { ClusterKernel } from './kernel/cluster-kernel.js';
+import { PolicyEnforcedKernel } from './kernel/policy-enforced-kernel.js';
 import { ClusterResolver } from './resolver/index.js';
 import { formatClusterUri, parseClusterUri, isClusterUri } from './uri/index.js';
 import { evaluatePolicy, explainPolicyDecision, checkVisibility } from './policy/policy-engine.js';
 import { DEFAULT_POLICIES, DEFAULT_TRUST_ZONES, DEFAULT_VISIBILITY_RULES } from './policy/default-policies.js';
-import type { Principal, Capability } from './types/policy.js';
+import { INTERNAL_TRUSTED_PRINCIPAL } from './policy/index.js';
+import type { Principal, Capability, Policy, TrustZone, VisibilityRule } from './types/policy.js';
 
 const CLUSTER_DIR = resolve(process.cwd(), '.db-cluster');
+const POLICIES_FILE = resolve(CLUSTER_DIR, 'policies.json');
 
-function getKernel(): ClusterKernel {
+/** Resolved operator identity for the current CLI invocation. */
+interface OperatorContext {
+    actorId: string;
+    /** True when the operator was derived from --actor or DB_CLUSTER_OPERATOR. */
+    explicit: boolean;
+}
+
+/** Optional policies/principal loaded from .db-cluster/policies.json. */
+interface PolicyConfig {
+    policies?: Policy[];
+    trustZones?: TrustZone[];
+    visibilityRules?: VisibilityRule[];
+    principal?: Principal;
+}
+
+/**
+ * Resolve the operator (actor) identity for this CLI invocation.
+ * Priority: --actor <id> > DB_CLUSTER_OPERATOR > os.userInfo().username > 'cli-user'.
+ *
+ * `explicit` is true when the operator came from --actor or DB_CLUSTER_OPERATOR
+ * (i.e. the user/automation chose it). Used to soften the self-approval warning
+ * for purely interactive single-user use.
+ */
+function resolveOperator(cliActor?: string): OperatorContext {
+    if (cliActor && cliActor.trim() !== '') {
+        return { actorId: cliActor, explicit: true };
+    }
+    const fromEnv = process.env.DB_CLUSTER_OPERATOR;
+    if (fromEnv && fromEnv.trim() !== '') {
+        return { actorId: fromEnv, explicit: true };
+    }
+    try {
+        const u = userInfo();
+        if (u.username && u.username.trim() !== '') {
+            return { actorId: u.username, explicit: false };
+        }
+    } catch {
+        // fall through
+    }
+    return { actorId: 'cli-user', explicit: false };
+}
+
+/**
+ * Load policy configuration from .db-cluster/policies.json if present.
+ * Returns null when no policies are configured — kernel runs in raw mode.
+ */
+function loadPolicyConfig(): PolicyConfig | null {
+    if (!existsSync(POLICIES_FILE)) return null;
+    try {
+        const raw = readFileSync(POLICIES_FILE, 'utf-8');
+        const parsed = JSON.parse(raw) as PolicyConfig;
+        return parsed;
+    } catch (err: any) {
+        console.error(`Failed to load ${POLICIES_FILE}: ${err.message}`);
+        process.exit(1);
+    }
+}
+
+/**
+ * Construct the kernel to use for a CLI invocation.
+ * When .db-cluster/policies.json exists, wrap with PolicyEnforcedKernel
+ * using INTERNAL_TRUSTED_PRINCIPAL (or the principal in the file) by default.
+ * Otherwise, return raw ClusterKernel.
+ */
+function getKernel(): ClusterKernel | PolicyEnforcedKernel {
     if (!existsSync(CLUSTER_DIR)) {
         console.error('No cluster found. Run `db-cluster init` first.');
         process.exit(1);
     }
     const stores = createLocalCluster(CLUSTER_DIR);
+    const config = loadPolicyConfig();
+    if (config && ((config.policies && config.policies.length > 0) || (config.trustZones && config.trustZones.length > 0) || (config.visibilityRules && config.visibilityRules.length > 0))) {
+        const principal = config.principal ?? INTERNAL_TRUSTED_PRINCIPAL;
+        return new PolicyEnforcedKernel(
+            stores,
+            { principal },
+            {
+                dataDir: CLUSTER_DIR,
+                policies: config.policies ?? [],
+                trustZones: config.trustZones,
+                visibilityRules: config.visibilityRules,
+            },
+        );
+    }
     return new ClusterKernel(stores, { dataDir: CLUSTER_DIR });
+}
+
+/**
+ * Soft self-approval check. Emits a stderr warning when the same identity
+ * proposed AND committed (no separation of duties).
+ *
+ * - When `policies.json` is configured, the policy layer's `approve_command`
+ *   gate is the real enforcement point — surface this as a hard reject when
+ *   the caller hasn't passed --self-approve.
+ * - When no policies are configured (default local single-user mode), the
+ *   warning still fires but doesn't block — preserves CLI ergonomics for the
+ *   common case while flagging the missing separation of duties.
+ */
+function checkSelfApproval(
+    proposer: string | undefined,
+    operator: OperatorContext,
+    selfApprove: boolean,
+): void {
+    if (!proposer) return;
+    if (proposer !== operator.actorId) return; // separation of duties achieved
+    if (selfApprove) {
+        console.error(
+            `⚠️  WARNING: --self-approve set. Same identity (${operator.actorId}) proposed and committed. No separation of duties.`,
+        );
+        return;
+    }
+    const policyConfigured = existsSync(POLICIES_FILE);
+    if (policyConfigured) {
+        console.error(
+            `Refusing to commit: proposer (${proposer}) is the same as operator (${operator.actorId}). ` +
+            `Pass --self-approve to acknowledge, or have a different operator commit this command.`,
+        );
+        process.exit(1);
+    }
+    console.error(
+        `⚠️  WARNING: proposer (${proposer}) is the same as operator (${operator.actorId}). No separation of duties. ` +
+        `Pass --self-approve to silence this warning, or configure .db-cluster/policies.json to enforce.`,
+    );
+}
+
+function safeJsonParse(input: string, what: string): any {
+    try {
+        return JSON.parse(input);
+    } catch (err: any) {
+        console.error(`Invalid JSON for ${what}: ${err.message}`);
+        process.exit(1);
+    }
 }
 
 const program = new Command();
@@ -26,7 +155,13 @@ const program = new Command();
 program
     .name('db-cluster')
     .description('AI-native federated database cluster')
-    .version('0.1.0');
+    .version('0.1.0')
+    .option('--actor <id>', 'Operator identity for this invocation (overrides DB_CLUSTER_OPERATOR / OS user)');
+
+/** Pull the resolved --actor option from the root program. */
+function rootActor(): string | undefined {
+    return program.opts<{ actor?: string }>().actor;
+}
 
 // --- init ---
 program
@@ -52,6 +187,7 @@ program
     .description('Ingest a source artifact into the cluster')
     .action(async (file: string) => {
         const kernel = getKernel();
+        const operator = resolveOperator(rootActor());
         const filePath = resolve(file);
         if (!existsSync(filePath)) {
             console.error(`File not found: ${filePath}`);
@@ -61,11 +197,14 @@ program
         const filename = file.split(/[/\\]/).pop()!;
         const mimeType = guessMime(filename);
 
-        const result = await kernel.ingestArtifact({
+        // PolicyEnforcedKernel does not expose ingestArtifact today (KERNEL-001).
+        // Fall back to the underlying ClusterKernel when policy-enforced.
+        const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
+        const result = await underlying.ingestArtifact({
             filename,
             content,
             mimeType,
-            actorId: 'cli-user',
+            actorId: operator.actorId,
         });
 
         console.log(`Ingested: ${filename}`);
@@ -87,13 +226,15 @@ entity
     .option('--attr <json>', 'Attributes as JSON', '{}')
     .action(async (opts: { kind: string; name: string; attr: string }) => {
         const kernel = getKernel();
-        const attributes = JSON.parse(opts.attr);
+        const operator = resolveOperator(rootActor());
+        const attributes = safeJsonParse(opts.attr, '--attr');
 
-        const result = await kernel.createEntity({
+        const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
+        const result = await underlying.createEntity({
             kind: opts.kind,
             name: opts.name,
             attributes,
-            actorId: 'cli-user',
+            actorId: operator.actorId,
         });
 
         console.log(`Created entity: ${opts.kind}/${opts.name}`);
@@ -110,11 +251,13 @@ program
     .requiredOption('--entity <id>', 'Entity ID')
     .action(async (opts: { artifact: string; entity: string }) => {
         const kernel = getKernel();
+        const operator = resolveOperator(rootActor());
 
-        const result = await kernel.linkEvidence({
+        const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
+        const result = await underlying.linkEvidence({
             artifactId: opts.artifact,
             entityId: opts.entity,
-            actorId: 'cli-user',
+            actorId: operator.actorId,
         });
 
         console.log(`Linked: artifact ${opts.artifact} → entity ${opts.entity}`);
@@ -158,7 +301,9 @@ program
         const kernel = getKernel();
 
         try {
-            const entity = await kernel.inspectEntity(entityId);
+            // inspectEntity is on the underlying kernel (KERNEL-001 — not wrapped).
+            const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
+            const entity = await underlying.inspectEntity(entityId);
             console.log(`Entity: ${entity.kind}/${entity.name}`);
             console.log(`  id:         ${entity.id}`);
             console.log(`  owner:      ${entity.owner}`);
@@ -177,13 +322,14 @@ program
     .description('Propose a mutation (does NOT write to stores)')
     .action(async (commandJson: string) => {
         const kernel = getKernel();
-        const { verb, targetStore, payload } = JSON.parse(commandJson);
+        const operator = resolveOperator(rootActor());
+        const { verb, targetStore, payload } = safeJsonParse(commandJson, 'command JSON');
 
         const command = await kernel.proposeMutation({
             verb,
             targetStore,
             payload,
-            proposedBy: 'cli-user',
+            proposedBy: operator.actorId,
         });
 
         console.log(`Proposed command: ${command.id}`);
@@ -197,11 +343,31 @@ program
 program
     .command('commit <command-id>')
     .description('Commit a proposed mutation through command runtime')
-    .action(async (commandId: string) => {
+    .option('--self-approve', 'Acknowledge that the operator is also the proposer (no separation of duties)', false)
+    .action(async (commandId: string, opts: { selfApprove?: boolean }) => {
         const kernel = getKernel();
+        const operator = resolveOperator(rootActor());
 
         try {
-            const result = await kernel.commitMutation(commandId, 'cli-user');
+            // Inspect the command to see who proposed it and its current state.
+            const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
+            const proposed = await underlying.inspectCommand(commandId).catch(() => null);
+            const proposer = proposed?.proposedBy;
+            checkSelfApproval(proposer, operator, !!opts.selfApprove);
+
+            // Kernel now requires `validated` or `approved` before commit (KERNEL-006 fix).
+            // Walk the lifecycle from whatever state the command is in to "approved".
+            // Operators who want to inspect intermediate states can call `validate` /
+            // `approve` explicitly; the CLI's `commit` verb stays a one-shot for
+            // ergonomic parity with the single-user local flow.
+            if (proposed && proposed.status === 'proposed') {
+                await kernel.validateMutation(commandId);
+                await kernel.approveMutation(commandId, operator.actorId);
+            } else if (proposed && proposed.status === 'validated') {
+                await kernel.approveMutation(commandId, operator.actorId);
+            }
+
+            const result = await kernel.commitMutation(commandId, operator.actorId);
             console.log(`Committed: ${result.command.id}`);
             console.log(`  verb:    ${result.command.verb}`);
             console.log(`  status:  ${result.command.status}`);
@@ -241,10 +407,17 @@ program
     .command('approve <command-id>')
     .description('Approve a validated command (operator/policy gate)')
     .option('--note <text>', 'Approval note')
-    .action(async (commandId: string, opts: { note?: string }) => {
+    .option('--self-approve', 'Acknowledge that the approver is also the proposer (no separation of duties)', false)
+    .action(async (commandId: string, opts: { note?: string; selfApprove?: boolean }) => {
         const kernel = getKernel();
+        const operator = resolveOperator(rootActor());
         try {
-            const cmd = await kernel.approveMutation(commandId, 'cli-user', opts.note);
+            const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
+            const proposed = await underlying.inspectCommand(commandId).catch(() => null);
+            const proposer = proposed?.proposedBy;
+            checkSelfApproval(proposer, operator, !!opts.selfApprove);
+
+            const cmd = await kernel.approveMutation(commandId, operator.actorId, opts.note);
             console.log(`Approved: ${cmd.id}`);
             console.log(`  verb:       ${cmd.verb}`);
             console.log(`  status:     ${cmd.status}`);
@@ -265,8 +438,9 @@ program
     .requiredOption('--reason <text>', 'Rejection reason')
     .action(async (commandId: string, opts: { reason: string }) => {
         const kernel = getKernel();
+        const operator = resolveOperator(rootActor());
         try {
-            const cmd = await kernel.rejectMutation(commandId, 'cli-user', opts.reason);
+            const cmd = await kernel.rejectMutation(commandId, operator.actorId, opts.reason);
             console.log(`Rejected: ${cmd.id}`);
             console.log(`  verb:     ${cmd.verb}`);
             console.log(`  status:   ${cmd.status}`);
@@ -284,8 +458,9 @@ program
     .requiredOption('--reason <text>', 'Compensation reason')
     .action(async (commandId: string, opts: { reason: string }) => {
         const kernel = getKernel();
+        const operator = resolveOperator(rootActor());
         try {
-            const result = await kernel.compensateMutation(commandId, 'cli-user', opts.reason);
+            const result = await kernel.compensateMutation(commandId, operator.actorId, opts.reason);
             console.log(`Compensated: ${result.originalCommand.id}`);
             console.log(`  original status: ${result.originalCommand.status}`);
             console.log(`  compensating:    ${result.compensatingCommand.id}`);
@@ -342,7 +517,8 @@ index
     .description('Clear and rebuild the index from owner stores')
     .action(async () => {
         const kernel = getKernel();
-        const result = await kernel.rebuildIndex('cli-user');
+        const operator = resolveOperator(rootActor());
+        const result = await kernel.rebuildIndex(operator.actorId);
         console.log(`Index rebuilt: ${result.rebuilt} record(s) from owner stores.`);
         console.log(`  provenance: ${result.provenance.id}`);
         console.log(`  receipt:    ${result.receipt.id}`);
@@ -353,7 +529,8 @@ index
     .description('Show index status and staleness estimate')
     .action(async () => {
         const kernel = getKernel();
-        const status = await kernel.indexStatus();
+        const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
+        const status = await underlying.indexStatus();
         console.log(`Index status:`);
         console.log(`  total records: ${status.total}`);
         console.log(`  expected:      ${status.expectedTotal}`);
@@ -503,7 +680,8 @@ program
         if (opts.graph) {
             console.log(JSON.stringify(graph, null, 2));
         } else {
-            console.log(kernel.explainTrace(graph));
+            const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
+            console.log(underlying.explainTrace(graph));
         }
     });
 
@@ -531,7 +709,8 @@ program
             includeReceipts: true,
             includeGaps: true,
         });
-        console.log(kernel.explainTrace(graph));
+        const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
+        console.log(underlying.explainTrace(graph));
     });
 
 // --- trace-bundle ---
@@ -544,14 +723,15 @@ program
     .action(async (query: string, opts: { limit: string; direction: string; graph: boolean }) => {
         const kernel = getKernel();
         const bundle = await kernel.retrieveBundle(query, { limit: parseInt(opts.limit) });
-        const graph = await kernel.traceBundle(bundle, {
+        const underlying = kernel instanceof PolicyEnforcedKernel ? kernel._kernel : kernel;
+        const graph = await underlying.traceBundle(bundle, {
             direction: opts.direction as 'backward' | 'forward' | 'bidirectional',
         });
 
         if (opts.graph) {
             console.log(JSON.stringify(graph, null, 2));
         } else {
-            console.log(kernel.explainTrace(graph));
+            console.log(underlying.explainTrace(graph));
         }
     });
 
@@ -859,7 +1039,7 @@ program
         const stores = createLocalCluster(CLUSTER_DIR);
         const { restore } = await import('./ops/backup.js');
         const raw = readFileSync(resolve(file), 'utf-8');
-        const data = JSON.parse(raw);
+        const data = safeJsonParse(raw, 'backup file');
         const result = await restore(stores, data);
         if (opts.json) {
             console.log(JSON.stringify(result, null, 2));

@@ -25,7 +25,7 @@ describe('Phase 5 — Mutation Law and Command Runtime', () => {
     // ─── Proof 1: No commit without validation ───────────────────────
 
     describe('Proof 1: No commit without validation', () => {
-        it('proposed command with invalid payload rejects on commit', async () => {
+        it('proposed command with invalid payload rejects on validation', async () => {
             const cmd = await kernel.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
@@ -33,7 +33,10 @@ describe('Phase 5 — Mutation Law and Command Runtime', () => {
                 proposedBy: 'ai-agent',
             });
 
-            await expect(kernel.commitMutation(cmd.id, 'ai-agent'))
+            // KERNEL-006: validation is now an explicit step. The validation
+            // failure surfaces from validateMutation, not from commit (which
+            // refuses to run on a proposed/unvalidated command).
+            await expect(kernel.validateMutation(cmd.id))
                 .rejects.toThrow(/Validation failed|create_entity requires/);
 
             // Command is now rejected
@@ -41,7 +44,21 @@ describe('Phase 5 — Mutation Law and Command Runtime', () => {
             expect(inspected.status).toBe('rejected');
         });
 
-        it('valid command commits successfully', async () => {
+        it('committing an unvalidated proposed command throws CommandNotValidatedError', async () => {
+            // Belt-and-braces for KERNEL-006: skipping validate is no longer
+            // possible at the kernel layer.
+            const cmd = await kernel.proposeMutation({
+                verb: 'create_entity',
+                targetStore: 'canonical',
+                payload: { kind: 'task', name: 'Skipped', attributes: {} },
+                proposedBy: 'ai-agent',
+            });
+
+            await expect(kernel.commitMutation(cmd.id, 'ai-agent'))
+                .rejects.toThrow(/has not been validated/);
+        });
+
+        it('valid command commits successfully (after explicit validate)', async () => {
             const cmd = await kernel.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
@@ -49,6 +66,7 @@ describe('Phase 5 — Mutation Law and Command Runtime', () => {
                 proposedBy: 'ai-agent',
             });
 
+            await kernel.validateMutation(cmd.id);
             const result = await kernel.commitMutation(cmd.id, 'ai-agent');
             expect(result.command.status).toBe('committed');
             expect(result.receipt).toBeTruthy();
@@ -146,13 +164,14 @@ describe('Phase 5 — Mutation Law and Command Runtime', () => {
                 actorId: 'dev',
             });
 
-            // Propose + commit an update
+            // Propose → validate → commit
             const cmd = await kernel.proposeMutation({
                 verb: 'update_entity',
                 targetStore: 'canonical',
                 payload: { entityId: entity.id, patch: { name: 'LightMode' } },
                 proposedBy: 'dev',
             });
+            await kernel.validateMutation(cmd.id);
             const result = await kernel.commitMutation(cmd.id, 'dev');
             const updateReceipt = result.receipt;
 
@@ -246,6 +265,7 @@ describe('Phase 5 — Mutation Law and Command Runtime', () => {
                 payload: { entityId: entity.id, patch: { name: 'CompChanged' } },
                 proposedBy: 'u',
             });
+            await kernel.validateMutation(cmd.id);
             await kernel.commitMutation(cmd.id, 'u');
             await kernel.compensateMutation(cmd.id, 'auditor', 'Data correction');
 
@@ -261,13 +281,14 @@ describe('Phase 5 — Mutation Law and Command Runtime', () => {
 
     describe('Proof 6: Command lifecycle survives restart', () => {
         it('command proposed in one kernel instance can be committed in another', async () => {
-            // First instance: propose
+            // First instance: propose + validate (KERNEL-006: validate is required)
             const cmd = await kernel.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
                 payload: { kind: 'project', name: 'CrossProcess', attributes: {} },
                 proposedBy: 'process-1',
             });
+            await kernel.validateMutation(cmd.id);
 
             // Second instance: commit
             const kernel2 = new ClusterKernel(createLocalCluster(TEST_DIR), { dataDir: TEST_DIR });
@@ -335,6 +356,7 @@ describe('Phase 5 — Mutation Law and Command Runtime', () => {
                 payload: { kind: 'item', name: 'StatusTest', attributes: {} },
                 proposedBy: 'ai',
             });
+            await kernel.validateMutation(cmd.id);
             await kernel.commitMutation(cmd.id, 'ai');
 
             await expect(kernel.validateMutation(cmd.id))
@@ -348,6 +370,7 @@ describe('Phase 5 — Mutation Law and Command Runtime', () => {
                 payload: { kind: 'item', name: 'RejectTest', attributes: {} },
                 proposedBy: 'ai',
             });
+            await kernel.validateMutation(cmd.id);
             await kernel.commitMutation(cmd.id, 'ai');
 
             await expect(kernel.rejectMutation(cmd.id, 'admin', 'too late'))

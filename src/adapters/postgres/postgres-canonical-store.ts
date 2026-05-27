@@ -105,6 +105,36 @@ export class PostgresCanonicalStore implements CanonicalStore {
     }
 
     /**
+     * Import a full entity snapshot preserving original id, createdAt, updatedAt.
+     * Used by restore so that re-runs are idempotent and provenance events that
+     * cite the original subjectId still resolve (STORES-001).
+     *
+     * If an entity with the same id already exists, the existing row is returned
+     * unchanged (idempotent restore).
+     */
+    async importSnapshot(entity: Entity): Promise<Entity> {
+        // Idempotency: if it already exists, return it as-is.
+        const existing = await this.get(entity.id);
+        if (existing) {
+            return existing;
+        }
+        const result = await this.pool.query(
+            `INSERT INTO ${CANONICAL_TABLE} (id, kind, name, attributes, owner, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, 'canonical', $5, $6)
+             RETURNING id, kind, name, attributes, owner, created_at, updated_at`,
+            [
+                entity.id,
+                entity.kind,
+                entity.name,
+                JSON.stringify(entity.attributes),
+                entity.createdAt,
+                entity.updatedAt,
+            ],
+        );
+        return this.rowToEntity(result.rows[0]);
+    }
+
+    /**
      * Run pending migrations. Call once at startup.
      */
     async migrate(): Promise<void> {

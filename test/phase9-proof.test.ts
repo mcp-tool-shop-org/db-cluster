@@ -38,7 +38,7 @@ describe('Phase 9 Proof Suite — Operations, Rebuild, and Recovery', () => {
             mimeType: 'text/sql',
         });
 
-        // Create a mutation to produce a receipt
+        // Create a mutation to produce a receipt (KERNEL-006: validate first)
         const entity = (await stores.canonical.list({ limit: 1 }))[0];
         const cmd = await kernel.proposeMutation({
             verb: 'update_entity',
@@ -46,6 +46,7 @@ describe('Phase 9 Proof Suite — Operations, Rebuild, and Recovery', () => {
             payload: { entityId: entity.id, patch: { name: 'ops-manual-v2' } },
             proposedBy: 'operator',
         });
+        await kernel.validateMutation(cmd.id);
         await kernel.commitMutation(cmd.id, 'operator');
     });
 

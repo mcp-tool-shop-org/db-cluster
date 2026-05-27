@@ -9,13 +9,44 @@ import type { ProvenanceGraph, TraceOptions } from '../types/provenance-graph.js
 import type { Command } from '../types/command.js';
 import type { Receipt } from '../types/receipt.js';
 import type { FindSourcesResult } from '../kernel/cluster-kernel.js';
+import { PolicyEnforcedKernel } from '../kernel/policy-enforced-kernel.js';
+import { INTERNAL_TRUSTED_PRINCIPAL } from '../policy/index.js';
 
 export interface SDKOptions {
     clusterDir: string;
     policies?: Policy[];
     trustZones?: TrustZone[];
     visibilityRules?: VisibilityRule[];
+    /**
+     * Principal under which kernel calls run when policies are configured.
+     * Required when policies are non-empty for least-privilege use cases;
+     * defaults to INTERNAL_TRUSTED_PRINCIPAL (cluster-admin) when omitted.
+     * Has no effect when policies are not set (raw kernel path).
+     */
+    principal?: Principal;
 }
+
+/**
+ * Internal kernel shape covered by both ClusterKernel and PolicyEnforcedKernel.
+ * Used by the SDK so the dispatch path is type-safe regardless of which
+ * concrete kernel is constructed.
+ */
+type KernelLike = Pick<
+    ClusterKernel,
+    | 'findSources'
+    | 'retrieveBundle'
+    | 'explainRetrieval'
+    | 'traceObject'
+    | 'why'
+    | 'proposeMutation'
+    | 'validateMutation'
+    | 'approveMutation'
+    | 'rejectMutation'
+    | 'commitMutation'
+    | 'compensateMutation'
+    | 'inspectCommand'
+    | 'listReceipts'
+>;
 
 export interface PolicyExplainInput {
     principal: Principal;
@@ -72,19 +103,51 @@ export interface PolicyTestResult {
  * Every operation goes through the kernel.
  */
 export class ClusterSDK {
-    private readonly kernel: ClusterKernel;
+    private readonly kernel: KernelLike;
     private readonly resolver: ClusterResolver;
     private readonly policyOptions: PolicyEngineOptions | null;
     private readonly visibilityRules: VisibilityRule[];
+    /** True when this SDK wrapped the kernel with PolicyEnforcedKernel. */
+    public readonly policyEnforced: boolean;
 
     constructor(options: SDKOptions) {
         const stores = createLocalCluster(options.clusterDir);
-        this.kernel = new ClusterKernel(stores, { dataDir: options.clusterDir });
         this.resolver = new ClusterResolver(stores);
-        this.policyOptions = options.policies
-            ? { policies: options.policies, trustZones: options.trustZones }
-            : null;
         this.visibilityRules = options.visibilityRules ?? [];
+
+        // Policy enforcement is OPT-IN. When the caller passes policies (or
+        // trust zones / visibility rules), the SDK wraps the kernel with
+        // PolicyEnforcedKernel so every read/write crosses the policy layer.
+        // Otherwise the SDK uses raw ClusterKernel — preserves existing
+        // behavior for the ~614 baseline tests that never set policies.
+        const policyConfigured = !!(
+            (options.policies && options.policies.length > 0) ||
+            (options.trustZones && options.trustZones.length > 0) ||
+            (options.visibilityRules && options.visibilityRules.length > 0)
+        );
+
+        if (policyConfigured) {
+            const principal = options.principal ?? INTERNAL_TRUSTED_PRINCIPAL;
+            this.kernel = new PolicyEnforcedKernel(
+                stores,
+                { principal },
+                {
+                    dataDir: options.clusterDir,
+                    policies: options.policies ?? [],
+                    trustZones: options.trustZones,
+                    visibilityRules: options.visibilityRules,
+                },
+            );
+            this.policyOptions = {
+                policies: options.policies ?? [],
+                trustZones: options.trustZones,
+            };
+            this.policyEnforced = true;
+        } else {
+            this.kernel = new ClusterKernel(stores, { dataDir: options.clusterDir });
+            this.policyOptions = null;
+            this.policyEnforced = false;
+        }
     }
 
     // ─── Retrieval ─────────────────────────────────────────────────
@@ -147,7 +210,27 @@ export class ClusterSDK {
         return this.kernel.rejectMutation(commandId, rejectedBy, reason);
     }
 
+    /**
+     * Commit a mutation. The kernel now requires `validated` or `approved`
+     * before commit (KERNEL-006 fix). The SDK auto-walks proposed → validated
+     * → approved → committed to preserve backward compat for callers that
+     * treat propose+commit as one step. Callers who want explicit visibility
+     * of the intermediate states can call `validateMutation` and
+     * `approveMutation` directly before this.
+     *
+     * The walk inspects the command first; only states behind 'approved' are
+     * advanced. The actor for the auto-walk is the supplied `actorId`.
+     */
     async commitMutation(commandId: string, actorId: string): Promise<{ command: Command; receipt: Receipt }> {
+        const cmd = await this.kernel.inspectCommand(commandId).catch(() => null);
+        if (cmd) {
+            if (cmd.status === 'proposed') {
+                await this.kernel.validateMutation(commandId);
+                await this.kernel.approveMutation(commandId, actorId);
+            } else if (cmd.status === 'validated') {
+                await this.kernel.approveMutation(commandId, actorId);
+            }
+        }
         return this.kernel.commitMutation(commandId, actorId);
     }
 

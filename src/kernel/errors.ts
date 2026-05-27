@@ -41,3 +41,24 @@ export class CommandRejectedError extends ClusterError {
         this.name = 'CommandRejectedError';
     }
 }
+
+/**
+ * Raised when a store mutation succeeds but the post-mutation
+ * provenance / receipt write fails — i.e. the store is now mutated
+ * but no receipt exists. The kernel tries to record a
+ * `mutation_orphaned` ledger event before throwing so that
+ * `doctor()` / `verify()` can surface the discrepancy.
+ */
+export class ReceiptFailedError extends ClusterError {
+    constructor(
+        public readonly subjectId: string,
+        public readonly commandId: string | undefined,
+        public readonly cause: Error,
+    ) {
+        super(
+            `Mutation succeeded but receipt/provenance emission failed for subject ${subjectId}${commandId ? ` (command ${commandId})` : ''}: ${cause.message}`,
+            'RECEIPT_FAILED',
+        );
+        this.name = 'ReceiptFailedError';
+    }
+}

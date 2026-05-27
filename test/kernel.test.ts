@@ -178,6 +178,8 @@ describe('Wave 3 — Kernel Spine', () => {
             proposedBy: 'user-1',
         });
 
+        // KERNEL-006: commit requires validated/approved status.
+        await kernel.validateMutation(command.id);
         const result = await kernel.commitMutation(command.id, 'user-1');
 
         expect(result.command.status).toBe('committed');
@@ -208,6 +210,7 @@ describe('Wave 3 — Kernel Spine', () => {
             payload: { kind: 'test', name: 'Three', attributes: {} },
             proposedBy: 'user-1',
         });
+        await kernel.validateMutation(command.id);
         await kernel.commitMutation(command.id, 'user-1');
 
         const receipts = await kernel.listReceipts();

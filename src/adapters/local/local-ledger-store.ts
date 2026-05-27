@@ -1,14 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ProvenanceEvent } from '../../types/provenance-event.js';
 import type { Receipt } from '../../types/receipt.js';
 import type { LedgerStore, LedgerFilter, ReceiptFilter } from '../../contracts/ledger-store.js';
+import { CorruptStoreError } from './errors.js';
 
 /**
  * Local ledger store — append-only event and receipt persistence.
  * Proves: ordered append, no update/delete, lineage trace via parent chain.
  * Events and receipts are stored in separate ordered arrays.
+ *
+ * Writes are atomic (tmp + rename). Loads validate JSON shape and throw
+ * CorruptStoreError on parse failure rather than silently returning [].
  */
 export class LocalLedgerStore implements LedgerStore {
     private readonly eventsPath: string;
@@ -103,17 +107,70 @@ export class LocalLedgerStore implements LedgerStore {
         return results;
     }
 
+    /**
+     * Import a provenance event preserving original id and timestamp.
+     * Used by restore so that re-runs are idempotent (STORES-002).
+     *
+     * Idempotent: if an event with the same id already exists, the existing
+     * event is returned and no new copy is appended.
+     */
+    async importEvent(event: ProvenanceEvent): Promise<ProvenanceEvent> {
+        const existing = this.events.find((e) => e.id === event.id);
+        if (existing) {
+            return existing;
+        }
+        const snapshot: ProvenanceEvent = {
+            ...event,
+            owner: 'ledger',
+        };
+        this.events.push(snapshot);
+        this.persistEvents();
+        return snapshot;
+    }
+
+    /**
+     * Import a receipt preserving original id and committedAt.
+     * Used by restore so that re-runs are idempotent (STORES-002).
+     */
+    async importReceipt(receipt: Receipt): Promise<Receipt> {
+        const existing = this.receipts.find((r) => r.id === receipt.id);
+        if (existing) {
+            return existing;
+        }
+        const snapshot: Receipt = { ...receipt };
+        this.receipts.push(snapshot);
+        this.persistReceipts();
+        return snapshot;
+    }
+
     private loadArray<T>(path: string): T[] {
         if (!existsSync(path)) return [];
-        const raw = readFileSync(path, 'utf-8');
-        return JSON.parse(raw);
+        let raw: string;
+        try {
+            raw = readFileSync(path, 'utf-8');
+        } catch (err) {
+            throw new CorruptStoreError(path, err);
+        }
+        try {
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) {
+                throw new Error(`expected JSON array, got ${typeof parsed}`);
+            }
+            return parsed as T[];
+        } catch (err) {
+            throw new CorruptStoreError(path, err);
+        }
     }
 
     private persistEvents(): void {
-        writeFileSync(this.eventsPath, JSON.stringify(this.events, null, 2));
+        const tmpPath = `${this.eventsPath}.tmp`;
+        writeFileSync(tmpPath, JSON.stringify(this.events, null, 2));
+        renameSync(tmpPath, this.eventsPath);
     }
 
     private persistReceipts(): void {
-        writeFileSync(this.receiptsPath, JSON.stringify(this.receipts, null, 2));
+        const tmpPath = `${this.receiptsPath}.tmp`;
+        writeFileSync(tmpPath, JSON.stringify(this.receipts, null, 2));
+        renameSync(tmpPath, this.receiptsPath);
     }
 }

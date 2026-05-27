@@ -1,5 +1,35 @@
 # Changelog
 
+## Wave A1 — Dogfood-swarm Stage A amend (2026-05-26)
+
+Health-pass amend after the Stage A audit (`swarm-stage-a-audit-20260526-225638Z.md`).
+This wave fixes CI/Docs-domain findings — Phase 15 self-declared PASS without
+continuous verification, which the audit surfaced as a gap.
+
+### CI workflows added
+- `.github/workflows/ci.yml` — Node 20/22 × ubuntu/windows matrix on push/PR (lint, lint:examples, build, test).
+- `.github/workflows/release-gate.yml` — runs `scripts/release-gate.mjs` on push to main and tag push.
+- `.github/workflows/smoke-install.yml` — runs `scripts/smoke-install.mjs` on tag push.
+
+### Release-gate portability
+- `scripts/release-gate.mjs` drift check now uses a Node-native scan (was Windows-only `findstr` that silently passed on macOS/Linux).
+- Matches both `from '../../src/...'` (static) and `import('../../src/...')` (dynamic) imports.
+
+### Examples typecheck
+- New `tsconfig.examples.json` extends the main tsconfig with `noEmit` + `examples/**/*` include.
+- `package.json` adds `npm run lint:examples`; `npm run lint` now chains it.
+- Every example rewritten against the current public-API surface (correct `actorId`, correct method names, SDK constructor with `policies`/`principal`, no `'../../src/'` imports).
+
+### Documentation
+- `docs/sdk.md`, `docs/cluster-uris.md`, `docs/handbook.md` updated to the §2 SDK constructor signature (`{ clusterDir, policies?, trustZones?, visibilityRules?, principal? }`); removed the structurally-impossible "Postgres via SDK" pattern.
+- `docs/mcp.md` "Artifact content boundary" rewritten to reflect that artifact content is not retrievable via the MCP boundary (no `_contentAccess` escape hatch).
+- `docs/release-readiness.md` updated to "verified post-Wave-A1" with CI/lint:examples evidence rows.
+- `docs/release-notes-v0.1.md` corrected: 15 phases (not 14); test count carries a TODO marker pending the final Wave A1 vitest run.
+- `docs/phase-15-closeout.md` annotated with the Wave A1 amend note.
+
+### .gitignore
+- Added `.db-cluster/` and `examples/**/.db-cluster/` so users following the quickstart don't accidentally commit cluster data.
+
 ## Phase 15 — Release Readiness & Package Boundary (2026-05-26)
 
 Prepares db-cluster for a real versioned release. Deliberate public API, package boundary documentation, fresh install smoke tests, and release gate automation. **Verdict: PASS.**

@@ -35,7 +35,7 @@ db-cluster resolve cluster://canonical/<id>
 ```
 
 ```typescript
-const sdk = new ClusterSDK({ stores, dataDir });
+const sdk = new ClusterSDK({ clusterDir: '.db-cluster' });
 const { store, object } = await sdk.resolve('cluster://canonical/<id>');
 // store === 'canonical'
 // object is the Entity with full attributes

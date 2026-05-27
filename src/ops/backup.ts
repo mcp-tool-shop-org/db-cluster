@@ -10,6 +10,7 @@ import type { Artifact } from '../types/artifact.js';
 import type { ProvenanceEvent } from '../types/provenance-event.js';
 import type { Receipt } from '../types/receipt.js';
 import type { Command } from '../types/command.js';
+import { ImportSnapshotNotSupportedError } from './errors.js';
 
 export interface ArtifactSnapshot {
     metadata: Artifact;
@@ -104,18 +105,22 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
         receipts: { created: 0, skipped: 0, errors: [] },
     };
 
-    // Restore entities
+    // Restore entities — preserves original IDs (STORES-001).
+    // `importSnapshot(entity)` is mandatory; falling back to `create()` would
+    // assign a fresh randomUUID and break every restored entity's provenance
+    // chain (the post-restore provenance events still reference the original
+    // subjectId). If the adapter doesn't implement it, fail loudly.
+    const canonicalImport = (stores.canonical as { importSnapshot?: (entity: Entity) => Promise<Entity> }).importSnapshot;
+    if (typeof canonicalImport !== 'function') {
+        throw new ImportSnapshotNotSupportedError('canonical', 'importSnapshot');
+    }
     for (const entity of data.entities) {
         try {
             const exists = await stores.canonical.exists(entity.id);
             if (exists) {
                 result.entities.skipped++;
             } else {
-                await stores.canonical.create({
-                    kind: entity.kind,
-                    name: entity.name,
-                    attributes: entity.attributes,
-                });
+                await canonicalImport.call(stores.canonical, entity);
                 result.entities.created++;
             }
         } catch (err: any) {
@@ -123,60 +128,61 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
         }
     }
 
-    // Restore artifacts (from snapshots if available, otherwise metadata-only)
+    // Restore artifacts (from snapshots if available, otherwise metadata-only).
+    // `importSnapshot(metadata, content)` is mandatory for the same reason as
+    // canonical — the silent `ingest()` fallback assigned new UUIDs and lost
+    // original IDs (STORES-003). If the adapter doesn't implement it, fail
+    // loudly before mutating anything.
     const snapshots: ArtifactSnapshot[] = data.artifactSnapshots ?? data.artifacts.map((a) => ({ metadata: a }));
-    for (const snapshot of snapshots) {
-        try {
-            const exists = await stores.artifact.exists(snapshot.metadata.id);
-            if (exists) {
-                result.artifacts.skipped++;
-            } else if (snapshot.contentBase64) {
-                const content = Buffer.from(snapshot.contentBase64, 'base64');
-                // Verify content integrity
-                const hash = createHash('sha256').update(content).digest('hex');
-                if (hash !== snapshot.metadata.contentHash) {
-                    result.artifacts.errors.push(
-                        `Artifact ${snapshot.metadata.id}: content checksum mismatch (expected ${snapshot.metadata.contentHash}, got ${hash})`,
-                    );
-                    continue;
-                }
-                // Use importSnapshot if available, otherwise ingest
-                if ('importSnapshot' in stores.artifact && typeof stores.artifact.importSnapshot === 'function') {
-                    await (stores.artifact as any).importSnapshot(snapshot.metadata, content);
+    if (snapshots.length > 0) {
+        const artifactImport = (stores.artifact as { importSnapshot?: (metadata: Artifact, content: Buffer) => Promise<Artifact> }).importSnapshot;
+        if (typeof artifactImport !== 'function') {
+            throw new ImportSnapshotNotSupportedError('artifact', 'importSnapshot');
+        }
+        for (const snapshot of snapshots) {
+            try {
+                const exists = await stores.artifact.exists(snapshot.metadata.id);
+                if (exists) {
+                    result.artifacts.skipped++;
+                } else if (snapshot.contentBase64) {
+                    const content = Buffer.from(snapshot.contentBase64, 'base64');
+                    // Verify content integrity
+                    const hash = createHash('sha256').update(content).digest('hex');
+                    if (hash !== snapshot.metadata.contentHash) {
+                        result.artifacts.errors.push(
+                            `Artifact ${snapshot.metadata.id}: content checksum mismatch (expected ${snapshot.metadata.contentHash}, got ${hash})`,
+                        );
+                        continue;
+                    }
+                    await artifactImport.call(stores.artifact, snapshot.metadata, content);
+                    result.artifacts.created++;
                 } else {
-                    await stores.artifact.ingest({
-                        filename: snapshot.metadata.filename,
-                        content,
-                        mimeType: snapshot.metadata.mimeType,
-                    });
+                    // Metadata-only backup — cannot restore content
+                    result.artifacts.errors.push(
+                        `Artifact ${snapshot.metadata.id}: no content in backup (metadata-only)`,
+                    );
                 }
-                result.artifacts.created++;
-            } else {
-                // Metadata-only backup — cannot restore content
-                result.artifacts.errors.push(
-                    `Artifact ${snapshot.metadata.id}: no content in backup (metadata-only)`,
-                );
+            } catch (err: any) {
+                result.artifacts.errors.push(`Artifact ${snapshot.metadata.id}: ${err.message}`);
             }
-        } catch (err: any) {
-            result.artifacts.errors.push(`Artifact ${snapshot.metadata.id}: ${err.message}`);
         }
     }
 
-    // Restore provenance events
+    // Restore provenance events — preserves original IDs + timestamps + parent
+    // links (STORES-002). `append()` always assigns a fresh randomUUID, so a
+    // re-run finds the original id absent and re-inserts → silent duplication.
+    // `importEvent(event)` is mandatory; if missing, fail loudly.
+    const ledgerImportEvent = (stores.ledger as { importEvent?: (event: ProvenanceEvent) => Promise<ProvenanceEvent> }).importEvent;
+    if (data.events.length > 0 && typeof ledgerImportEvent !== 'function') {
+        throw new ImportSnapshotNotSupportedError('ledger', 'importEvent');
+    }
     for (const event of data.events) {
         try {
             const exists = await stores.ledger.getEvent(event.id);
             if (exists) {
                 result.events.skipped++;
             } else {
-                await stores.ledger.append({
-                    action: event.action,
-                    actorId: event.actorId,
-                    subjectId: event.subjectId,
-                    subjectStore: event.subjectStore,
-                    detail: event.detail,
-                    parentEventId: event.parentEventId,
-                });
+                await ledgerImportEvent!.call(stores.ledger, event);
                 result.events.created++;
             }
         } catch (err: any) {
@@ -184,19 +190,19 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
         }
     }
 
-    // Restore receipts
+    // Restore receipts — same story as events: `appendReceipt()` re-numbers
+    // ids, breaking idempotency. `importReceipt(receipt)` is mandatory.
+    const ledgerImportReceipt = (stores.ledger as { importReceipt?: (receipt: Receipt) => Promise<Receipt> }).importReceipt;
+    if (data.receipts.length > 0 && typeof ledgerImportReceipt !== 'function') {
+        throw new ImportSnapshotNotSupportedError('ledger', 'importReceipt');
+    }
     for (const receipt of data.receipts) {
         try {
             const exists = await stores.ledger.getReceipt(receipt.id);
             if (exists) {
                 result.receipts.skipped++;
             } else {
-                await stores.ledger.appendReceipt({
-                    commandId: receipt.commandId,
-                    resultSummary: receipt.resultSummary,
-                    affectedIds: receipt.affectedIds,
-                    provenanceEventId: receipt.provenanceEventId,
-                });
+                await ledgerImportReceipt!.call(stores.ledger, receipt);
                 result.receipts.created++;
             }
         } catch (err: any) {

@@ -63,13 +63,14 @@ describe('Dogfood policy', () => {
         const results = await k.findSources({ query: 'Phase' });
         expect(results.resolvedEntities.length).toBeGreaterThanOrEqual(0);
 
-        // Propose + Commit
+        // Propose → validate → commit (KERNEL-006 requires explicit validate)
         const proposal = await k.proposeMutation({
             verb: 'create_entity',
             targetStore: 'canonical',
             payload: { kind: 'finding', name: 'op-policy-test', attributes: {} },
             proposedBy: 'operator',
         });
+        await k.validateMutation(proposal.id);
         const { command } = await k.commitMutation(proposal.id, 'operator');
         expect(command.status).toBe('committed');
     });

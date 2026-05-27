@@ -19,4 +19,6 @@ export {
     ProvenanceMissingError,
     CommandNotValidatedError,
     CommandRejectedError,
+    ReceiptFailedError,
 } from './errors.js';
+export type { ClusterKernelInterface } from './cluster-kernel-interface.js';

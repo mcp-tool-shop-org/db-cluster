@@ -390,8 +390,15 @@ describe('Wave 6 — Phase 6 Proof: MCP Cannot Bypass Cluster Law', () => {
 
     describe('Proof 10: CLI and MCP observe same committed mutation state', () => {
         it('entity committed through MCP is visible through CLI', async () => {
-            // Build dist (CLI needs compiled JS — must include CLI fix)
-            execSync('npx tsc', { cwd: join(import.meta.dirname, '..'), encoding: 'utf-8', timeout: 30000 });
+            // TESTS-006/TESTS-016: was `execSync('npx tsc')` — building from
+            // inside a test is the wrong dependency direction. Assert the dist
+            // exists (CI / release-gate / `npm run build` is responsible for
+            // populating it) and fail loudly if it doesn't.
+            if (!existsSync(join(import.meta.dirname, '..', 'dist', 'cli.js'))) {
+                throw new Error(
+                    'wave6-proof Proof 10 requires dist/cli.js — run `npm run build` first.',
+                );
+            }
 
             // Init cluster via CLI
             runCli('init');
@@ -422,7 +429,11 @@ describe('Wave 6 — Phase 6 Proof: MCP Cannot Bypass Cluster Law', () => {
         });
 
         it('entity committed through CLI is visible through MCP', async () => {
-            execSync('npx tsc', { cwd: join(import.meta.dirname, '..'), encoding: 'utf-8', timeout: 30000 });
+            if (!existsSync(join(import.meta.dirname, '..', 'dist', 'cli.js'))) {
+                throw new Error(
+                    'wave6-proof Proof 10 requires dist/cli.js — run `npm run build` first.',
+                );
+            }
             runCli('init');
 
             // Create entity through CLI

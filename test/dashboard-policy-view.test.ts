@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { DashboardObject } from '../src/dashboard/dashboard-model.js';
+// TESTS-004 fix: import the SAME applyRedaction the dashboard UI uses
+// (extracted to dashboard/lib/apply-redaction.js) instead of carrying a
+// local mirror that could silently drift.
+import { applyRedaction as applyRedactionImpl } from '../dashboard/lib/apply-redaction.js';
 
 /**
- * PolicyView type — mirrors dashboard/components/PolicyViewToggle.jsx
+ * PolicyView type — used by the dashboard PolicyViewToggle.
  */
 interface PolicyView {
     principal: string;
@@ -11,37 +15,9 @@ interface PolicyView {
     redacted: string[];
 }
 
-/**
- * applyRedaction — mirrors the logic in PolicyViewToggle.jsx for testing.
- * Returns a copy with redacted paths replaced by '[REDACTED]'.
- * Source truth is never modified.
- */
+// Thin typed wrapper so the test signatures stay strict.
 function applyRedaction(dashObj: DashboardObject, policyView: PolicyView): DashboardObject {
-    const copy = JSON.parse(JSON.stringify(dashObj)) as DashboardObject;
-    const visible = new Set(policyView.visible);
-
-    // If the object's store isn't visible, redact everything
-    if (!visible.has(copy.ownerStore)) {
-        copy.object = { _redacted: true } as unknown as Record<string, unknown>;
-        copy.provenanceGraph = { nodes: [], edges: [], warnings: [{ type: 'redacted', message: 'store not visible to this principal' }] };
-        copy.receipts = [];
-        copy.warnings = [...copy.warnings, { type: 'redacted', severity: 'info', message: 'full object redacted for this view' }];
-        return copy;
-    }
-
-    // Apply field-level redaction
-    for (const field of policyView.redacted) {
-        const [store, path] = field.split('.');
-        if (store === copy.ownerStore || (store === 'artifact' && copy.type === 'artifact')) {
-            if (path === '*') {
-                copy.object = { _redacted: true } as unknown as Record<string, unknown>;
-            } else if (copy.object && typeof copy.object === 'object' && path in copy.object) {
-                (copy.object as Record<string, unknown>)[path] = '[REDACTED]';
-            }
-        }
-    }
-
-    return copy;
+    return applyRedactionImpl(dashObj, policyView) as DashboardObject;
 }
 
 const VIEWS: Record<string, PolicyView> = {

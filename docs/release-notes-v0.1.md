@@ -87,7 +87,7 @@ Optional: Postgres canonical backend via `createCluster({ backends: { canonical:
 
 ## Status
 
-14 development phases complete. 600+ tests passing. Integration gate with repo-knowledge proven. Package boundary deliberate and documented.
+15 development phases complete. <!-- TODO: update test count after Wave A1 (pre-Wave-A1 baseline: 614 tests passing) --> 614+ tests passing as of pre-Wave-A1 baseline. Integration gate with repo-knowledge proven. Package boundary deliberate and documented. Dogfood-swarm Stage A surfaced and corrected drift across CI, examples, and docs.
 
 ## License
 

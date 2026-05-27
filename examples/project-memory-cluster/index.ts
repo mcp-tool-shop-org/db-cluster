@@ -12,77 +12,97 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createLocalCluster, ClusterKernel, backup, restore, doctor } from 'db-cluster';
+import { ClusterSDK } from 'db-cluster/sdk';
+import { createLocalCluster, backup, restore, doctor } from 'db-cluster';
 
 async function main() {
     const dataDir = mkdtempSync(join(tmpdir(), 'project-memory-'));
-    const stores = createLocalCluster(dataDir);
-    const kernel = new ClusterKernel(stores, { dataDir });
+    const sdk = new ClusterSDK({ clusterDir: dataDir });
 
     console.log('=== Project Memory Cluster ===\n');
 
+    async function ingest(filename: string, content: string, mimeType: string) {
+        const cmd = await sdk.proposeMutation({
+            verb: 'ingest_artifact',
+            targetStore: 'artifact',
+            payload: { filename, content: Buffer.from(content), mimeType },
+            proposedBy: 'developer',
+        });
+        await sdk.validateMutation(cmd.id);
+        const { receipt } = await sdk.commitMutation(cmd.id, 'developer');
+        return receipt.affectedIds[0];
+    }
+
+    async function create(name: string, kind: string, attributes: Record<string, unknown>) {
+        const cmd = await sdk.proposeMutation({
+            verb: 'create_entity',
+            targetStore: 'canonical',
+            payload: { kind, name, attributes },
+            proposedBy: 'developer',
+        });
+        await sdk.validateMutation(cmd.id);
+        const { receipt } = await sdk.commitMutation(cmd.id, 'developer');
+        return receipt.affectedIds[0];
+    }
+
     // Ingest meeting notes and docs
-    const notes = await kernel.ingestArtifact({
-        filename: 'architecture-meeting-2026-05-20.md',
-        content: Buffer.from('# Architecture Meeting\n\nDecision: adopt command-gated mutation for all DB writes.\nRationale: prevents unauthorized state changes, provides audit trail.'),
-        mimeType: 'text/markdown',
-    });
+    const notesId = await ingest(
+        'architecture-meeting-2026-05-20.md',
+        '# Architecture Meeting\n\nDecision: adopt command-gated mutation for all DB writes.\nRationale: prevents unauthorized state changes, provides audit trail.',
+        'text/markdown',
+    );
 
-    const spec = await kernel.ingestArtifact({
-        filename: 'api-spec-v2.yaml',
-        content: Buffer.from('openapi: 3.0\ninfo:\n  title: Project API\n  version: 2.0'),
-        mimeType: 'application/yaml',
-    });
+    const specId = await ingest(
+        'api-spec-v2.yaml',
+        'openapi: 3.0\ninfo:\n  title: Project API\n  version: 2.0',
+        'application/yaml',
+    );
 
-    console.log('Docs ingested:', notes.filename, spec.filename);
+    console.log('Docs ingested:', notesId, specId);
 
     // Create entities: repo, task, decision
-    const repo = await kernel.createEntity({
-        kind: 'repo',
-        name: 'project-api',
-        attributes: { language: 'typescript', team: 'platform' },
+    const repoId = await create('project-api', 'repo', { language: 'typescript', team: 'platform' });
+    const decisionId = await create('Adopt command-gated mutation', 'decision', {
+        status: 'accepted',
+        meeting: '2026-05-20',
+        sourceNote: notesId,
+    });
+    const taskId = await create('Implement mutation lifecycle', 'task', {
+        status: 'in-progress',
+        assignee: 'developer',
+        decision: decisionId,
     });
 
-    const decision = await kernel.createEntity({
-        kind: 'decision',
-        name: 'Adopt command-gated mutation',
-        attributes: { status: 'accepted', meeting: '2026-05-20', sourceNote: notes.id },
-    });
-
-    const task = await kernel.createEntity({
-        kind: 'task',
-        name: 'Implement mutation lifecycle',
-        attributes: { status: 'in-progress', assignee: 'developer', decision: decision.id },
-    });
-
-    console.log('Entities:', repo.name, '|', decision.name, '|', task.name);
+    console.log('Entities:', repoId, '|', decisionId, '|', taskId);
 
     // Trace decision to source note
     console.log('\n--- Trace decision provenance ---');
-    const graph = await kernel.traceObject(`cluster://canonical/${decision.id}`);
+    const graph = await sdk.traceObject(`cluster://canonical/${decisionId}`);
     console.log('Decision trace nodes:', graph.nodes.length);
 
     // Command-gated update (task completion)
     console.log('\n--- Command-gated mutation ---');
-    const cmd = await kernel.proposeMutation({
+    const cmd = await sdk.proposeMutation({
         verb: 'update_entity',
         targetStore: 'canonical',
-        payload: { entityId: task.id, patch: { attributes: { status: 'completed' } } },
+        payload: { entityId: taskId, patch: { attributes: { status: 'completed' } } },
         proposedBy: 'developer',
     });
     console.log('Proposed:', cmd.id, '→', cmd.status);
 
-    const { command, receipt } = await kernel.commitMutation(cmd.id, 'developer');
+    const { command, receipt } = await sdk.commitMutation(cmd.id, 'developer');
     console.log('Committed:', command.status);
     console.log('Receipt:', receipt.id, '→ affected:', receipt.affectedIds);
 
     // List all receipts
-    const receipts = await kernel.listReceipts();
+    const receipts = await sdk.listReceipts();
     console.log('\n--- Receipts ---');
     console.log('Total receipts:', receipts.length);
 
-    // Backup
+    // Backup/restore — these still operate on raw ClusterStores from createLocalCluster.
+    // Construct a parallel stores handle for the same data directory.
     console.log('\n--- Backup/Restore ---');
+    const stores = createLocalCluster(dataDir);
     const backupData = await backup(stores);
     console.log('Backup: entities:', backupData.entities.length, 'artifacts:', backupData.artifacts.length, 'events:', backupData.events.length);
 
