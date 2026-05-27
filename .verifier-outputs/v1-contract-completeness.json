@@ -1,0 +1,141 @@
+{
+  "lens": "contract-completeness",
+  "verifier_id": "V1",
+  "wave": "A3",
+  "diff_anchor": "swarm-stage-a-amend-a3-1779855264",
+  "findings": [
+    {
+      "id": "V1-001",
+      "file": "src/ops/backup.ts",
+      "line": 113,
+      "legacy_pattern": "(stores.canonical as { importSnapshot?: (entity: Entity) => Promise<Entity> }).importSnapshot; if (typeof canonicalImport !== 'function') { ... }",
+      "expected_pattern": "await stores.canonical.importSnapshot(entity); // direct call — contract now guarantees it",
+      "evidence": "src/ops/backup.ts L113-116 repeats at L138-141 (artifact.importSnapshot), L175-178 (ledger.importEvent), L195-198 (ledger.importReceipt). Contracts now require these methods (STORES-R2-002) — optional-cast type assertions and typeof !== 'function' guards are dead-code AND undermine the type-level guarantee.",
+      "severity": "HIGH",
+      "abstraction": "importSnapshot/importEvent/importReceipt required contract (STORES-R2-002)"
+    },
+    {
+      "id": "V1-002",
+      "file": "src/mcp/server.ts",
+      "line": 541,
+      "legacy_pattern": "if (resolved.store === 'artifact') { object = sanitizeArtifactForOutput(...); } else if (resolved.store === 'canonical') { ... }  // index/ledger/receipt left raw",
+      "expected_pattern": "Mirror SDK.resolve 5-arm coverage — also sanitize index (sanitizeIndexRecordForOutput), ledger (sanitizeProvenanceEventForOutput), and receipt (sanitizeReceiptForOutput).",
+      "evidence": "src/mcp/server.ts L540-545 covers only 2 of 5 store types. SDK.resolve (cluster-sdk.ts L234-244) covers all 5 when policyEnforced; in no-policy path returns raw (L247). MCP handler is the boundary backstop but covers only 2/5.",
+      "severity": "HIGH",
+      "abstraction": "MCP cluster_resolve output sanitization across all 5 store types"
+    },
+    {
+      "id": "V1-003",
+      "file": "src/kernel/policy-enforced-kernel.ts",
+      "line": 385,
+      "legacy_pattern": "provenanceEvents: filteredProvenance  // NOT routed through redactProvenanceEvent",
+      "expected_pattern": "provenanceEvents: bundleRules.length > 0 ? filteredProvenance.map((ev) => redactProvenanceEvent(ev, bundleRules)) : filteredProvenance",
+      "evidence": "src/policy/redactor.ts L114-118 (wave-edited JSDoc) names: 'Redact a single ProvenanceEvent surfaced through traceProvenance, retrieveBundle.provenanceEvents'. policy-enforced-kernel.ts L378-391 applies bundleRules to entities + artifacts but provenanceEvents only go through path-based filtering — NO call to redactProvenanceEvent.",
+      "severity": "HIGH",
+      "abstraction": "redactProvenanceEvent across all flat-event surfaces (KERNEL-R2-004/R005)"
+    },
+    {
+      "id": "V1-004",
+      "file": "src/adapters/local/local-artifact-store.ts",
+      "line": 163,
+      "legacy_pattern": "if (!existsSync(contentPath)) { writeFileSync(contentPath, content); }",
+      "expected_pattern": "tmp + rename atomic pattern matching ingest() L107-122 with cleanup on failure",
+      "evidence": "L150-164 importSnapshot uses plain writeFileSync — the EXACT pattern Wave A3 just replaced in ingest() (STORES-R2-005). Sibling helper, same write semantics, not migrated.",
+      "severity": "HIGH",
+      "abstraction": "LocalArtifactStore atomic content write (STORES-R2-005)"
+    },
+    {
+      "id": "V1-005",
+      "file": "src/kernel/policy-enforced-kernel.ts",
+      "line": 139,
+      "legacy_pattern": "const decision = this.enforce('read_owner_truth', { ownerStore, resourceUri }); const entity = await this.kernel.inspectEntity(id);  // PolicyDeniedError vs NotFoundError discriminates existence per-resource",
+      "expected_pattern": "Apply the inspectCommand double-enforce pattern (KERNEL-R2-001): coarse pre-fetch gate WITHOUT resource specifics, then fetch, then refine.",
+      "evidence": "src/kernel/policy-enforced-kernel.ts L139-144 inspectEntity has the EXACT existence-oracle shape that inspectCommand (L470-500) was just fixed for. Per-resource policy denials → enumerable existence via error-type difference.",
+      "severity": "HIGH",
+      "abstraction": "Existence-oracle fix for per-resource enforce+fetch surfaces (KERNEL-R2-001)"
+    },
+    {
+      "id": "V1-006",
+      "file": "src/cli.ts",
+      "line": 643,
+      "legacy_pattern": "if (resolved.store === 'artifact') ... else if 'canonical' ... else if 'receipt' ...  // index/ledger NOT sanitized",
+      "expected_pattern": "Add `else if 'index'` and `else if 'ledger'` arms to mirror SDK.resolve 5-arm coverage.",
+      "evidence": "src/cli.ts L643-649 covers only 3 of 5 store types. Wave's own comment L605-612 promises 'baseline path safe'. No-policy CLI invocation `db-cluster resolve cluster://index/<id>` prints raw IndexRecord.metadata.",
+      "severity": "HIGH",
+      "abstraction": "CLI resolve baseline sanitization across all 5 store types (SURFACE-R2-001/R2-003)"
+    },
+    {
+      "id": "V1-007",
+      "file": "src/ops/doctor.ts",
+      "line": 1,
+      "legacy_pattern": "doctor() has no check that consumes mutation_orphaned events — a cluster with orphans still reports healthy.",
+      "expected_pattern": "Mirror src/ops/verify.ts L154-189: query ledger for action='mutation_orphaned' and emit a HealthCheck with status='degraded' if any exist.",
+      "evidence": "src/kernel/cluster-kernel.ts L322-329 (wave-edited comment) claims: 'doctor() / verify() can flag it'. verify.ts L150-189 has the check; doctor.ts (210 lines) has zero matches for mutation_orphaned. Promised consumer, missing migration.",
+      "severity": "HIGH",
+      "abstraction": "mutation_orphaned signal consumption across health surfaces (STORES-R2-003)"
+    },
+    {
+      "id": "V1-008",
+      "file": "scripts/checks/R4-switch-on-resolved-store-incomplete.yml",
+      "line": 16,
+      "legacy_pattern": "rule matches only `switch (...) { $$$ }` patterns — if/else chains slip through",
+      "expected_pattern": "Add patterns for if/else if chains on resolved.store and parsed.store OR have completeness-checks.mjs do follow-up text inspection.",
+      "evidence": "src/mcp/server.ts L541-545 and src/cli.ts L643-647 both use if/else chains covering only 2-3 of 5 store types — V1-002 and V1-006 above are exactly the patterns R4 was meant to catch.",
+      "severity": "HIGH",
+      "abstraction": "R4 completeness rule coverage of store-discriminator switches"
+    },
+    {
+      "id": "V1-009",
+      "file": "scripts/checks/R5-optional-import-contract-method.yml",
+      "line": 35,
+      "legacy_pattern": "files: - 'src/contracts/*.ts'  // ONLY contracts. backup.ts call-site `{ importSnapshot?: ... }` casts invisible.",
+      "expected_pattern": "Add sibling rule scanning src/ops/, src/adapters/, src/sdk/ for the optional-cast call-site patterns.",
+      "evidence": "src/ops/backup.ts L113/L138/L175/L195 retain optional-cast pattern; R5 doesn't see them because it only scans contracts.",
+      "severity": "MEDIUM",
+      "abstraction": "R5 completeness rule coverage of optional-method legacy patterns across all source dirs"
+    },
+    {
+      "id": "V1-010",
+      "file": "src/sdk/cluster-sdk.ts",
+      "line": 245,
+      "legacy_pattern": "switch on resolved.store covers 5 cases, no default exhaustiveness guard",
+      "expected_pattern": "Add `default: const _exhaustive: never = resolved.store; ...` so a 6th store type added to ResolvedObject's union surfaces as TS error.",
+      "evidence": "L233-247 covers 5 current types but lacks exhaustiveness. A 6th store type added to ResolvedObject would skip every case and fall through L247 returning RAW owner truth — latent SURFACE-R2-003 regression.",
+      "severity": "MEDIUM",
+      "abstraction": "SDK.resolve switch exhaustiveness (SURFACE-R2-003)"
+    },
+    {
+      "id": "V1-011",
+      "file": "src/policy/redactor.ts",
+      "line": 213,
+      "legacy_pattern": "result[key] = rule.behavior === 'strip' ? undefined : REDACTED;  // strip emits undefined (falsy / indistinguishable from missing field)",
+      "expected_pattern": "result[key] = REDACTED;  // unify strip and mask behaviors as in the just-fixed redactProvenanceEvent",
+      "evidence": "L209-217 redactMetadataActors and L185-207 redactProvenanceActors still carry the asymmetric strip-vs-mask shape that the wave's KERNEL-R2-006 fix at L171-179 unified for redactProvenanceEvent. Sibling graph-level helpers not harmonized.",
+      "severity": "MEDIUM",
+      "abstraction": "Actor-redaction semantics harmonization between flat-event and graph-level redactors (KERNEL-R2-006)"
+    },
+    {
+      "id": "V1-012",
+      "file": "src/kernel/cluster-kernel.ts",
+      "line": 898,
+      "legacy_pattern": "{ rebuilt, clearedFirst: true }  // claims clear-first, but performIndexRebuild now uses atomic replaceAll",
+      "expected_pattern": "{ rebuilt, atomic: true }  // reflect KERNEL-R2-003 semantics",
+      "evidence": "rebuildIndex L892-899 provenance detail still asserts clearedFirst:true; performIndexRebuild (L824-871) no longer calls clear(). Auditors reading the ledger see a claim contradicting on-disk semantics.",
+      "severity": "LOW",
+      "abstraction": "rebuildIndex provenance metadata consistency with performIndexRebuild atomic semantics"
+    },
+    {
+      "id": "V1-013",
+      "file": "scripts/completeness-checks.mjs",
+      "line": 78,
+      "legacy_pattern": "REQUIRED_STORE_CASES.filter((label) => !text.includes(`'${label}'`) ...);  // text containment, not case-arm detection",
+      "expected_pattern": "Parse the switch body for actual `case '<store>':` tokens.",
+      "evidence": "L74-86 postProcessSwitchCompleteness uses substring containment. A switch with comment mentioning all 5 labels but only 1 actual case arm would textually pass.",
+      "severity": "LOW",
+      "abstraction": "R4 post-processor case-detection precision"
+    }
+  ],
+  "files_audited": ["src/contracts/canonical-store.ts", "src/contracts/artifact-store.ts", "src/contracts/ledger-store.ts", "src/ops/backup.ts", "src/ops/verify.ts", "src/ops/doctor.ts", "src/sdk/cluster-sdk.ts", "src/mcp/server.ts", "src/cli.ts", "src/kernel/cluster-kernel.ts", "src/kernel/policy-enforced-kernel.ts", "src/policy/redactor.ts", "src/policy/store-output-sanitizers.ts", "src/policy/policy-engine.ts", "src/adapters/local/local-artifact-store.ts", "src/adapters/local/local-canonical-store.ts", "src/adapters/local/local-ledger-store.ts", "src/adapters/postgres/postgres-canonical-store.ts", "src/provenance/trace-builder.ts", "src/resolver/cluster-resolver.ts", "src/types/provenance-graph.ts", "scripts/checks/R1-kernel-underscore-access.yml", "scripts/checks/R2-index-clear-then-loop.yml", "scripts/checks/R3-raw-cluster-resolver-instantiation.yml", "scripts/checks/R4-switch-on-resolved-store-incomplete.yml", "scripts/checks/R5-optional-import-contract-method.yml", "scripts/completeness-checks.mjs", "scripts/release-gate.mjs", "test/wave-a3-stores-regression.test.ts"],
+  "abstractions_audited": ["importSnapshot/importEvent/importReceipt required contract (STORES-R2-002)", "MCP cluster_resolve output sanitization (SURFACE-R2-003 mirror)", "SDK.resolve output sanitization (SURFACE-R2-003)", "CLI resolve belt-and-suspenders sanitization (SURFACE-R2-001/R2-003)", "redactProvenanceEvent across flat-event surfaces (KERNEL-R2-004/R005)", "redactProvenanceActors graph-level vs flat-event semantics (KERNEL-R2-006)", "Existence-oracle pattern for resource-bound enforce+fetch surfaces (KERNEL-R2-001)", "Atomic content-write in LocalArtifactStore (STORES-R2-005)", "performIndexRebuild atomic replaceAll (KERNEL-R2-003)", "mutation_orphaned signal consumption (STORES-R2-003)", "5-store-type switch exhaustiveness in resolver/trace surfaces", "ast-grep completeness rules R1-R5 coverage", "Switch on resolved.store / parsed.store / *.store across all surfaces", "Typed error class registry (ImportSnapshotNotSupportedError uniqueness)", "Symlink-safe policies-file loading (SURFACE-R2-002)"],
+  "summary": "Contract-completeness meta-pattern recurred in Wave A3 at multiple abstraction layers. Top recurrences: (a) backup.ts retains Pick<...> casts + typeof !== 'function' guards at 4 call sites despite STORES-R2-002 contract promotion; (b) LocalArtifactStore.importSnapshot still uses plain writeFileSync while sibling ingest() was migrated to atomic tmp+rename; (c) SDK.resolve sanitization is complete (5/5) but MCP cluster_resolve (2/5) and CLI resolve baseline (3/5) cover only subsets; (d) inspectCommand existence-oracle fix (KERNEL-R2-001) wasn't applied to sibling inspectEntity with identical structure; (e) retrieveBundle.provenanceEvents surface named in wave-edited JSDoc was NOT migrated to use redactProvenanceEvent; (f) doctor() does not consume mutation_orphaned signal that verify() now consumes; (g) new R4 and R5 completeness gates have coverage gaps (R4 misses if/else chains, R5 misses backup.ts call sites)."
+}

@@ -1,0 +1,161 @@
+{
+  "lens": "invariant-test-completeness",
+  "verifier_id": "V3",
+  "wave": "A3",
+  "diff_anchor": "swarm-stage-a-amend-a3-1779855264",
+  "findings": [
+    {
+      "id": "V3-001",
+      "test_file": "test/wave-a3-tests-regression.test.ts",
+      "test_line": 449,
+      "invariant": "SURFACE-R2-003 — MCP cluster_resolve returns sanitized output for ALL FIVE store types (artifact, canonical, receipt, ledger, index)",
+      "legs_asserted": ["MCP cluster_resolve on artifact URI: storagePath undefined, content undefined, _sourceType='owner-truth', _contentPolicy contains DATA/instructions, non-sensitive fields present"],
+      "legs_missing": ["MCP cluster_resolve on canonical URI returns sanitized entity", "MCP cluster_resolve on receipt URI returns sanitized receipt", "MCP cluster_resolve on ledger URI returns sanitized provenance event", "MCP cluster_resolve on index URI returns sanitized index record"],
+      "evidence": "test only invokes handleTool('cluster_resolve', { uri: artifact-uri }, sdk); no parallel block for the other 4 URI types. src/mcp/server.ts:541-545 only special-cases artifact + canonical; other 3 rely on SDK upstream sanitization. A future refactor that constructs the SDK without policies (or drops SDK-level ledger/index/receipt sanitization) would leak through MCP with no test catching it.",
+      "severity": "HIGH"
+    },
+    {
+      "id": "V3-002",
+      "test_file": "test/wave-a3-surface-regression.test.ts",
+      "test_line": 274,
+      "invariant": "SURFACE-R2-003 — SDK.resolve ledger output is sanitized: actorId='[REDACTED]' AND detail={} AND _sourceType='audit-record'",
+      "legs_asserted": ["AT LEAST ONE of: _sourceType==='audit-record', actorId==='', actorId==='[REDACTED]', !detail, detail empty"],
+      "legs_missing": ["All three conditions hold simultaneously (the test is a disjunction; a regression that emits only ONE sanitization marker passes)"],
+      "evidence": "lines 273-280: `const isSanitized = ledgerObj._sourceType === 'audit-record' || ledgerObj.actorId === '' || ledgerObj.actorId === '[REDACTED]' || !ledgerObj.detail || Object.keys(ledgerObj.detail).length === 0; expect(isSanitized).toBe(true);` — the OR-chain accepts any one of 5 markers. Production at store-output-sanitizers.ts:82-87 always emits all three. A future change that emits only _sourceType but leaves actorId raw would silently pass.",
+      "severity": "HIGH"
+    },
+    {
+      "id": "V3-003",
+      "test_file": "test/wave-a3-surface-regression.test.ts",
+      "test_line": 288,
+      "invariant": "SURFACE-R2-003 — SDK.resolve index output: metadata stripped AND _sourceType='derivative' AND _metadataPolicy present",
+      "legs_asserted": ["AT LEAST ONE of: _sourceType defined, !metadata, metadata empty"],
+      "legs_missing": ["_sourceType pinned to 'derivative' specifically", "_metadataPolicy field present with notice text", "metadata explicitly UNDEFINED (production sanitizer removes it via destructuring); a regression that leaves metadata={} would pass"],
+      "evidence": "lines 289-293: disjunction. Production at store-output-sanitizers.ts:53-57 emits _sourceType:'derivative' + _metadataPolicy + completely removes metadata. Same either-OK pattern.",
+      "severity": "HIGH"
+    },
+    {
+      "id": "V3-004",
+      "test_file": "test/wave-a3-kernel-regression.test.ts",
+      "test_line": 119,
+      "invariant": "KERNEL-R2-001 — inspectCommand error type is IDENTICAL between existent and nonexistent commandIds for any denied principal, including denial at the second commandVerb-refined enforce stage",
+      "legs_asserted": ["denied-at-coarse-gate principal: existent and nonexistent commandIds both yield PolicyDeniedError"],
+      "legs_missing": ["denied-at-commandVerb-refinement principal: when policy allows coarse `read_command` but denies a specific commandVerb, existent commandIds still yield PolicyDeniedError but nonexistent commandIds yield NotFoundError — the second-stage refinement re-introduces the oracle"],
+      "evidence": "src/kernel/policy-enforced-kernel.ts:488-499 implements a 2-stage enforce: coarse pre-fetch + commandVerb-refined post-fetch. The fix comment at L482-487 acknowledges 'we propagate NotFoundError' when coarse passes. Test at wave-a3-kernel-regression.test.ts:38-43 uses roles:[] (denied at coarse). No test exercises a principal allowed at coarse but denied at refinement.",
+      "severity": "HIGH"
+    },
+    {
+      "id": "V3-005",
+      "test_file": "test/wave-a3-stores-regression.test.ts",
+      "test_line": 281,
+      "invariant": "STORES-R2-004 — TraceBuilder.eventToEdgeType for 'mutation_orphaned' returns the SPECIFIC edge type 'missing_provenance'",
+      "legs_asserted": ["edge type is NOT 'entity_created_by'"],
+      "legs_missing": ["edge type IS the specific value 'missing_provenance' — a regression that changes the mapping to any other value (e.g., 'orphan_edge', 'mutation_failed', a typo, empty string) still passes the negative assertion"],
+      "evidence": "test line 294: `expect(edgeType).not.toBe('entity_created_by');` — only assertion. src/provenance/trace-builder.ts:437 sets specific value 'missing_provenance' that downstream trace consumers will key off.",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "V3-006",
+      "test_file": "test/wave-a3-kernel-regression.test.ts",
+      "test_line": 497,
+      "invariant": "KERNEL-R2-006 — redactProvenanceEvent handles ALL three rule types (provenance_actors, command_payload, receipt_details), with receipt_details wiping entire detail",
+      "legs_asserted": ["provenance_actors strip → actorId=REDACTED", "command_payload strip → payload/commandId/kind/entityId/name removed, verb preserved", "Property: both rules together"],
+      "legs_missing": ["receipt_details rule → detail object entirely emptied (the most aggressive code path at src/policy/redactor.ts:151-153 'Aggressive: drop the whole detail object'); no test exercises this rule type at all"],
+      "evidence": "redactor.ts:147-153 has the receipt_details branch. Test file imports RedactionRule (line 25) but creates rules only with target='provenance_actors' (line 510) and target='command_payload' (line 542). No `target: 'receipt_details'` rule passed to redactProvenanceEvent. Removing redactor.ts:151-153 leaves the detail intact for callers with that rule active — no test catches.",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "V3-007",
+      "test_file": "test/wave-a3-surface-regression.test.ts",
+      "test_line": 124,
+      "invariant": "SURFACE-R2-002 — buildSDKOptions REJECTS a DB_CLUSTER_POLICIES_FILE that resolves outside cwd via symlink",
+      "legs_asserted": ["When symlink can be created: buildSDKOptions throws AND error does not contain leak marker"],
+      "legs_missing": ["When symlinkSync fails with EPERM/ENOTSUP (Windows without admin/Developer Mode): the test silently returns without asserting the invariant. On the 5080 Windows rig the invariant is never exercised — test passes trivially."],
+      "evidence": "lines 153-159: `} catch (err: any) { if (err.code === 'EPERM' || err.code === 'ENOTSUP') { console.warn(...); return; } throw err; }` — `return` exits without any expect() call. On Windows without Dev Mode, this test is no-op.",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "V3-008",
+      "test_file": "test/wave-a3-kernel-regression.test.ts",
+      "test_line": 376,
+      "invariant": "KERNEL-R2-005 — link_evidence orphan event cites the affected entity id",
+      "legs_asserted": ["error type is ReceiptFailedError", "evidence_linked event count >= 1", "mutation_orphaned event count >= 1", "orphan event with detail.verb === 'link_evidence' exists"],
+      "legs_missing": ["the orphan event cites the entity id on subjectId OR detail.entityId (parity with TESTS-R2-001 leg 5 for createEntity at wave-a3-tests-regression.test.ts:161-171). A regression that records mutation_orphaned with empty subjectId would still pass."],
+      "evidence": "test lines 416-424 — no assertion on subjectId or detail.entityId. Production src/kernel/cluster-kernel.ts:368-373 passes input.entityId as the subject. createEntity test asserts citation; link_evidence test omits same assertion.",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "V3-009",
+      "test_file": "test/wave-a3-stores-regression.test.ts",
+      "test_line": 56,
+      "invariant": "KERNEL-R2-002 — verify() ignores ALL ledger-subject events as orphan candidates (command_approved, command_rejected, command_compensated, mutation_committed-with-targetStore=ledger)",
+      "legs_asserted": ["command_approved (full lifecycle) → healthy", "command_rejected (rejectMutation) → provenance_references_valid healthy"],
+      "legs_missing": ["command_compensated (compensateMutation full lifecycle) → healthy", "mutation_committed events with targetStore='ledger' (e.g., link_evidence) → healthy. Re-audit-2 explicitly listed all 5 ledger-subject event types. 2 of 5 tested."],
+      "evidence": "test file has describe block 'KERNEL-R2-002' with only two it() blocks covering approved + rejected. compensateMutation and link_evidence's mutation_committed-with-ledger-subject are absent.",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "V3-010",
+      "test_file": "test/wave-a3-surface-regression.test.ts",
+      "test_line": 380,
+      "invariant": "SURFACE-R2-006 — CLI commit --self-approve without --accept-soft-duty-bypass REFUSES AND DOES NOT perform the auto-walk (command remains in 'proposed' state)",
+      "legs_asserted": ["result.status !== 0", "stderr/stdout contains '/accept-soft-duty-bypass/i'"],
+      "legs_missing": ["After refusal, the command is still in 'proposed' state — no validate/approve/commit side effects happened. A regression that refuses on the final commit step but DID auto-walk validate→approve would print warning, exit non-zero, AND leave the command in 'approved' state — silent state corruption."],
+      "evidence": "test lines 413-416 only assert exit status + message. No call to db-cluster inspect or kernel.inspectCommand to verify command status. Production places the refusal check BEFORE the walk so the invariant holds — but a future refactor that reorders would break silently.",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "V3-011",
+      "test_file": "test/wave-a3-stores-regression.test.ts",
+      "test_line": 350,
+      "invariant": "STORES-R2-005 — LocalArtifactStore.ingest on tmp-write failure path EXECUTES the cleanup unlinkSync(tmpPath), leaving no .tmp file under contentDir",
+      "legs_asserted": ["ingest throws (any error)", "no .tmp file orphans", "finalPath does not exist as a partial file"],
+      "legs_missing": ["The unlinkSync cleanup path actually executes — test setup with EISDIR triggers writeFileSync failure BEFORE any .tmp file is created; cleanup branch never runs. A regression that removes the try/catch+unlink cleanup at L111-120 leaves no observable artifact in this test setup.", "The happy path tmp+rename atomicity is not asserted."],
+      "evidence": "test setup uses mkdirSync(tmpPath, ...) so writeFileSync throws EISDIR BEFORE creating .tmp. The catch block's unlinkSync runs on a directory and throws EPERM, swallowed. The 'no .tmp orphans' check trivially passes. Second test (L424-449) is source-text grep — comment mentioning .tmp would satisfy.",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "V3-012",
+      "test_file": "test/wave-a3-surface-regression.test.ts",
+      "test_line": 299,
+      "invariant": "SURFACE-R2-004 — INTERNAL_TRUSTED_PRINCIPAL warning fires IFF (policies non-empty AND principal undefined)",
+      "legs_asserted": ["policies + no principal → WARN", "policies + INTERNAL principal explicit → NO WARN", "policies + custom principal → NO WARN"],
+      "legs_missing": ["NO policies + NO principal → NO WARN (false-positive guard: a regression that fires the warning on the no-policy path would silently break the baseline-tests path)"],
+      "evidence": "test has 3 it() blocks covering 3 'with policies' cases. cluster-sdk.ts:149-186 places the warning INSIDE if(policyConfigured). 4 combinations of (policies×principal) need 4 cases; 3 present.",
+      "severity": "LOW"
+    },
+    {
+      "id": "V3-013",
+      "test_file": "test/wave-a3-kernel-regression.test.ts",
+      "test_line": 558,
+      "invariant": "KERNEL-R2-006 — redactProvenanceEvent behaves consistently across all 4 RedactionRule behaviors (strip, mask, summarize, hash)",
+      "legs_asserted": ["strip behavior on actorId → REDACTED", "strip behavior on detail → fields removed"],
+      "legs_missing": ["mask behavior, summarize behavior, hash behavior"],
+      "evidence": "fast-check property at L578-590 hard-codes behavior:'strip' for both rule types. The pre-fix bug was strip→'' vs mask→REDACTED; fix unified both. A regression that re-introduces behavior-dependent output is not probed.",
+      "severity": "LOW"
+    },
+    {
+      "id": "V3-014",
+      "test_file": "test/wave-a3-stores-regression.test.ts",
+      "test_line": 200,
+      "invariant": "STORES-R2-003 — verify() reports degraded with no_orphaned_mutations as the SPECIFIC degrading check (not just overall degraded for any reason)",
+      "legs_asserted": ["status not 'healthy'", "no_orphaned_mutations check exists", "no_orphaned_mutations status not 'healthy'", "message matches /orphan/i"],
+      "legs_missing": ["Other checks remain healthy when ONLY orphan events exist. Test plants subjectStore='canonical' with synthetic subjectId NOT in canonical — provenance_references_valid will also flag this as an orphan because the subject isn't in canonical/artifact. Cannot isolate which check is the regression target."],
+      "evidence": "test lines 211-220 plants subjectStore='canonical' with synthetic subjectId. verify.ts:111 only skips ledger/index subjects — canonical subjects still get the .exists() check. So provenance_references_valid would fail for this synthetic event too.",
+      "severity": "LOW"
+    },
+    {
+      "id": "V3-015",
+      "test_file": "test/wave-a3-stores-regression.test.ts",
+      "test_line": 142,
+      "invariant": "STORES-R2-002 — promoted contract methods (importSnapshot×2, importEvent, importReceipt) actually compile-fail when omitted from concrete implementations",
+      "legs_asserted": ["spawned `npx tsc --noEmit` exits 0 for each fixture with @ts-expect-error on the class header"],
+      "legs_missing": ["A POSITIVE counter-fixture: a fixture WITHOUT @ts-expect-error and WITH the required method should also compile cleanly (proof that adding the method satisfies the contract)", "Verification that the fixtures are NOT included in the production tsc -p . build, or that the build excludes test/fixtures/"],
+      "evidence": "test L142-192 spawns tsc on each fixture standalone. The @ts-expect-error matches a real error but doesn't verify what the error is (could be ANY type error matching the directive). A future refactor that breaks the fixture unrelatedly would satisfy @ts-expect-error and pass.",
+      "severity": "LOW"
+    }
+  ],
+  "tests_audited": ["test/wave-a3-kernel-regression.test.ts", "test/wave-a3-stores-regression.test.ts", "test/wave-a3-surface-regression.test.ts", "test/wave-a3-tests-regression.test.ts", "test/typed-error-regression.test.ts", "test/dashboard-policy-view.test.ts", "test/fixtures/incomplete-canonical-store.fixture.ts", "test/fixtures/incomplete-artifact-store.fixture.ts", "test/fixtures/incomplete-ledger-store-event.fixture.ts", "test/fixtures/incomplete-ledger-store-receipt.fixture.ts"],
+  "invariants_audited": ["KERNEL-R2-001 inspectCommand error-type oracle", "KERNEL-R2-002 verify() skips ledger-subject events", "KERNEL-R2-003 performIndexRebuild atomic via replaceAll", "KERNEL-R2-004 traceProvenance per-event redaction", "KERNEL-R2-005 link_evidence orphan-on-receipt-fail", "KERNEL-R2-006 redactProvenanceEvent sentinel + detail strip", "KERNEL-R2-008 detail.targetStore validation", "STORES-R2-002 contract import* promoted required", "STORES-R2-003 verify() consumes mutation_orphaned", "STORES-R2-004 TraceBuilder mutation_orphaned mapping", "STORES-R2-005 LocalArtifactStore.ingest atomic", "SURFACE-R2-001 CLI resolve through policy", "SURFACE-R2-002 symlink realpath sandbox", "SURFACE-R2-003 SDK.resolve 5 store-type sanitization + MCP boundary parity", "SURFACE-R2-004 INTERNAL_TRUSTED_PRINCIPAL warning", "SURFACE-R2-006 CLI --self-approve requires acknowledgment", "TESTS-R2-001 ReceiptFailedError dirty store + no receipt + citation", "TESTS-R2-002 LocalCanonicalStore.importSnapshot ID + timestamps", "TESTS-R2-003 cluster_resolve sanitized artifact output", "TESTS-R2-005 CorruptStoreError all 4 local stores", "TESTS-R2-008 dashboard applyRedaction wiring"],
+  "summary": "Half-invariant test meta-pattern recurs in Wave A3 at lower density than A1/A2. Most consequential: SURFACE-R2-003 added SDK sanitization for all 5 store types but MCP's handler still only special-cases artifact + canonical, and no test exercises ledger/index/receipt URIs through handleTool('cluster_resolve', ...) — same gap shape re-audit-2 flagged. Second-order: two HIGH disjunction-style assertions in SDK.resolve 5-store-type tests allow regressions emitting only one sanitization marker to pass silently. Third: KERNEL-R2-001 inspectCommand oracle test only probes denial at coarse pre-fetch gate; second-stage commandVerb-refined denial path still leaks. Lower-severity: TraceBuilder mutation_orphaned pinned only with negative assertion, receipt_details rule path untested, link_evidence orphan citation missing, Windows symlink test silently returns on EPERM, STORES-R2-005 atomic-ingest test fails to exercise cleanup branch."
+}
