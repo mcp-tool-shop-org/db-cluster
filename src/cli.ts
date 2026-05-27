@@ -50,6 +50,7 @@ import { redactErrorMessage } from './policy/redactor.js';
 // now reads through formatForUser so subclass-supplied remediationHint is
 // the single source of truth — no parallel CLI-side remediation map.
 import { formatForUser } from './policy/error-formatter.js';
+import { setCliColorEnabled, cliColor, colorizeFormattedError } from './cli/color-output.js';
 import type { Principal, Capability, Policy, TrustZone, VisibilityRule } from './types/policy.js';
 
 // SURFACE-C-011 (Wave C1-Amend): cluster-dir resolution now mirrors the
@@ -498,15 +499,16 @@ export function cliCommand<T extends unknown[]>(
                 // canonical CLI/MCP/SDK/dashboard rendering helper. It
                 // reads err.message + err.remediationHint directly from
                 // the subclass — no parallel `remediationForCode` table.
-                process.stderr.write(formatForUser(err) + '\n');
+                // Phase 10 §3b: colorize the headline red, the → try hint dim italic.
+                process.stderr.write(colorizeFormattedError(formatForUser(err)) + '\n');
                 process.exit(typedErrorToExitCode(err.code));
                 return;
             }
             if (err instanceof PolicyConfigError) {
-                process.stderr.write(err.message + '\n');
+                process.stderr.write(cliColor.error(err.message) + '\n');
                 const hint = remediationForCode(err.code);
                 if (hint) {
-                    process.stderr.write(`  → try: ${hint}\n`);
+                    process.stderr.write(`  ${cliColor.hint(`→ try: ${hint}`)}\n`);
                 }
                 process.exit(typedErrorToExitCode(err.code));
                 return;
@@ -533,10 +535,10 @@ export function cliCommand<T extends unknown[]>(
                 // Sanitize the message at the boundary (paths leak from
                 // adapter prose) before surfacing.
                 const safeMsg = redactErrorForCli(err);
-                process.stderr.write(`Error: ${safeMsg}\n`);
+                process.stderr.write(cliColor.error(`Error: ${safeMsg}`) + '\n');
                 const hint = adapterErr.remediationHint || remediationForCode(adapterErr.code);
                 if (hint) {
-                    process.stderr.write(`  → try: ${hint}\n`);
+                    process.stderr.write(`  ${cliColor.hint(`→ try: ${hint}`)}\n`);
                 }
                 process.exit(typedErrorToExitCode(adapterErr.code));
                 return;
@@ -548,7 +550,7 @@ export function cliCommand<T extends unknown[]>(
                 const message = err instanceof Error
                     ? redactErrorForCli(err)
                     : 'An internal error occurred.';
-                process.stderr.write(`Error: ${message}\n`);
+                process.stderr.write(cliColor.error(`Error: ${message}`) + '\n');
             }
             process.exit(1);
         }
@@ -940,6 +942,7 @@ program
     .option('--actor <id>', 'Operator identity for this invocation (overrides DB_CLUSTER_OPERATOR / OS user)')
     .option('--quiet', 'Suppress non-error output (SURFACE-C-023)')
     .option('--log-level <level>', 'Gate stderr output by level: debug | info | warn | error (SURFACE-C-023)', 'info')
+    .option('--no-color', 'Disable ANSI color in CLI output (NO_COLOR env var is also honoured)')
     .option('--help-exit-codes', 'Print the table of exit codes mapped to typed-error codes and exit', false);
 
 const EXIT_CODE_TABLE = [
@@ -982,8 +985,14 @@ if (process.argv.includes('--help-exit-codes')) {
 // cliQuiet / cliLogLevel are populated by the time the action's body
 // (or any wrapper like cliCommand / destructiveCommand) executes.
 program.hook('preAction', (thisCmd) => {
-    const opts = thisCmd.opts<{ quiet?: boolean; logLevel?: string }>();
+    // Commander materializes `--no-color` as `opts.color === false`.
+    const opts = thisCmd.opts<{ quiet?: boolean; logLevel?: string; color?: boolean }>();
     cliQuiet = !!opts.quiet;
+    // `--no-color` sets opts.color to false; absence leaves it undefined.
+    // Default behavior (no flag) preserves the auto-detected TTY/NO_COLOR state.
+    if (opts.color === false) {
+        setCliColorEnabled(false);
+    }
     const level = (opts.logLevel ?? 'info').toLowerCase();
     if (level === 'debug' || level === 'info' || level === 'warn' || level === 'error') {
         cliLogLevel = level;
@@ -1011,7 +1020,7 @@ program
         }
         mkdirSync(CLUSTER_DIR, { recursive: true });
         createLocalCluster(CLUSTER_DIR);
-        console.log('Cluster initialized at .db-cluster/');
+        console.log(cliColor.success('Cluster initialized at .db-cluster/'));
         console.log('  canonical/  — entities, state');
         console.log('  artifact/   — raw files, evidence');
         console.log('  index/      — discoverability');
@@ -1041,7 +1050,7 @@ program
             actorId: operator.actorId,
         });
 
-        console.log(`Ingested: ${filename}`);
+        console.log(cliColor.success(`Ingested: ${filename}`));
         console.log(`  artifact: ${result.artifact.id}`);
         console.log(`  version:  ${result.artifact.version}`);
         console.log(`  hash:     ${result.artifact.contentHash.slice(0, 12)}...`);
@@ -1070,7 +1079,7 @@ entity
             actorId: operator.actorId,
         });
 
-        console.log(`Created entity: ${opts.kind}/${opts.name}`);
+        console.log(cliColor.success(`Created entity: ${opts.kind}/${opts.name}`));
         console.log(`  id:      ${result.entity.id}`);
         console.log(`  indexed: ${result.indexRecord.id}`);
         console.log(`  receipt: ${result.receipt.id}`);
@@ -1092,7 +1101,7 @@ program
             actorId: operator.actorId,
         });
 
-        console.log(`Linked: artifact ${opts.artifact} → entity ${opts.entity}`);
+        console.log(cliColor.success(`Linked: artifact ${opts.artifact} → entity ${opts.entity}`));
         console.log(`  provenance: ${result.provenance.id}`);
         console.log(`  receipt:    ${result.receipt.id}`);
     }));
@@ -1132,7 +1141,7 @@ program
     .action(cliCommand(async (entityId: string) => {
         const kernel = getKernel();
         const entity = await kernel.inspectEntity(entityId);
-        console.log(`Entity: ${entity.kind}/${entity.name}`);
+        console.log(cliColor.header(`Entity: ${entity.kind}/${entity.name}`));
         console.log(`  id:         ${entity.id}`);
         console.log(`  owner:      ${entity.owner}`);
         console.log(`  created:    ${entity.createdAt}`);
@@ -1229,7 +1238,7 @@ program
         }
 
         const result = await kernel.commitMutation(commandId, operator.actorId);
-        console.log(`Committed: ${result.command.id}`);
+        console.log(cliColor.success(`Committed: ${result.command.id}`));
         console.log(`  verb:    ${result.command.verb}`);
         console.log(`  status:  ${result.command.status}`);
         console.log(`  result:  ${result.receipt.resultSummary}`);

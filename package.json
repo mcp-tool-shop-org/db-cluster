@@ -1,6 +1,6 @@
 {
   "name": "db-cluster",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "AI-native federated database cluster with typed errors, mutation receipts, and MCP/SDK/CLI surfaces — for AI agents needing trustworthy retrieval and operators needing safe writes.",
   "type": "module",
   "main": "dist/index.js",
@@ -45,6 +45,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:mutation": "stryker run",
+    "verify": "node scripts/release-gate.mjs",
     "lint": "tsc --noEmit && npm run lint:examples",
     "lint:examples": "tsc -p tsconfig.examples.json",
     "prepack": "npm run build",
@@ -100,6 +101,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "commander": "^14.0.3",
+    "kleur": "^4.1.5",
     "pg": "^8.21.0"
   }
 }

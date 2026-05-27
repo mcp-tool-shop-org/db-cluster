@@ -37,3 +37,7 @@ cluster-backup-*.json
 
 # Stray top-level .txt files (CIDOCS-009 — workspace hygiene)
 /*.txt
+site/.astro/
+site/dist/
+site/node_modules/
+.polyglot-cache.json

@@ -1,5 +1,16 @@
 <p align="center">
+  <a href="README.ja.md">日本語</a> | <a href="README.zh.md">中文</a> | <a href="README.es.md">Español</a> | <a href="README.fr.md">Français</a> | <a href="README.hi.md">हिन्दी</a> | <a href="README.it.md">Italiano</a> | <a href="README.pt-BR.md">Português (BR)</a>
+</p>
+
+<p align="center">
   <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/brand/main/logos/db-cluster/readme.png" alt="db-cluster" width="800" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/mcp-tool-shop-org/db-cluster/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/db-cluster/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://www.npmjs.com/package/db-cluster"><img src="https://img.shields.io/npm/v/db-cluster.svg" alt="npm version" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License: MIT" /></a>
+  <a href="https://mcp-tool-shop-org.github.io/db-cluster/handbook/"><img src="https://img.shields.io/badge/handbook-online-blue.svg" alt="Handbook" /></a>
 </p>
 
 **AI-native federated database cluster.** Specialized truth stores behaving as one governed substrate — typed errors, structured exit codes, mutation receipts, MCP + SDK + CLI surfaces.
@@ -80,26 +91,55 @@ See [`docs/cli.md`](docs/cli.md) for the full CLI reference (including the typed
 
 ## Status
 
-**Phase 15 — Release Readiness & Package Boundary: PASS.** Post-Wave-C1-Amend
-baseline: **1200+ tests passing across 80+ files** (the exact number tracks
-through each amend wave — see `CHANGELOG.md` for the per-wave count). Stryker
-mutation testing is shipped but experimental — not in the standing release-gate
-per the v2 dogfood-swarm protocol's verifier-3 doctrine. See
-`docs/release-readiness.md` "Stryker mutation testing — current disposition".
+**v1.0.0 — shipping.** db-cluster is audit-hardened across the dogfood-swarm
+protocol — Stage A (correctness, Waves A1–A4), Stage B (proactive health,
+Wave B1-Amend), and Stage C (humanization, Wave C1-Amend).
+**1247+ tests passing** deterministically across 83 files, release-gate 9/9
+PASS, lint clean.
 
-Phase 15 establishes a deliberate public API surface, package boundary, fresh
-install smoke tests, and release gate automation. The package is ready for
-versioned release as v0.1.0. The release-gate (`scripts/release-gate.mjs`) is
-9 stages — build, tests, pack, smoke-install, docs-drift, package-exports,
-completeness-checks, doc-drift, and (new in Wave C1-Amend) JSDoc-completeness
-that verifies every required public symbol carries `@throws` + `@example`.
+### What's in v1.0.0
 
-Previous: Phase 14 — Repo-Knowledge Integration Gate.
+- **Federated truth model** — canonical, artifact, index, ledger stores; kernel routes, cluster owns; index is derivative.
+- **Typed errors with `remediationHint` everywhere** — `ClusterError` base + per-class subclasses; CLI maps to sysexits.h (65/70/77/78); `AiErrorEnvelope` at every AI boundary.
+- **Mutation lifecycle** — propose → validate → approve → commit → (compensate). Every commit emits a content-addressable receipt.
+- **MCP server** — 16 tools with safety annotations (`readOnlyHint` / `destructiveHint` / `requiresApprovalHint`); structured error results, never raw stacks.
+- **Policy & redaction** — `PolicyEnforcedKernel` is the only exported kernel entry; `Principal` / `Capability` / `Policy` / `TrustZone` / `VisibilityRule` types; redaction at every read path.
+- **Operator surface** — `doctor`, `verify`, `rebuild index`, `backup`, `restore`, `compensate`, `migration-status`. Destructive commands gated by `--yes` + interactive TTY confirmation.
+- **Dashboard demo** — viewer-only React dashboard for cluster truth (`dashboard/`), with `ComponentState<T>` + `StateBoundary` HOC for loading/empty/error states.
+- **Release gate** — 9 stages enforced by `scripts/release-gate.mjs`: build, tests, pack, smoke-install, docs-drift, package-exports, completeness, doc-drift, JSDoc-completeness.
+
+### Tracked residuals for v1.x
+
+- `V2-C1-009` — long-running MCP ops (doctor/verify/rebuild/backup/restore) currently surface as single-shot tools; granular progress streaming is documented but not in v1.0.0. See [`docs/release-readiness.md`](docs/release-readiness.md).
+- `KERNEL-C-012` — OperatorSignal cross-domain channel is a v1.1+ architectural extension.
+- Stryker mutation testing is shipped (`npm run test:mutation`) but experimental — not in the standing release-gate per the v2 dogfood-swarm verifier-3 doctrine.
+
+### Dogfood-swarm history
+
+Stage A (correctness, Waves A1–A4) → Stage B (proactive health, Wave B1-Amend) → Stage C (humanization, Wave C1-Amend) → **Stage D folds into Phase 10 Full Treatment** (logo, landing page, handbook, inline CLI color polish). No Stage D swarm wave dispatched. Full audit trail in [`CHANGELOG.md`](CHANGELOG.md) and the `swarm-stage-*-*.md` reports at the repo root.
 
 ## Prerequisites
 
 - Node.js 20+ (enforced via `engines.node` in `package.json`)
 - npm
+
+## Trust model
+
+db-cluster runs **locally**. It reads + writes a `.db-cluster/` directory in the
+working directory you point it at and reads artifacts you pass to `ingest`.
+There is **no network egress** by default and **no telemetry**. The only
+optional outbound connection is to a Postgres host if you set
+`DB_CLUSTER_POSTGRES_URL` (with `DB_CLUSTER_POSTGRES_SSL` respected).
+
+The MCP server tools read + write the local stores only — they never reach the
+network, and structured `AiErrorEnvelope` responses never leak stack traces or
+filesystem paths. Destructive CLI commands (`restore`, `rebuild index`,
+`compensate`, `backup --force-overwrite`) require an explicit `--yes` flag plus
+an interactive confirmation on TTY.
+
+The full threat model — data touched, data NOT touched, permissions required,
+surface-by-surface posture, and tracked residuals — lives in
+[`SECURITY.md`](SECURITY.md).
 
 ## Documentation
 

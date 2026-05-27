@@ -8,6 +8,61 @@ The CHANGELOG audience is **external readers** — operators, developers, and AI
 
 Internal swarm-finding IDs (KERNEL-X-NNN, STORES-X-NNN, AGG-NNN) appear as **backlinks at the bottom** of each wave section so the audit trail is preserved, but the body text is written for the external reader.
 
+## v1.0.0 — Phase 10 Full Treatment release (2026-05-27)
+
+First shipped release. db-cluster exits the dogfood-swarm protocol with all
+hard gates green and proceeds to a v1.0.0 release that's fully translated,
+branded, documented, and indexed.
+
+### User-visible changes
+
+- **First published version on npm.** `npm install db-cluster` works; the `db-cluster` and `db-cluster-mcp` bins are usable from `npx` without a clone.
+- **Landing page** at https://mcp-tool-shop-org.github.io/db-cluster/ — scaffolded via `@mcptoolshop/site-theme`. Hero block, four feature cards, four code cards (install / init+ingest+retrieve / SDK / MCP wire-up).
+- **Starlight handbook** at https://mcp-tool-shop-org.github.io/db-cluster/handbook/ — 8 pages (index / getting-started / architecture / operations / policy-and-redaction / mcp / sdk / cli) with pagefind search across all of them. Cyan accent matching the brand logo.
+- **README translations** in 7 languages — Japanese, Chinese (Simplified), Spanish, French, Hindi, Italian, Brazilian Portuguese — via polyglot-mcp's TranslateGemma 12B pipeline. Language nav bar injected above the logo in all 8 source-plus-translated READMEs.
+- **CLI color polish** — kleur-based ANSI color codes for errors (red), warnings (yellow), success (green), headers (bold cyan), and `→ try:` remediation hints (dim italic). The `--no-color` flag forces colors off; the `NO_COLOR` env variable is honoured per https://no-color.org. Piped output (non-TTY) auto-disables.
+- **Trust model section** in the README — pointer to the full threat model in `SECURITY.md`. Surfaces what data db-cluster touches, what it does NOT touch, and the permissions it asks for.
+- **Shipcheck baseline** — repo joined the `@mcptoolshop/shipcheck` quality gate. SHIP_GATE.md filled, all four hard gates (A: Security, B: Error Handling, C: Operator Docs, D: Shipping Hygiene) pass at 27/27 applicable items + 5 SKIP justifications. SCORECARD.md, SECURITY.md (db-cluster-specific threat model), and `.github/dependabot.yml` (npm + github-actions ecosystems, grouped updates) all landed.
+- **GitHub repo metadata** updated — description, homepage, 10 topics (ai-native, claude, cli, database, federated, mcp, model-context-protocol, policy, provenance, typescript).
+
+### Breaking changes
+
+- None. v1.0.0 finalizes the surface defined by Phase 15 (Release Readiness & Package Boundary) and audit-hardened through Stages A, B, C of the dogfood-swarm. Existing 0.1.x usage of `import 'db-cluster'`, `import 'db-cluster/sdk'`, the CLI verbs, and the MCP tool schemas all continue to work.
+
+### Migration notes
+
+- Pre-1.0 (any 0.x clone-and-build users): nothing to migrate; the published `db-cluster@1.0.0` is the same surface you've been running, just on npm now.
+- AI integrators: continue branching on `AiErrorEnvelope.code` and `retryable`. The 16 MCP tools and their safety annotations are stable.
+- Operators: the CLI exit-code table (0 / 1 / 65 / 70 / 77 / 78) is stable across versions per sysexits.h. `db-cluster --help-exit-codes` prints the live table.
+
+### Stage D disposition (re-stated for completeness)
+
+db-cluster ships as an npm package; there is no marketplace listing, no VS Code extension, and no first-class frontend surface. Stage D (Visual Polish) of the dogfood-swarm protocol is therefore not applicable. Its intent — coherent visual identity — folds into Phase 10 Full Treatment: brand logo (landed in C1-Amend), landing page, handbook, and inline CLI color polish. No Stage D swarm wave was dispatched.
+
+### Release-gate
+
+- Final baseline: 1255+ tests passing deterministically across 84 files (8 new tests added in the CLI color polish module), release-gate 9/9 PASS, lint clean.
+- Coverage badge deferred to a later v1.x release per the full-treatment Phase 4 default ("ship without, defer to v1.x").
+
+### Repo-knowledge
+
+- Phase 5 entry landed in the repo-knowledge DB at `mcp-tool-shop-org/db-cluster` with thesis, architecture, and release_summary notes; relationships: `shares_domain_with` repo-knowledge, `shares_package_with` ollama-intern-mcp.
+
+## Stage D — not applicable (2026-05-27)
+
+db-cluster ships as an npm package. There is no marketplace listing, no VS Code extension, and no first-class frontend surface. Stage D (Visual Polish) of the dogfood-swarm protocol is therefore not applicable to this repo.
+
+Stage D's intent — that the product carry a coherent visual identity — folds into Phase 10 Full Treatment work:
+
+- **README brand logo** — landed in Wave C1-Amend.
+- **Landing page** — `npx @mcptoolshop/site-theme init` (Phase 10 §2).
+- **Handbook** — Starlight docs site scaffolded via `npx @mcptoolshop/site-theme handbook` (Phase 10 §3).
+- **Inline CLI color polish** — kleur-based ANSI color output with `--no-color` flag and `NO_COLOR` env-var honoured (Phase 10 §1).
+
+The dashboard demo (`dashboard/`) already carries a self-contained visual treatment from Phase 13 (StoreLanesMap, ProvenanceTimeline, ExplainIndexPanel, PolicyViewToggle).
+
+No dogfood-swarm Stage D wave is dispatched. db-cluster exits the dogfood swarm at Stage C and proceeds directly to Phase 10 (Full Treatment) for v1.0.0 release.
+
 ## Wave C1-Amend — Dogfood-swarm Stage C Wave C1 amend (2026-05-27)
 
 Stage C Wave C1 amend closing the 68 behavioral-humanization findings the Stage C audit surfaced (25 HIGH + 38 MEDIUM + 5 LOW + 8 should-have-been-A). The wave addresses the gap between "structurally sound" (Stage B exit) and "actually usable" — typed-error remediation, AI envelope enrichment, operator runbooks, JSDoc completeness.
