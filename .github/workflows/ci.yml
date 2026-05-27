@@ -29,7 +29,11 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: 'npm'
       - run: npm ci
-      - run: npm run lint
-      - run: npm run lint:examples
+      # Build first — `lint:examples` resolves `db-cluster`, `db-cluster/sdk`,
+      # `db-cluster/policy` (self-reference via package.json `exports`), which
+      # requires dist/ to be populated. Without a prior build, tsc cannot
+      # resolve the self-reference and the example typecheck fails with
+      # TS2307 across every example file. Run order: build → lint → test.
       - run: npm run build
+      - run: npm run lint
       - run: npm test
