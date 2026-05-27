@@ -1,0 +1,193 @@
+{
+  "verifier": "v3-migration-safety",
+  "wave": "stage-b-amend-b1",
+  "timestamp": "2026-05-27T18:30:00Z",
+  "findings": [
+    {
+      "id": "V3-B1-001",
+      "severity": "HIGH",
+      "category": "enforcement_gap",
+      "file": "src/dashboard/inspector-data.ts",
+      "line": 26,
+      "legacy_pattern": "export async function inspectEntity(kernel: ClusterKernel, entityId: string) { ... const graph = await kernel.traceObject(uri, { direction: 'backward' }); ... return { ..., provenanceGraph: mapProvenanceGraph(graph), ... } } — accepts a BARE ClusterKernel and surfaces node.label (containing literal entity names per the post-fix labelData rendering) straight into a DashboardObject. Same pattern at inspectArtifact:68, inspectIndexRecord:103, inspectCommandObject:168.",
+      "expected_pattern": "Dashboard inspector functions must require a PolicyEnforcedKernel (or document INTERNAL-ONLY) and either call renderProvenanceLabel(metadata.labelData, policyView) at the mapProvenanceGraph boundary OR document that callers must redact node.label before surfacing. The architectural rule 'AI-facing surfaces MUST use PolicyEnforcedKernel' has no compile-time enforcement.",
+      "evidence": "src/dashboard/inspector-data.ts:26 `export async function inspectEntity(kernel: ClusterKernel, entityId: string)` + line 31 `const graph = await kernel.traceObject(uri, { direction: 'backward' });` + line 201 `label: n.label ?? n.uri?.split('/').pop() ?? 'unknown'` in mapProvenanceGraph. After the KERNEL-B-006 fix, renderPublicLabel(labelData) = renderProvenanceLabel(labelData, []) which returns `${kind_value}: ${name}` UNREDACTED (src/provenance/trace-builder.ts:113-115). The kernel-report's own breadcrumb §6.C acknowledges this: 'A follow-up could wire renderProvenanceLabel(metadata.labelData, rules) into those surfaces ... I left it for the coordinator because the rendering policy choice ... is a Wave B1-Amend design decision.' — the design decision was deferred but is the load-bearing migration-safety gap.",
+      "family_probe": "Siblings: inspectArtifact (line 68), inspectIndexRecord (line 103), inspectCommandObject (line 168) — all take `kernel: ClusterKernel`. scripts/dashboard-snapshot.ts:14 imports `ClusterKernel` (not PEK) and passes it to all three inspectors. scripts/repo-knowledge-dashboard-snapshot.ts:12 does the same. test/dashboard-model.test.ts, test/phase13-proof.test.ts, test/phase14-proof.test.ts all create a bare ClusterKernel and pass it. The whole call-family bypasses policy redaction.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V3-B1-002",
+      "severity": "HIGH",
+      "category": "doc_drift",
+      "file": "src/provenance/trace-builder.ts",
+      "line": 595,
+      "legacy_pattern": "JSDoc lines 595-602 claim the rendered label 'has the sensitive identifier ALREADY structurally stripped' and 'For `entity` kind, the rendered label is `<kind_value>` (no name); For `artifact` kind, the rendered label is `<filename-redacted-stub> v<version>`. The sensitive parts ARE available in labelData but NOT in the publicly-displayed label string. This is the load-bearing structural fix for KERNEL-B-006.'",
+      "expected_pattern": "JSDoc must accurately describe the code. The actual code at line 624 calls `renderProvenanceLabel(labelData, [])` which (per lines 113-115 with empty policyView) returns `${kind_value}: ${name}` — the literal name DOES appear in the label string for `entity` kind, and `${filename} v${version}` for `artifact` kind. Either the doc is wrong (and the bifurcation is intentional with policy gating at the boundary) OR the code is wrong (and renderPublicLabel should strip identifiers regardless of policy).",
+      "evidence": "src/provenance/trace-builder.ts:578-583 doc claims 'For entity kind, the rendered label is <kind_value> (no name); For artifact kind, the rendered label is <filename-redacted-stub> v<version>'. src/provenance/trace-builder.ts:113-115 code: `case 'entity': const name = has('entity_name') ? REDACT : labelData.name; return \\`${labelData.kind_value}: ${name}\\`;` — with policyView=[], `has('entity_name')` returns false, so the literal name appears. test/wave-b1-kernel-regression.test.ts:165-211 asserts both: (a) metadata.labelData carries the name structurally; (b) renderProvenanceLabel with a DENY policy returns [REDACTED]. The test never asserts the doc's claim that the published label string omits the literal name.",
+      "family_probe": "If a caller (e.g. dashboard/components/OperationsPanel.jsx, or any external consumer reading dashboard-snapshot.json) reads node.label directly, they get the literal name today. The doctrine intended in the JSDoc is not enforced by code.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V3-B1-003",
+      "severity": "HIGH",
+      "category": "version_drift",
+      "file": "scripts/release-gate.mjs",
+      "line": 111,
+      "legacy_pattern": "const tgz = join(ROOT, 'db-cluster-0.1.0.tgz'); — hardcoded tarball name with version literal. Wave B1-Amend's Surface family-probe (SURFACE-B-013) found 2 of 3 sites (cli.ts:157 + mcp/server.ts:794) and missed this one + smoke-install.mjs:16.",
+      "expected_pattern": "Compute the tarball name from package.json: `const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8')); const tgz = join(ROOT, \\`db-cluster-${pkg.version}.tgz\\`);`. Or, more robust: read the actual file emitted by `npm pack` from stdout. The release-gate is now a HARD gate (prepublishOnly) so a stale version literal here is a publish-blocking regression on the version bump.",
+      "evidence": "scripts/release-gate.mjs:111 `const tgz = join(ROOT, 'db-cluster-0.1.0.tgz');`. scripts/smoke-install.mjs:16 `const tgzPath = resolve(process.argv[2] || 'db-cluster-0.1.0.tgz');`. Surface agent-surface-report.md §7 self-assessment: 'All `version: 0.1.0` literals — 2 found (cli.ts:157 + mcp/server.ts:794). Both fixed. No third hardcoded version site found.' — family probe missed scripts/.",
+      "family_probe": "Sibling sites probed: README.md:67 (prose), package.json (single SoT, fine), CHANGELOG.md (prose), examples/ (none), docs/ (none with literal). The scripts/ directory was OUT of the Surface agent's family-probe scope; CI/Docs agent owns scripts/ but didn't probe for this version-string drift. Aggregator should reassign.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V3-B1-004",
+      "severity": "HIGH",
+      "category": "doc_drift",
+      "file": "docs/store-contracts.md",
+      "line": 79,
+      "legacy_pattern": "docs/store-contracts.md `interface LedgerStore { ... listEvents(filter?: LedgerFilter): Promise<ProvenanceEvent[]>; ... }` — declares the pre-wave contract. STORES-B-013 added `rotate(beforeTimestamp): Promise<RotateResult>` and STORES-B-014 added `countEvents(filter?): Promise<number>` as REQUIRED methods this wave. STORES-R2-002 added `importEvent` / `importReceipt` in Wave A3. None of the five new methods appear in the documented contract.",
+      "expected_pattern": "docs/store-contracts.md must enumerate every method on the LedgerStore contract — countEvents, rotate, importEvent, importReceipt — with JSDoc-equivalent descriptions. Forward-compat: when a future migration wave (Wave B2+) adds a third LedgerStore method, the doc-drift detector must catch the doc-vs-code drift. The CI/Docs agent's own breadcrumb #2 acknowledges this: 'docs/store-contracts.md currently shows the pre-rotate LedgerStore interface ... my detector catches DRIFT of imported names, not local interface declarations that haven't been updated.'",
+      "evidence": "docs/store-contracts.md:79 `interface LedgerStore { ... listEvents(filter?: LedgerFilter): Promise<ProvenanceEvent[]>; ... }` (no rotate, no countEvents, no importEvent, no importReceipt). src/contracts/ledger-store.ts:9-88 shows the real contract with all 5 missing methods. agent-cidocs-report.md §7.2 explicitly documented the gap: 'docs/store-contracts.md currently shows the pre-rotate LedgerStore interface ... If Stores adds these methods AND the doc isn't updated, the doc-drift detector's Layer 1 will not catch it.' — the doc-drift detector's known blind-spot is local-interface declarations.",
+      "family_probe": "Sibling: docs/store-contracts.md ALSO declares CanonicalStore (line 16), ArtifactStore (line 50), IndexStore (line 109), ReceiptStore (line equivalent). All are local interface declarations the doc-drift detector deliberately does NOT type-check. Every store contract method added in any future wave will silently drift unless docs/store-contracts.md is updated. NOT closed in this wave.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V3-B1-005",
+      "severity": "HIGH",
+      "category": "contract_drift",
+      "file": "src/dashboard/ops-model.ts",
+      "line": 93,
+      "legacy_pattern": "Defensive feature-detect `if (typeof (stores.ledger as { countEvents?: unknown }).countEvents === 'function')` with a `listEvents().length` fallback. countEvents is REQUIRED on the LedgerStore contract per ledger-store.ts:22-25 — but ops-model.ts treats it as optional.",
+      "expected_pattern": "If countEvents is REQUIRED on the contract, ops-model.ts should not feature-detect — it should call `stores.ledger.countEvents(...)` directly. Either tighten the call site (and let TypeScript enforce the contract) OR drop the REQUIRED claim from the contract JSDoc. The mixed signal is a forward-compat drift hazard: a future adapter author reading ops-model.ts learns that countEvents is optional; reading ledger-store.ts they learn it's required.",
+      "evidence": "src/contracts/ledger-store.ts:22 `REQUIRED on the contract. Adapters implement it directly — there is no consumer-side fallback; a missing method is a compile error.` vs src/dashboard/ops-model.ts:89-90 `defensive: the contract requires countEvents but tests may pass alternative store stubs`. The 'tests may pass alternative store stubs' rationale is admissible BUT it directly contradicts the contract claim. agent-stores-report.md §4 names countEvents as 'NEW method (required)' — but the consumer code keeps the optional-shape.",
+      "family_probe": "Sibling: src/ops/doctor.ts:264 calls `stores.ledger.countEvents(...)` directly (no fallback) — consistent with the REQUIRED claim. src/ops/verify.ts:165 also calls directly. The drift is ONLY in src/dashboard/ops-model.ts:93. The doctor + verify paths trust the contract; the dashboard path doesn't. Two consumers, two different trust contracts.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V3-B1-006",
+      "severity": "HIGH",
+      "category": "deprecation_gap",
+      "file": "src/adapters/postgres/schema.ts",
+      "line": 20,
+      "legacy_pattern": "`getRequiredTables(): readonly string[] { return [CANONICAL_TABLE]; }` — single-table registry. The Postgres ledger does not exist; STORES-B-005 (`Postgres adapter has no migration_status / applied_migrations table; v0.1→v0.2 has no safe forward path. Single migration 001 is idempotent so latent; the next migration silently re-runs or fails.`) was NOT closed in this wave. The audit flagged HIGH, the wave shipped only a tables-registry (cosmetic), not an applied-migrations registry.",
+      "expected_pattern": "Postgres adapter needs an `applied_migrations` table (id, applied_at, checksum), and migrations.ts::migrate() should consult it before invoking up(). Without this, when Wave B2 ships migration 002 (e.g. ledger tables), src/adapters/postgres/postgres-canonical-store.ts:153 only imports migration 001 and runs its up() — migration 002's up() is never invoked. The migration is unrunnable in production. v0.1→v0.2 has no safe forward path.",
+      "evidence": "src/adapters/postgres/postgres-canonical-store.ts:153-156 `async migrate(): Promise<void> { const { up } = await import('./migrations/001_create_canonical_entities.js'); await up(this.pool); }` — single hardcoded import, no registry, no discovery, no version tracking. src/ops/migrations.ts:26-58 only checks `required.filter((t) => !tables.includes(t))` — doesn't track which migrations have been APPLIED. Grep `applied_migrations|schema_migrations|migration_status` across src/ returns ZERO matches. agent-stores-report.md §4 contract-changes table mentions only the registry function; STORES-B-005 was NOT listed as closed.",
+      "family_probe": "Sibling: no migrations/ subdirectory under src/adapters/local/ (local adapter doesn't need migrations). The only migration code is src/adapters/postgres/migrations/001_create_canonical_entities.ts — one file. A second migration file would NOT be picked up automatically; the import path is literal. This is structurally unfixed.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V3-B1-007",
+      "severity": "HIGH",
+      "category": "deprecation_gap",
+      "file": "src/sdk/cluster-sdk.ts",
+      "line": 248,
+      "legacy_pattern": "Zero @deprecated markers on any SDK export, MCP tool, or CLI subcommand. README.md and CHANGELOG.md don't mention a deprecation policy. No docs/MIGRATION.md exists.",
+      "expected_pattern": "Forward-compat for v0.2 release requires: (a) @deprecated JSDoc on any export slated for removal with @see pointing to replacement; (b) docs/MIGRATION.md naming the deprecation timeline (v0.2 deprecates X, v0.3 removes X); (c) optional runtime DeprecationWarning emissions on legacy MCP tools / SDK methods. SURFACE-B-018 ('No documented deprecation policy') was named in the audit, NOT in the wave's fix set, and the Surface agent's §7 self-assessment explicitly lists it as deferred ('Deprecation policy SURFACE-B-018 — architectural future-proofing, defer to B2').",
+      "evidence": "Grep `@deprecated` across src/ returns 1 hit: src/ops/backup.ts:52 `@deprecated Use artifactSnapshots instead. Kept for backward compat.` — a single backup-internal field, not a public API. No matches in src/sdk/, src/mcp/, src/cli.ts, src/types/, src/policy/. docs/ contains 41 files, no MIGRATION.md. README.md does not mention deprecation. CHANGELOG.md mentions 'deprecate' only in passing.",
+      "family_probe": "Sibling: the only deprecation mention in the codebase is on an internal backup field. ZERO @deprecated on public SDK/MCP/CLI surfaces. When v0.2 ships, consumers have no JSDoc or runtime signal about what's being removed.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V3-B1-008",
+      "severity": "MEDIUM",
+      "category": "contract_drift",
+      "file": "src/ops/migrations.ts",
+      "line": 75,
+      "legacy_pattern": "`const expectedColumns = ['id', 'kind', 'name', 'attributes', 'created_at', 'updated_at'];` — hardcoded column list. The actual CREATE_TABLE_SQL in schema.ts:24-37 declares 7 columns: id, kind, name, attributes, owner, created_at, updated_at. The `owner` column is missing from verifySchema's expected list.",
+      "expected_pattern": "schema.ts should export an `EXPECTED_COLUMNS_<TABLE>` constant (single source of truth alongside getRequiredTables), and verifySchema should import it. The same principle that closed STORES-B-018 for table names should close it for column names.",
+      "evidence": "src/adapters/postgres/schema.ts:24-37 CREATE TABLE includes `owner TEXT NOT NULL DEFAULT 'canonical' CHECK (owner = 'canonical')`. src/ops/migrations.ts:75 expects `['id', 'kind', 'name', 'attributes', 'created_at', 'updated_at']` — missing 'owner'. A migration that DROPs the owner column would pass verifySchema(); a future column rename in the CREATE_TABLE_SQL doesn't propagate.",
+      "family_probe": "Sibling: only one CREATE TABLE today. When a second table ships (Wave B2's ledger / index tables), verifySchema needs another hardcoded column list. STORES-B-018 closed the table-name half of this single-SoT pattern but left the column-name half open.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V3-B1-009",
+      "severity": "MEDIUM",
+      "category": "doc_drift",
+      "file": "src/types/policy.ts",
+      "line": 189,
+      "legacy_pattern": "Added `entity_name` and `artifact_filename` to RedactionTarget union (KERNEL-B-006). But src/policy/default-policies.ts ships no built-in policy that uses either target. Documentation does not announce these new policy targets.",
+      "expected_pattern": "When a new RedactionTarget literal is added (forward-compat-breaking change for policy authors), the wave should: (a) add a docs/policy-and-redaction.md entry naming the new target and what it scrubs; (b) optionally ship an example policy in default-policies.ts (commented-out is fine); (c) bump the policy-config version (none today) so externally-authored policies can detect the new contract. Today: silent extension to a public type union.",
+      "evidence": "src/types/policy.ts:189-190 `'entity_name' | 'artifact_filename'` added in this wave. agent-kernel-report.md §6.D self-acknowledges: 'The new RedactionTarget literals (entity_name, artifact_filename) are added to src/types/policy.ts:188-189 but src/policy/default-policies.ts doesn't ship a built-in policy that uses them. Operators can opt in via their own policy files; the renderer handles them when present. Optional follow-up for CI/Docs (docs/policy-rules.md).' — flagged as optional; not closed.",
+      "family_probe": "Sibling: 6 prior RedactionTargets all have docs in docs/policy-and-redaction.md. The two new ones do not. Future-wave additions risk the same drift class.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V3-B1-010",
+      "severity": "MEDIUM",
+      "category": "enforcement_gap",
+      "file": "src/policy/redactor.ts",
+      "line": 439,
+      "legacy_pattern": "redactProvenanceActors regex `/by\\s+[\\w\\-@.]+/g` is now defended as 'a tactical band-aid' (KERNEL-B-016 acknowledged in the source comment). It runs on `n.label` after the AGG-008 structural fix. With KERNEL-B-006's per-node `metadata.labelData` carrying the structured form, the band-aid regex is now belt-and-braces — but the band-aid still operates on the published `n.label` STRING and would mangle a label that happens to contain ` by ` substring for non-actor reasons.",
+      "expected_pattern": "Either: (a) remove the band-aid now that the structural fix exists and labels are rendered policy-gated at consumer boundaries, OR (b) document this as a known false-positive case in src/policy/redactor.ts:439 with a test that asserts a label containing a non-actor ' by ' substring doesn't get mangled. Today the regex is left in defensively but adds no value (since KERNEL-B-006 already structurally redacts) AND can mangle legitimate labels.",
+      "evidence": "src/policy/redactor.ts:432-440 comment: 'KERNEL-B-016: this regex is a tactical band-aid. The structural fix lives in TraceBuilder (KERNEL-B-006) which now stores labelData and renders labels at consumer boundary; this regex remains as a defense-in-depth pass over any label strings that bypass the renderer.' — the regex was kept defensively but its false-positive class is not tested.",
+      "family_probe": "Single site (one regex). No siblings.",
+      "self_assessment": "low-confidence"
+    },
+    {
+      "id": "V3-B1-011",
+      "severity": "MEDIUM",
+      "category": "doc_drift",
+      "file": "src/adapters/local/local-ledger-store.ts",
+      "line": 61,
+      "legacy_pattern": "`this.eventsPath = join(dataDir, 'events.json');` — file extension is `.json` but the format is NDJSON (newline-delimited JSON, one record per line, NOT a JSON array). The file content does not parse as a single JSON document via `cat events.json | jq` or any standard JSON tool. Backward-compat detection (`trimmed.startsWith('[')`) preserves legacy reads but the new writes are NDJSON.",
+      "expected_pattern": "Either: (a) rename to `events.ndjson` (operator-clear; consumers of the previous `.json` shape break visibly), (b) keep `.json` and document the format mismatch prominently in docs/ + the file header, (c) make new writes write to `events.ndjson` alongside the legacy `events.json` (slow migration). The current behavior silently changes file format under a misleading extension. Operators inspecting events with `jq .` or `JSON.parse(readFileSync(...))` will fail post-rotation.",
+      "evidence": "src/adapters/local/local-ledger-store.ts:61 `this.eventsPath = join(dataDir, 'events.json');` + line 317 `const eventsArchivePath = join(archiveDir, \\`events-${archiveId}.ndjson\\`);` — the archive files DO use `.ndjson` (correct), but the active file keeps `events.json` (misleading). The class-level JSDoc at line 34 mentions NDJSON but the filename does not.",
+      "family_probe": "Sibling: receipts.json also NDJSON, same misleading extension. The 2 active local-ledger files share the issue.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V3-B1-012",
+      "severity": "MEDIUM",
+      "category": "deprecation_gap",
+      "file": "src/contracts/ledger-store.ts",
+      "line": 25,
+      "legacy_pattern": "STORES-B-013 added `rotate()` as REQUIRED on the contract. The JSDoc at lines 80-86 documents the rotation strategy but provides no migration story for adapters built against the pre-wave contract. Any consumer who implemented their own LedgerStore against v0.1's published contract type signatures will get a compile-time break on upgrade. No @deprecated marker on the old contract, no MIGRATION.md entry.",
+      "expected_pattern": "When a REQUIRED method is added to a published contract, the wave needs: (a) a CHANGELOG entry naming it as BREAKING, (b) a docs/MIGRATION.md entry explaining the upgrade path, (c) optional: ship a `LegacyLedgerStore extends LedgerStore` interface that retains the v0.1 shape and is @deprecated, so adapters can opt into the slower migration. None of these exist.",
+      "evidence": "agent-stores-report.md §4 lists countEvents AND rotate as 'NEW method (required)'. CHANGELOG.md (per CIDOCS) gained a Wave B1-Amend section but does not flag the contract addition as BREAKING. No docs/MIGRATION.md exists. SemVer-wise, adding required methods to an exported interface IS a major-version-break under TypeScript structural-typing rules; the package is still v0.1.0.",
+      "family_probe": "Sibling: countEvents (same wave) has the same shape. importEvent + importReceipt (Wave A3) were added with REQUIRED status — also no MIGRATION entry. Pattern across waves: contract grows, no deprecation choreography.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V3-B1-013",
+      "severity": "MEDIUM",
+      "category": "version_drift",
+      "file": "scripts/smoke-install.mjs",
+      "line": 16,
+      "legacy_pattern": "`const tgzPath = resolve(process.argv[2] || 'db-cluster-0.1.0.tgz');` — fallback default contains the version literal. Today the release-gate always passes argv[2] so the fallback is dormant, but a future direct invocation of `node scripts/smoke-install.mjs` (e.g. by an external developer following docs) would use the stale fallback.",
+      "expected_pattern": "Either remove the fallback default entirely and require argv[2] (preferred: forces explicit invocation), OR read package.json for the version. The version-literal fallback is documentation that says 'this script expects v0.1.0' — false at version bump.",
+      "evidence": "scripts/smoke-install.mjs:16 fallback string. Paired with V3-B1-003 release-gate.mjs:111 — both sites are version-coupled.",
+      "family_probe": "Already covered by V3-B1-003 family probe.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V3-B1-014",
+      "severity": "LOW",
+      "category": "enforcement_gap",
+      "file": "src/dashboard/inspector-data.ts",
+      "line": 26,
+      "legacy_pattern": "Inspector functions type `kernel: ClusterKernel` (the concrete class) rather than `kernel: ClusterKernelInterface` (the parity contract at src/kernel/cluster-kernel-interface.ts). This means: (a) the verb-parity-contract abstraction is unused at the consumer boundary; (b) future divergence between bare ClusterKernel and PolicyEnforcedKernel could surface as compile errors that pollute consumer code rather than failing at the kernel-domain boundary.",
+      "expected_pattern": "Inspector signatures should use ClusterKernelInterface (or a yet-stricter PolicyAwareKernel subtype). If V3-B1-001's recommendation lands (require PolicyEnforcedKernel), use that. Either choice closes the typing-vs-doctrine gap.",
+      "evidence": "src/dashboard/inspector-data.ts:8 `import type { ClusterKernel } from '../kernel/cluster-kernel.js';` — concrete class import. src/kernel/cluster-kernel-interface.ts:17 `export interface ClusterKernelInterface { ... }` exists exactly for this case but isn't used here.",
+      "family_probe": "Sibling: src/sdk/cluster-sdk.ts:126 `private readonly kernel: KernelLike;` uses an interface alias (KernelLike). The SDK uses the abstraction; the dashboard doesn't. Two consumers, two typing disciplines.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V3-B1-015",
+      "severity": "LOW",
+      "category": "doc_drift",
+      "file": "docs/release-notes-v0.1.md",
+      "line": 0,
+      "legacy_pattern": "The release-notes filename `release-notes-v0.1.md` is a fixed string. A future release-notes-v0.2.md would be a separate file with no naming convention enforcing same shape. There's no version-bump release-notes template.",
+      "expected_pattern": "Either: (a) drop the version from the filename and make it the current release-notes (single living doc, history in CHANGELOG.md), or (b) document the naming convention for vX.Y.md release notes and ship a scripts/release-notes-template.md. Today the discoverability of next-version's release notes is left to convention.",
+      "evidence": "docs/release-notes-v0.1.md exists (per ls of docs/). No release-notes template, no CHANGELOG link, no contributors-guide mention.",
+      "family_probe": "Single site; nothing to probe.",
+      "self_assessment": "speculative"
+    }
+  ],
+  "lens_self_assessment": {
+    "probe_coverage": "Probed all 5 fix-agent reports' family-probe sections, the trace-builder + redactor structural changes, the new LedgerStore contract additions (rotate + countEvents), the docs sprawl / store-contracts.md / policy-and-redaction.md, the schema registry + verifySchema + migrate() postgres story, the @deprecated / MIGRATION.md / deprecation-policy state, the SURFACE-B-013 version-string family (cli + mcp + scripts), and the dashboard/inspector-data.ts call sites that consume traceObject(). Confirmed the audit's STORES-B-005 (Postgres migrations registry) was NOT closed in this wave despite HIGH severity and forward-compatibility blocker status — left for v0.2 design pass per audit §9.5.",
+    "blind_spots": "Could not exercise (a) the runtime behavior of dashboard inspector functions against an actual PolicyEnforcedKernel (no JSDOM, no live dashboard); (b) the cross-wave migration of an externally-authored LedgerStore adapter (we have only one in-tree LedgerStore, so cross-cutting break is unobservable from this rig); (c) the visual rendering of the dashboard with the new orphanEvents row + the literal-name label content (requires running scripts/dashboard-snapshot.ts which would write to dashboard/data/dogfood-snapshot.json with whatever the bare-kernel label renders to). All three would require either dynamic dispatch or runtime tests beyond the cap.",
+    "label_rendering_bifurcation_verdict": "flagged-as-finding",
+    "label_rendering_bifurcation_reasoning": "The bifurcation IS the load-bearing migration-safety gap. (a) The architectural boundary is NOT enforced: src/dashboard/inspector-data.ts:26,68,103,168 all accept `kernel: ClusterKernel` (the bare class) and call `kernel.traceObject(uri)` whose returned graph carries literal entity names in `node.label`; the dashboard then maps `node.label` straight into a DashboardObject with no policy-aware re-render. There is no compile-time block (no branded type, no sealed class) preventing a consumer from passing a bare kernel into an AI-facing surface; the only protection is the convention that ALL paths route through PolicyEnforcedKernel — which the actual code violates at scripts/dashboard-snapshot.ts:31 (`new ClusterKernel(stores, ...)` then `inspectEntity(kernel, ...)`). (b) The JSDoc at trace-builder.ts:578-583 explicitly claims the rendered label has the sensitive identifier 'ALREADY structurally stripped' — this is FALSE as code reads (renderPublicLabel = renderProvenanceLabel(labelData, []) which returns `${kind_value}: ${name}` UNREDACTED). The doctrine and the code disagree, which is the worst migration-safety state: future maintainers and future consumers each read a different contract. (c) The Kernel agent's own §6.C breadcrumb explicitly deferred this design decision to the coordinator. The coordinator should EITHER promote the boundary upstream (make ClusterKernel.traceObject internal-only via a branded return type, OR have it return graph nodes with `label: RedactedMarker | string` so consumers must narrow) OR ratify the doctrine with explicit documentation that bare ClusterKernel returns unredacted labels and AI-facing surfaces MUST use PolicyEnforcedKernel.traceObject (which today does NOT call renderProvenanceLabel either — see policy-enforced-kernel.ts:491-511, which calls redactProvenanceActors but not the labelData re-renderer). Until one of those choices lands, the bifurcation is a documented-but-unenforced doctrine that the actual code violates at the dashboard snapshot script."
+  }
+}

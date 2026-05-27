@@ -1,0 +1,191 @@
+{
+  "verifier": "v1-resilience",
+  "wave": "stage-b-amend-b1",
+  "timestamp": "2026-05-27T10:30:00Z",
+  "findings": [
+    {
+      "id": "V1-B1-001",
+      "severity": "HIGH",
+      "category": "partial_failure",
+      "file": "src/adapters/local/local-ledger-store.ts",
+      "line": 320,
+      "legacy_pattern": "rotate() writes archive files first (tmp+rename), then mutates in-memory `this.events = retainEvents` BEFORE the active-file rewrite. If persistEvents() throws AFTER `this.events = retainEvents` but BEFORE `renameSync` lands, the in-memory state has lost the archived events, the on-disk active file still has the originals, and on next constructor load loadArray re-reads the full original file and reconciliation diverges from in-memory state for the lifetime of the process.",
+      "expected_pattern": "Mutate `this.events`/`this.receipts` only AFTER both `persistEvents()` and `persistReceipts()` complete successfully. If persistEvents() succeeds and persistReceipts() throws, rotate() should restore the in-memory events to retain+archive merge OR rethrow with the active-file invariant intact. Pre-mutation snapshots restored on any rewrite failure.",
+      "evidence": "Lines 340-343:\n    this.events = retainEvents;\n    this.receipts = retainReceipts;\n    this.persistEvents();\n    this.persistReceipts();\nIf persistEvents() throws ENOSPC mid-write, the events array in memory is now `retainEvents`; the next `append()` writes the new event into the file via appendFileSync but the on-disk file still has the un-rotated original events. The in-memory view and the on-disk view permanently diverge.",
+      "family_probe": "Checked persistEvents/persistReceipts siblings — `rotate()` is the only caller. `append()` and `appendReceipt()` use O(1) appendFileSync + in-memory push so they don't have this ordering issue. Only the rotate path is affected.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V1-B1-002",
+      "severity": "HIGH",
+      "category": "input_boundary",
+      "file": "src/adapters/local/local-ledger-store.ts",
+      "line": 273,
+      "legacy_pattern": "rotate() accepts `beforeTimestamp: string` with no validation. Three boundary cases produce wrong behavior: (1) empty string `''` — `'' > nowIso` is false (no future-noop), AND `e.timestamp < ''` is also false for any real ISO timestamp, so archive arrays are empty → no-op return. Silent acceptance. (2) non-ISO garbage like `'foo'` — lexicographic compare against ISO timestamps is unpredictable; could match-everything or match-nothing without operator awareness. (3) timestamp without colons like `'2026-05-27T10-30-00.000Z'` (the operator passes the archive-id format back as a boundary by accident) — lexicographic compare also unpredictable.",
+      "expected_pattern": "Validate `beforeTimestamp` is a parseable ISO-8601 datetime (Date.parse(beforeTimestamp) !== NaN). Reject with a typed error so the operator can correct rather than silently performing a partial or no-op rotation.",
+      "evidence": "Lines 275-285 do `if (beforeTimestamp > nowIso)` purely lexicographic. There is no parse-check, no error thrown for malformed input.",
+      "family_probe": "rotate() is the only consumer of beforeTimestamp; no sibling validators. ledger-store contract `RotateResult` does not document an error path for invalid input.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V1-B1-003",
+      "severity": "HIGH",
+      "category": "resource_cleanup",
+      "file": "src/adapters/local/local-ledger-store.ts",
+      "line": 322,
+      "legacy_pattern": "Archive write path uses tmp+rename but on rename failure leaves orphan tmp files in `<dataDir>/ledger-archive/` AND there is NO orphan-tmp sweep for the archive directory. The constructor sweeps `<dataDir>/` for `events.json.<pid>-<rand>.tmp` orphans (line 65) but not `<dataDir>/ledger-archive/events-<archiveId>.ndjson.<pid>-<rand>.tmp` orphans. Repeated failed rotations accumulate orphan tmp files.",
+      "expected_pattern": "Either sweep the archive dir at constructor time (`cleanupOrphanTmpFiles(archiveDir, 'events-*.ndjson')` — but baseName globbing not currently supported), OR use a try/finally around the writeFileSync + renameSync sequence that unlinks the tmp on rename failure.",
+      "evidence": "Lines 322-337 have no try/finally; if renameSync throws (e.g., target already exists on Windows), the tmp file lingers. cleanupOrphanTmpFiles is called only for `eventsPath` and `receiptsPath` in the constructor (line 65-66), not for the archive dir.",
+      "family_probe": "Checked `persistEvents()` / `persistReceipts()` — same pattern (line 498-512); they too lack try/finally around tmp file unlinking. The constructor sweep at line 65 handles the events.json tmp orphans because they share the dataDir; archive-dir orphans live one level deeper and are never swept.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V1-B1-004",
+      "severity": "MEDIUM",
+      "category": "partial_failure",
+      "file": "src/ops/backup.ts",
+      "line": 161,
+      "legacy_pattern": "backup() iterates `readdirSync(stagingDir)` files. The contentHash is taken from the filename, not recomputed. A staging file whose content was tampered (bytes corrupted on disk, name preserved) is backed up with `contentHash = <stale name>` and `content = <tampered bytes>`. On restore (line 391), the `actualHash !== entry.contentHash` check catches this — but the OPERATOR who runs backup sees no error and the backup tarball quietly contains corrupted data. Operator might delete the source cluster trusting the backup.",
+      "expected_pattern": "Either (a) recompute sha256 at backup time and warn-or-skip if mismatch, OR (b) document that backup is best-effort byte-level and operators must verify the round-trip before destroying source. Currently neither is true.",
+      "evidence": "Lines 161-173: filename is read into `entry`, content read with readFileSync, no hash verification at backup-time. assertContentMatch / restore-time hash check happens only on restore() consumption.",
+      "family_probe": "Restore() path at line 390-396 DOES verify the hash, but at backup time only on restore is the staging integrity guaranteed. Asymmetric with the artifact restore path which also verifies content hash on restore (line 282-288). No backup-time hash check for either staging or artifact content.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V1-B1-005",
+      "severity": "MEDIUM",
+      "category": "race",
+      "file": "src/ops/backup.ts",
+      "line": 156,
+      "legacy_pattern": "backup() walks `<dataDir>/pending-content/` while the kernel may concurrently propose mutations (which write hash-named staging files) or commit/reject (which unlink). The readdirSync + per-file readFileSync sequence has no snapshot semantics: a file listed by readdir may be unlinked before readFileSync, producing ENOENT. The catch arm at line 169-172 swallows it best-effort, but a backup that loses some staging files silently still reports `staging: [...]` to the operator as the COMPLETE backup. There's no way for the operator to know N staging files were unlinked mid-backup.",
+      "expected_pattern": "Track read failures separately and report them in the backup payload OR in a returned warnings array. The current 'silently skip on read failure' makes the backup result indistinguishable from one where no staging files existed in the racy slot.",
+      "evidence": "Lines 161-173: try/catch around readFileSync swallows the failure with no counter, no warning. If `entries.length === 0` becomes 0 due to all-races-lost, staging becomes undefined (line 174) and the backup looks as if the cluster had no pending-content.",
+      "family_probe": "Checked the artifact-content backup path (lines 132-141) — `stores.artifact.getContent(artifact.id)` returns null if missing and snapshot.contentBase64 stays unset. That path also silently degrades to a metadata-only artifact entry. Same pattern.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V1-B1-006",
+      "severity": "MEDIUM",
+      "category": "input_boundary",
+      "file": "src/adapters/local/local-ledger-store.ts",
+      "line": 423,
+      "legacy_pattern": "NDJSON loader has a per-line shape gate that requires `typeof value.id === 'string'` (line 429). But it does NOT require `id.length > 0`. A line `{\"id\":\"\"}` passes the shape gate, is appended to `parsed`, becomes a valid lineage record. Subsequent `getEvent('')` returns that empty-id record. `trace()` walking parentEventId chains with `''` as a parent could surface empty-string-id'd ghost records into traces.",
+      "expected_pattern": "Tighten the shape gate to `typeof value.id === 'string' && value.id.length > 0` (mirroring the validatePrincipal pattern in config-validator.ts:65). A tampered ledger file containing `{\"id\":\"\"}` is corrupt by definition.",
+      "evidence": "Line 429: `if (typeof (value as Record<string, unknown>).id !== 'string') { throw new Error(...) }`. No length check.",
+      "family_probe": "Same shape gate used for both events and receipts (loadArray<T> is generic over both). Both inherit the empty-id pass-through.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V1-B1-007",
+      "severity": "MEDIUM",
+      "category": "cascade",
+      "file": "src/dashboard/ops-model.ts",
+      "line": 99,
+      "legacy_pattern": "buildOpsModel catches countEvents()/listEvents() failures and sets `orphanEvents = 0` (line 103). The dashboard then reports `healthy` for the orphan signal — but the actual cluster state is UNKNOWN, not zero. An adapter throwing on the filter call (e.g., on Postgres ledger with a query error) masks the orphan-count failure as `healthy`. The doctor.ts orphan-check arm has the same swallow at line 296-305 but at least it reports `status: 'unreachable', severity: 'error'`; ops-model emits no signal that the count is suspect.",
+      "expected_pattern": "Either propagate the error so the dashboard renders an explicit 'unknown/unreachable' state for orphan count, OR set a `_unknown: true` flag on `provenanceHealth.orphanEvents` and have OperationsPanel render '?' instead of '0'. The current `0` silently masks unreachable.",
+      "evidence": "Lines 99-104: catch block sets `orphanEvents = 0` with comment 'reported as zero — the dashboard still renders, and operators see the structural row.' But operators have NO way to distinguish 'cluster has zero orphans' from 'count call threw and we swallowed it.'",
+      "family_probe": "Checked doctor.ts no_orphaned_mutations check (line 296-305) — it reports `status: 'unreachable'` on failure, which propagates to the dashboard via storeChecks. So the operator MAY see the unreachable signal through the doctor() arm even when ops-model.ts hides it. But the duplication of paths means the dashboard's `provenanceHealth.orphanEvents` field itself is unreliable.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V1-B1-008",
+      "severity": "MEDIUM",
+      "category": "race",
+      "file": "src/ops/doctor.ts",
+      "line": 326,
+      "legacy_pattern": "no_orphan_staging walks `pending-content/` concurrent to in-flight proposes. The age gate uses `Date.now()` at TWO different points (lines 329 + 375) which means a file evaluated at boundary time may report different ages on the two reads. More importantly, the referencedHashes set is built BEFORE the directory scan (line 337-343), then files are listed (line 359). A propose call between these two could WRITE a new staging file AND add a new command to the queue — but doctor only saw the OLD queue snapshot, so the new file (younger than 1 hour, passes the cutoff check) might be incorrectly skipped as 'young', or worse, an OLD file unlinked by a concurrent commit between the build of referencedHashes and the readdirSync could be missed entirely.",
+      "expected_pattern": "Capture commandQueue.list() AFTER readdirSync, OR document that the check is best-effort and may report false orphans during heavy mutation. Currently neither — operators receive a definitive count that's racy under load.",
+      "evidence": "Line 337: `for (const cmd of options.commandQueue.list())` (snapshot A); line 359: `for (const entry of entries)` (snapshot B). A propose between A and B writes a file referenced by a command not in A.",
+      "family_probe": "Checked the backup.ts staging walk (lines 156-173) — same race: readdir then per-file readFileSync, no snapshot semantics. The race is broader than doctor.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V1-B1-009",
+      "severity": "MEDIUM",
+      "category": "resource_cleanup",
+      "file": "src/adapters/local/local-ledger-store.ts",
+      "line": 521,
+      "legacy_pattern": "fsyncBestEffort opens the file with `openSync(path, 'r')` and fsync's it. On Windows fsync of a read-only handle does NOT flush dirty pages associated with prior write-handles — fsync on Windows is per-file-handle, not per-inode. The intended durability is broken on Windows. The 'best-effort' framing hides this: under power-loss stress on Windows, the appendFileSync line may not be durable even though the call returned and the code believes fsync ran.",
+      "expected_pattern": "Either open with O_RDWR (writeSync flag) on Windows-aware platforms, OR use openSync mode 'r+' which gets a writable handle. Or: drop fsync and document append durability as 'OS-buffer-best-effort' (matches the actual semantics on Windows). The current code claims durability it doesn't provide.",
+      "evidence": "Lines 522-535: openSync(path, 'r') — read-only. fsyncSync(fd) on a read-only handle. Comment line 519 calls it 'durability defense-in-depth' but the actual defense is no-op on Windows.",
+      "family_probe": "fsyncBestEffort is called by both appendOneEvent and appendOneReceipt. Both share the same Windows-mode-broken pattern.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V1-B1-010",
+      "severity": "MEDIUM",
+      "category": "cascade",
+      "file": "src/kernel/cluster-kernel.ts",
+      "line": 280,
+      "legacy_pattern": "recordOrphanMutation catch block writes the orphanErr.message to stderr WITHOUT going through redactErrorMessage. The persisted ledger detail.error IS scrubbed (line 262), but the stderr emission at lines 277-281 leaks the unscrubbed filesystem path (and any kernel internals in the orphan-write error message) to the operator console. In Docker / k8s deployments stderr is routinely shipped to logging infra which may be in a less-privileged trust zone than the ledger. Asymmetric scrub.",
+      "expected_pattern": "Apply redactErrorMessage to the stderr message at line 280 too, OR document the threat model that operator-stderr is a more-privileged surface than persisted ledger. Currently the scrubbing intent is half-applied.",
+      "evidence": "Line 275: `const message = orphanErr instanceof Error ? orphanErr.message : String(orphanErr);` — raw. Line 277-281: writes that raw message directly. Compare with line 262 which calls redactErrorMessage(cause) on the persisted side.",
+      "family_probe": "Searched src/kernel/cluster-kernel.ts for other `console.error` sites carrying error messages — recordOrphanMutation is the only one in the cluster-kernel; the CLI's HOF at cliCommand also calls redactErrorForCli on the stderr path so the boundary is symmetric there. The asymmetry is only on this kernel-side direct console.error.",
+      "self_assessment": "medium-confidence"
+    },
+    {
+      "id": "V1-B1-011",
+      "severity": "MEDIUM",
+      "category": "partial_failure",
+      "file": "src/provenance/trace-builder.ts",
+      "line": 624,
+      "legacy_pattern": "renderPublicLabel delegates to renderProvenanceLabel(labelData, []) — passing empty policy view. The dispatch design ('literal labels at bare kernel; PolicyEnforcedKernel boundary remains the redaction gate') is implemented half-way: bare kernel emits literal label strings AND PolicyEnforcedKernel.traceObject (line 491-511) calls only `redactProvenanceActors` (not `renderProvenanceLabel`). So even when a policy includes an `entity_name` or `artifact_filename` redaction rule, PolicyEnforcedKernel does NOT re-render the labels — the `node.label` carries the literal entity.name / artifact.filename verbatim through the policy boundary. The structural fix the dispatch asked for is only complete on the metadata.labelData side, not on the rendered label side.",
+      "expected_pattern": "PolicyEnforcedKernel.traceObject() should, after the redactProvenanceActors pass, walk nodes and re-render `label` via `renderProvenanceLabel(node.metadata.labelData, this.collectRedactionRules(decision))` for any node whose labelData is present. Currently the structural redaction work the kernel agent shipped is unused at the policy boundary.",
+      "evidence": "PolicyEnforcedKernel.traceObject lines 491-511: collectRedactionRules + redactProvenanceActors only; no call to renderProvenanceLabel. Grep across src/ shows renderProvenanceLabel has ZERO callers outside trace-builder.ts itself.",
+      "family_probe": "Same gap at PolicyEnforcedKernel.traceBundle (line 810). Both surfaces share the missed integration. The kernel agent's report (§6.C) flagged this as a coordinator decision deferred — but the deferral leaves the entire entity_name / artifact_filename redaction-target wiring inert post-wave.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V1-B1-012",
+      "severity": "LOW",
+      "category": "input_boundary",
+      "file": "src/policy/redactor.ts",
+      "line": 607,
+      "legacy_pattern": "PATH_REGEX `/(?:[A-Za-z]:[\\\\/]|\\\\\\\\[^\\s\"'`)]+[\\\\/]|\\/)[^\\s\"'`)]+/g` mishandles a few edge cases: (1) Forward-slash leading paths with a query-string `/foo?x=1` strip the entire `/foo?x=1` (probably intended). (2) A bare `/` is NOT scrubbed (requires at least one non-whitespace following char). (3) A relative path like `./foo/bar` survives unscrubbed even though it leaks repo internals. (4) An NPM cache path like `C:/Users/u/AppData/Roaming/npm-cache/_logs/foo.log` is matched as a single `<path>` (good). The regex doesn't handle home-relative `~/foo` (unscrubbed — fine because `~` isn't an absolute path).",
+      "expected_pattern": "Add a relative-path arm (`(?:\\.\\.?[\\\\/])`) so `./foo/bar` and `../bar` also scrub. Or document explicitly that relative paths are not scrubbed (because they're operator-supplied and not a leak vector).",
+      "evidence": "Line 607's regex starts with `(?:[A-Za-z]:[\\\\/]|\\\\\\\\[^\\s\"'`)]+[\\\\/]|\\/)` — three arms: Windows drive, UNC, POSIX-absolute. No relative-path arm.",
+      "family_probe": "Single PATH_REGEX in src/policy/redactor.ts:607. The MCP-side `src/mcp/sanitize.ts::PATH_REGEX` is documented as 'must stay aligned' — checked, it's also missing the relative-path arm. Family is consistent (both miss the same case).",
+      "self_assessment": "medium-confidence"
+    },
+    {
+      "id": "V1-B1-013",
+      "severity": "LOW",
+      "category": "input_boundary",
+      "file": "dashboard/index.html",
+      "line": 210,
+      "legacy_pattern": "Dashboard readiness polling: 50 retries * 50ms = 2.5 second cap. If the ESM module `./lib/apply-redaction.js` fails to fetch or parse, the user sees only the static fallback after 2.5s. There's no signal that the module failure occurred — the user can't distinguish 'slow network' from 'module 404' from 'syntax error in apply-redaction.js'. On a slow connection > 2.5s, the dashboard hard-fails into the same fallback.",
+      "expected_pattern": "Either bump retry budget AND attach a `window.addEventListener('error')` to surface the actual ESM error to the operator OR poll for a third 'ESM module loaded' marker that the `<script type=\"module\">` can set after `import` completes. Currently the operator has no diagnostic.",
+      "evidence": "Lines 210-220: hard fallback after 50 tries with no error attribution.",
+      "family_probe": "No other readiness-poll consumer in dashboard/. Single site.",
+      "self_assessment": "medium-confidence"
+    },
+    {
+      "id": "V1-B1-014",
+      "severity": "LOW",
+      "category": "resource_cleanup",
+      "file": "src/cli.ts",
+      "line": 313,
+      "legacy_pattern": "cliCommand HOF wraps subcommand action bodies with try/catch + process.exit. The exit path calls `process.exit(typedErrorToExitCode(...))` directly inside the catch arm. process.exit fires synchronously and does NOT await pending Promise microtasks — any kernel-side in-flight async fsync/cleanup running on the same event loop tick is dropped. The PolicyEnforcedKernel-wrapped kernel that emitted the throw may have a pending `recordOrphanMutation` ledger append that will silently NOT complete because process.exit terminated the runtime.",
+      "expected_pattern": "Either set `process.exitCode = ...` (deferred exit lets pending microtasks complete) or document the trade-off. Current behavior may cause orphan-mutation ledger writes to NOT land on the failure path that should record them most reliably.",
+      "evidence": "Line 322-323: `process.stderr.write(...); process.exit(typedErrorToExitCode(err.code));`. Multiple sites all use process.exit not exitCode.",
+      "family_probe": "Same pattern at lines 327-328 (PolicyConfigError), 339-340 (default arm), 388, 553. The full cliCommand HOF has 38 wrapped sites — all share the synchronous-exit semantics. The dispatch reframed this as a wave-A4 design; this is on the family but not new in B1.",
+      "self_assessment": "medium-confidence"
+    },
+    {
+      "id": "V1-B1-015",
+      "severity": "LOW",
+      "category": "partial_failure",
+      "file": "src/ops/backup.ts",
+      "line": 376,
+      "legacy_pattern": "restore() staging arm: `mkdirSync(stagingDir, { recursive: true })` wrapped in try/catch that 'defers error surfacing to the per-entry loop.' But the per-entry loop's `writeFileSync(targetPath, buf)` (line 402) will then throw ENOENT for every staging entry because the parent dir doesn't exist. That fills `stagingResult.errors` with N copies of essentially the same error. The restore appears 'partial' to the operator (some entries restored, some errored), but actually ZERO entries restored — the per-entry granular reporting obscures the all-or-nothing failure.",
+      "expected_pattern": "Either propagate the mkdirSync error immediately (push it to `staging.errors` as a top-level 'staging dir unwritable' error) OR check existsSync(stagingDir) before the loop and short-circuit with a single clear error. Currently per-entry errors mask the root cause.",
+      "evidence": "Lines 376-379: try/catch wrapper around mkdirSync swallows the error with a comment about deferring. Lines 401-403: writeFileSync inside the per-entry try, so each entry produces its own error message about the same underlying mkdir failure.",
+      "family_probe": "Only this site in backup.ts. The doctor.ts no_orphan_staging check uses `existsSync(stagingDir)` (line 352) to gate — different pattern, no equivalent bug.",
+      "self_assessment": "high-confidence"
+    }
+  ],
+  "lens_self_assessment": {
+    "probe_coverage": "Probed all 5 fix-agent reports + the diff for src/adapters/local/local-ledger-store.ts (full read of new STORES-B-002 NDJSON + STORES-B-013 rotate paths), src/ops/backup.ts (full read of V1-A4-004 staging path), src/ops/doctor.ts (full read of V1-A4-005 no_orphan_staging + STORES-B-014 countEvents), src/kernel/cluster-kernel.ts:240-289 (KERNEL-B-005 scrub site), src/kernel/commands.ts:200-295 (V2-004 follow-up), src/provenance/trace-builder.ts (full read of KERNEL-B-006 + renderProvenanceLabel callers), src/kernel/policy-enforced-kernel.ts:480-540 (where renderProvenanceLabel should be wired but isn't), src/dashboard/ops-model.ts (SURFACE-B-011 buildOpsModel), src/sdk/cluster-sdk.ts:180-220 (SURFACE-B-007), src/cli.ts:1-345 (§2c HOF + SURFACE-B-006/009/013), src/mcp/config-validator.ts (full read), src/policy/redactor.ts:595-645 (PATH_REGEX + redactErrorMessage), src/util/tmp-paths.ts (full read of new util), src/adapters/local/tmp-cleanup.ts (delegation shim), dashboard/index.html:195-220 (SURFACE-B-015), dashboard/ClusterTruthInspector.jsx:605-625 (SURFACE-B-005 guard). Family-probed the canonical/artifact/index local stores for NDJSON pattern (correctly scoped to ledger only). Did NOT probe Postgres adapter (not in this wave's scope per dispatch).",
+    "blind_spots": "(1) Cannot exercise actual concurrency: the rotate-during-append race (V1-B1-001) is reasoned from code, not stress-tested. (2) Cannot verify Windows fsync-on-read-handle behavior (V1-B1-009) without a Windows VM + power-loss test rig. (3) Cannot verify the dashboard ESM race remediation (V1-B1-013) absent a JSDOM run with slow-network simulation. (4) The lens does not cover Postgres-side resilience — STORES-B-006 pool hardening was deferred and is not in this wave. (5) Memory pressure on countEvents() at very large ledgers (>1M events) is not exercised — the local adapter materializes nothing but Postgres adapter behavior depends on plan choice. (6) Did NOT independently run the new wave-b1-* regression tests; trust the agent reports' 3x-stability claim. (7) The cliCommand HOF's process.exit-vs-exitCode trade-off (V1-B1-014) is a known industry pattern but the precise consequences for this codebase's pending-ledger-write paths were not exhaustively traced through the full event loop."
+  }
+}

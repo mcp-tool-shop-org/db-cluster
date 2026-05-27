@@ -1,0 +1,191 @@
+{
+  "verifier": "v2-operational-visibility",
+  "wave": "stage-b-amend-b1",
+  "timestamp": "2026-05-27T09:15:00Z",
+  "findings": [
+    {
+      "id": "V2-B1-001",
+      "severity": "HIGH",
+      "category": "signal_view_gap",
+      "file": "dashboard/components/OperationsPanel.jsx",
+      "line": 23,
+      "legacy_pattern": "OperationsPanel.jsx reads opsData.doctor?.overall, opsData.doctor?.checks, opsData.provenanceHealth?.receipts, opsData.provenanceHealth?.events — none of which exist on the OpsModel shape that buildOpsModel produces. OpsModel exports `overall` (top-level), `stores[]`, `provenanceHealth.totalReceipts`, `provenanceHealth.totalEvents`. The SURFACE-B-011 fix added the orphan row using the CORRECT path (provenanceHealth.orphanEvents) but did not fix the surrounding shape mismatch. Worse: dashboard/index.html mounts ClusterTruthInspector (not OperationsPanel) and there is NO consumer that imports OperationsPanel — `grep -rn '<OperationsPanel' dashboard/ docs/ src/ examples/` returns empty.",
+      "expected_pattern": "Either (a) OperationsPanel is mounted somewhere in the demo and its remaining rows use the OpsModel shape (`opsData.overall`, `opsData.provenanceHealth.totalReceipts`, `opsData.provenanceHealth.totalEvents`); or (b) the panel is intentionally unmounted dead code and the orphan-row fix lands in whatever surface IS mounted. As-is, the wired data plane (buildOpsModel.orphanEvents) reaches a view that no operator ever sees.",
+      "evidence": "dashboard/components/OperationsPanel.jsx:23 `overallColor[opsData.doctor?.overall || 'unknown']` ; :37 `(opsData.doctor?.checks || []).map(...)` ; :76 `{opsData.provenanceHealth?.receipts ?? '—'}` ; :80 `{opsData.provenanceHealth?.events ?? '—'}` vs src/dashboard/ops-model.ts OpsModel interface exporting `overall`, `provenanceHealth.totalReceipts`, `provenanceHealth.totalEvents`. dashboard/index.html:194 mounts ClusterTruthInspector, never OperationsPanel.",
+      "family_probe": "Probed sibling rendering paths: ClusterTruthInspector.jsx does not render OpsModel; scripts/repo-knowledge-dashboard-snapshot.ts uses an opsData shape; tests at test/dashboard-ops.test.ts assert the actual OpsModel shape (`ops.overall`, `ops.provenanceHealth.totalReceipts`). The panel's source-shape passes the regression test (just checks the literal string `provenanceHealth?.orphanEvents` appears) but the panel never runs end-to-end with real data.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V2-B1-002",
+      "severity": "HIGH",
+      "category": "signal_view_gap",
+      "file": "src/cli.ts",
+      "line": 1181,
+      "legacy_pattern": "`db-cluster doctor` CLI invokes `doctor(stores)` with no options. doctor.ts's new `no_orphan_staging` check (V1-A4-005) is gated by `if (options?.dataDir)` (src/ops/doctor.ts:326). Without options.dataDir the check is SILENTLY SKIPPED — no `else` branch pushes a 'staging-check-skipped' health check. Same for src/dashboard/ops-model.ts:83 `await doctor(stores)`. Both operator-facing surfaces NEVER fire the orphan-staging check the wave just shipped.",
+      "expected_pattern": "CLI doctor invocation passes `{ dataDir: CLUSTER_DIR, commandQueue: kernel.commandQueueAccessor }` (or equivalent). When dataDir is genuinely absent the doctor() should push a 'staging_check_skipped' health check with severity:'info' and message naming the missing context, NOT silently omit the check. Operators reading doctor output should see all checks the implementation supports, including ones that couldn't run.",
+      "evidence": "src/cli.ts:1180-1181 `const { doctor } = await import('./ops/doctor.js'); const health = await doctor(stores);` (no second arg). src/ops/doctor.ts:326 `if (options?.dataDir) { ... }` — no else branch; staging check is conditional with no skip-signal. src/dashboard/ops-model.ts:83 `const health = await doctor(stores);` (no options).",
+      "family_probe": "Probed all `doctor(stores` call sites in src/ — 2 of 2 invocations pass no options. The new commandQueue option is also unused. Doctor's new dataDir+commandQueue options are dead code from the CLI/dashboard perspective. test/dashboard-ops.test.ts test-runs buildOpsModel(stores, kernel) — kernel could have been threaded as commandQueue but isn't.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V2-B1-003",
+      "severity": "HIGH",
+      "category": "signal_view_gap",
+      "file": "src/contracts/ledger-store.ts",
+      "line": 87,
+      "legacy_pattern": "`LedgerStore.rotate()` is a brand-new REQUIRED contract method shipped this wave with full LocalLedgerStore implementation, ledger-archive directory creation, archived/retained counts, RotateResult. There is NO CLI command, NO MCP tool, and NO SDK method that exposes it. `grep -n 'rotate' src/cli.ts src/mcp/server.ts src/sdk/cluster-sdk.ts` returns zero matches. Operators have no path to invoke ledger rotation. `LedgerStore.countEvents` is consumed by doctor/verify/ops-model but `rotate()` is operator-invisible.",
+      "expected_pattern": "Either ship `db-cluster ledger rotate --before <iso>` CLI subcommand and/or `cluster_rotate_ledger` MCP tool (approval-sensitive), OR explicitly document the contract method as INTERNAL-API-ONLY and remove it from `LedgerStore` REQUIRED surface. As-is the contract obligates every adapter (including future Postgres) to implement a method nothing calls — and operators with unbounded-ledger growth have no recovery path despite the audit's STORES-B-013 fix.",
+      "evidence": "src/contracts/ledger-store.ts:87 `rotate(beforeTimestamp: string): Promise<RotateResult>;` REQUIRED; src/adapters/local/local-ledger-store.ts:275-350 full implementation incl. archive file path; CHANGELOG.md:30 single sentence mention. No CLI/MCP/SDK exposure.",
+      "family_probe": "Probed all rotate/RotateResult consumers — only the implementation, the contract definition, and tests. countEvents has 4 consumers (doctor, verify, ops-model fallback path, contract); rotate has zero non-test consumers.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V2-B1-004",
+      "severity": "HIGH",
+      "category": "audit_trail",
+      "file": "src/adapters/local/local-ledger-store.ts",
+      "line": 463,
+      "legacy_pattern": "NDJSON tail-corruption recovery at loadArray() lines 442-466 SILENTLY discards the unparseable suffix and returns the cleanly-parsed prefix. No log, no warning, no health-check signal — `firstBadIdx` is detected but the silent-recover branch (line 463-466) just returns. After the next mutation, the bad suffix is overwritten by a fresh NDJSON write — those discarded events are gone forever with no operator record. Exactly the pattern Wave A4 made loud for CommandQueue.load() (CommandQueuePersistenceLostError) but the parallel ledger-side discovery is silent.",
+      "expected_pattern": "When loadArray detects tail corruption (firstBadIdx !== -1 and lastGoodIdx <= firstBadIdx), emit a warning to stderr AND record an event in the ledger ('ledger_tail_corruption_recovered' with detail listing discarded line count) so doctor()/verify() can surface it later. Mirrors the CommandQueuePersistenceLostError pattern the audit established as doctrine in Wave A4.",
+      "evidence": "src/adapters/local/local-ledger-store.ts:463-466 `// Tail-only corruption with prior committed lines: discard the bad suffix and return what we parsed cleanly. This is the STORES-B-002 recovery path.` followed by `return parsed.map((p) => p.value);` — no signal emission, no console.warn, no audit-event emission. Constructor at line 67 calls this loader at cold-start with no captured signal.",
+      "family_probe": "Probed CommandQueue load (src/kernel/command-queue.ts) — that one DOES emit CommandQueuePersistenceLostError on lost-persistence (Wave A4). The two file-format loaders are sibling-pattern; ledger silently recovers while CommandQueue is loud. Cross-domain inconsistency in operator-facing signal.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V2-B1-005",
+      "severity": "MEDIUM",
+      "category": "signal_view_gap",
+      "file": "src/policy/store-output-sanitizers.ts",
+      "line": 130,
+      "legacy_pattern": "The KERNEL-B-006 / AGG-008 refactor adds structured `LabelData` + `renderProvenanceLabel(labelData, policyView)` + new RedactionTarget literals `entity_name` and `artifact_filename`. But the MCP boundary sanitizer `sanitizeProvenanceNodeForOutput` (the consumer chosen by the wave) still emits the OPAQUE placeholder `[${type} in ${ownerStore}]` and DROPS metadata.labelData (sets `metadata: undefined`). The new structured labelData path that's the entire point of KERNEL-B-006 is invoked by NO operator-facing surface. The policy-aware rendering machinery ships and is unused.",
+      "expected_pattern": "MCP boundary's sanitizeProvenanceNodeForOutput reads `node.metadata?.labelData` and calls `renderProvenanceLabel(labelData, activePolicyView)` to produce a policy-gated label string. PolicyEnforcedKernel.traceObject / traceBundle wire `renderProvenanceLabel` per the kernel agent's own breadcrumb (§6.C). As-is, an entity_name redaction rule shipped by an operator has no effect on any operator-facing trace surface — the rule is dead config.",
+      "evidence": "src/policy/store-output-sanitizers.ts:130 `label: \\`[${node.type} in ${node.ownerStore ?? 'unknown'}]\\`` (opaque); line 131 `metadata: undefined`. No call to `renderProvenanceLabel`. src/types/policy.ts:188-189 the two new targets exist; src/policy/default-policies.ts ships none using them. PolicyEnforcedKernel.traceObject still calls `redactProvenanceActors` (regex on `by <actor>`), not `renderProvenanceLabel`.",
+      "family_probe": "Probed `renderProvenanceLabel` consumers — only test/wave-b1-kernel-regression.test.ts uses it. src/kernel/cluster-kernel.ts::explainTrace, ::why use bare `node.label` (the unredacted form from `renderPublicLabel(labelData, [])`). PolicyEnforcedKernel surfaces redact actor regex but not entity_name/artifact_filename. The MCP boundary uses the opaque-stub path.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V2-B1-006",
+      "severity": "MEDIUM",
+      "category": "error_diagnosability",
+      "file": "src/mcp/sanitize.ts",
+      "line": 137,
+      "legacy_pattern": "`BUILTIN_ERROR_CODES` map in MCP redactError does NOT include `PolicyConfigError`. PolicyConfigError extends plain `Error` (not ClusterError), carries `code = 'INVALID_POLICY_CONFIG'` on the instance, but MCP `redactError` only special-cases `err instanceof ClusterError` (uses err.code) OR a constructor-name lookup. Since PolicyConfigError is missing from BUILTIN_ERROR_CODES, an MCP-side throw collapses to `INTERNAL_ERROR` and the instance code is silently ignored. Today MCP doesn't call validatePolicyConfig (only CLI does), but the shared validator was placed in src/mcp/ specifically so MCP COULD adopt it — when it does, the error code surface will silently regress.",
+      "expected_pattern": "Either (a) add 'PolicyConfigError': 'INVALID_POLICY_CONFIG' to BUILTIN_ERROR_CODES; or (b) extend redactError to check `(err as any).code` before falling back to constructor lookup so any future Error subclass carrying a `code` field surfaces its stable identifier. Mirrors the symmetric breadcrumb in src/policy/redactor.ts:redactErrorMessage which lives in policy/ exactly because cross-domain code needs the same scrubber.",
+      "evidence": "src/mcp/sanitize.ts:137-157 BUILTIN_ERROR_CODES lists 13 names — PolicyConfigError is not among them. src/mcp/config-validator.ts:39-46 PolicyConfigError carries `public readonly code = 'INVALID_POLICY_CONFIG'` and `name = 'PolicyConfigError'`. src/mcp/sanitize.ts:204 `BUILTIN_ERROR_CODES[err.constructor.name] ?? 'INTERNAL_ERROR'` — lookup-only fallback.",
+      "family_probe": "Probed all `extends Error` + `code` patterns in src/ — found PolicyConfigError (mcp/config-validator.ts); CorruptStoreError, InvalidContentHashError, ImportConflictError, LedgerCycleDetectedError, ImportSnapshotNotSupportedError, ResolveError, ClusterUriError ALL carry codes and ARE in BUILTIN_ERROR_CODES. PolicyConfigError is the lone omission in the family.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V2-B1-007",
+      "severity": "MEDIUM",
+      "category": "context_loss",
+      "file": "src/policy/redactor.ts",
+      "line": 607,
+      "legacy_pattern": "Two PATH_REGEX constants — src/policy/redactor.ts:607 and src/mcp/sanitize.ts:126 — maintained 'identical by convention.' Both kernel report and surface report flagged this as a follow-up wave breadcrumb; neither agent shipped the consolidation this wave. From an operator-visibility perspective, when MCP returns a scrubbed error message, CLI returns one, the ledger persists one — all three surfaces SHOULD produce byte-identical messages but are now maintained as two regexes. Drift in either yields surfaces that disagree about what an absolute path looks like.",
+      "expected_pattern": "src/mcp/sanitize.ts::scrubMessage imports `redactErrorMessage` from `src/policy/redactor.ts` (the chosen single home). The MCP `scrubMessage` helper becomes a thin wrapper. Drift becomes impossible.",
+      "evidence": "src/policy/redactor.ts:607 `const PATH_REGEX = /(?:[A-Za-z]:[\\\\/]|\\\\\\\\[^\\s\"'`)]+[\\\\/]|\\/)[^\\s\"'`)]+/g;` ; src/mcp/sanitize.ts:126 `const PATH_REGEX = /(?:[A-Za-z]:[\\\\/]|\\\\\\\\[^\\s\"'`)]+[\\\\/]|\\/)[^\\s\"'`)]+/g;` — byte-identical, two locations. Agent reports (.stage-b-amend/agent-kernel-report.md §6.B, agent-surface-report.md §2c note) both flag for follow-up. Neither resolved this wave.",
+      "family_probe": "Probed cross-domain regex usage. Only the two PATH_REGEX instances; no third site. Risk is binary: either present or future-wave consolidation.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V2-B1-008",
+      "severity": "MEDIUM",
+      "category": "context_loss",
+      "file": "src/ops/verify.ts",
+      "line": 103,
+      "legacy_pattern": "`verify()`'s `provenance_references_valid` check at line 103 iterates `await stores.ledger.listEvents({ limit })` (default 100). Of the canonical/artifact-subject events present, only the most recent `limit` are checked (LocalLedgerStore.listEvents uses `slice(-limit)`). If 5000 ledger events exist, only the most recent 100 get checked for canonical/artifact existence. The orphan-mutation check at lines 164-205 was upgraded to use `countEvents` for the true headline number, but `provenance_references_valid` and `receipts_provenance_valid` (line 209) silently cap at the sample size with NO 'sampled N of M' messaging.",
+      "expected_pattern": "Either (a) call countEvents to surface the true ledger size in the health message ('Sampled 100 of 5247 ledger events'), so operators reading verify output know the bound; or (b) document the sampling semantics in the contract docstring + verify.ts comment. STORES-B-014's lesson — silent caps mislead operators — applies to verify's other checks, not just the orphan count.",
+      "evidence": "src/ops/verify.ts:103 `const events = await stores.ledger.listEvents({ limit });` ; src/adapters/local/local-ledger-store.ts:104-105 `if (filter?.limit) { results = results.slice(-filter.limit); }`. Message at verify.ts:127 'X provenance event(s) reference objects not found...' carries no 'sampled' suffix. verify.ts:209 receipt check uses same `listReceipts({ limit })` pattern.",
+      "family_probe": "Probed the STORES-B-014 cap-disclosure pattern. Orphan check (verify.ts:175) now reports '(showing first N)' when count > sample. provenance_references_valid (verify.ts:124) and receipts_provenance_valid (verify.ts:222) do NOT. Sibling checks did not receive the same disclosure treatment.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V2-B1-009",
+      "severity": "MEDIUM",
+      "category": "audit_trail",
+      "file": "src/adapters/local/local-ledger-store.ts",
+      "line": 364,
+      "legacy_pattern": "Ledger persistence-format migrated from JSON-array to NDJSON. Pre-existing files starting with `[` are auto-detected and read transparently; the next mutation rewrites the file in NDJSON form. The on-disk format change is documented ONLY in source code + CHANGELOG.md:30 mention. No docs/ documentation describes the events.json format, the new ledger-archive/ directory created by rotate(), or the legacy auto-conversion behavior. Operators backing up `.db-cluster/ledger/events.json` and restoring to a pre-Wave-B1 install (or vice versa) have no documented expectation.",
+      "expected_pattern": "Add a `docs/ledger-format.md` (or section in docs/operations.md) describing: (a) NDJSON line format with required `id` string per record; (b) tail-corruption recovery semantics + how to detect it (per V2-B1-004 finding); (c) the legacy auto-detect on load; (d) the `ledger-archive/` directory created by rotate() incl. file naming `events-<archiveId>.ndjson`; (e) what archived events are reachable to (only manual restore, not trace()).",
+      "evidence": "src/adapters/local/local-ledger-store.ts:30-50 file docstring describes format. CHANGELOG.md:30 'LedgerStore.rotate + LedgerStore.countEvents contract additions' — no mention of the format change. `grep -rn 'NDJSON\\|ndjson' docs/` returns empty. New ledger-archive directory: zero docs.",
+      "family_probe": "Probed docs/ for any mention of new contract surfaces shipped this wave: countEvents, rotate, RotateResult, no_orphan_staging, staging snapshot in backup, getRequiredTables. Most are operator-internal so partial undoc is OK; the format change is operator-visible if they ever inspect `.db-cluster/` on disk.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V2-B1-010",
+      "severity": "MEDIUM",
+      "category": "error_diagnosability",
+      "file": "src/adapters/local/local-ledger-store.ts",
+      "line": 280,
+      "legacy_pattern": "LedgerStore.rotate() with a future `beforeTimestamp` is a SAFEGUARDED no-op (lines 280-285). Returns `{archived: 0, retained: this.events.length}` — INDISTINGUISHABLE from `{archived: 0, retained: this.events.length}` returned when nothing matched the past boundary (lines 300-306). Operator who typo'd a future date (or whose clock drifted) sees `archived=0` with no signal the safeguard fired. RotateResult has no `reason` / `safeguardTriggered` / `requested` field to disambiguate. Once rotate is exposed via CLI (V2-B1-003), operators will not understand why the rotate didn't archive anything.",
+      "expected_pattern": "Either (a) throw on future timestamp (typed `RotateBoundaryInFutureError` with the requested+now timestamps) so the CLI/MCP surface returns a clear error; or (b) extend RotateResult with `safeguardTriggered?: 'future_boundary' | 'no_matching_events'` so the result distinguishes the two no-op causes. Today the operator must compare beforeTimestamp to wall-clock manually to know whether the safeguard fired.",
+      "evidence": "src/adapters/local/local-ledger-store.ts:279-285 future-timestamp early-return; lines 300-306 nothing-to-archive early-return — both return shape `{archived: 0, retained: N}` with no discriminator. RotateResult interface (src/contracts/ledger-store.ts:95-99) has only `archived/retained/archiveFile?` — no safeguard field.",
+      "family_probe": "Probed sibling safeguard patterns in the codebase — proposeMutation/validateCommand throw typed errors (ContentHashMismatchError, InvalidContentShapeError) on caller-error inputs. Doctor/verify push 'degraded' checks with explanatory messages. Rotate's silent no-op pattern diverges from both.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V2-B1-011",
+      "severity": "LOW",
+      "category": "signal_view_gap",
+      "file": "src/dashboard/ops-model.ts",
+      "line": 92,
+      "legacy_pattern": "buildOpsModel's countEvents try/catch (lines 92-104) silently swallows ANY error from `countEvents` and reports `orphanEvents = 0`. Defensive fallback is documented as 'an adapter that throws on this query (e.g. a stub that doesn't implement the filter) is reported as zero — the dashboard still renders'. But the same catch arm fires when the real LedgerStore.countEvents fails for an OPERATIONAL reason (file unreadable, transient disk error). The operator sees `orphanEvents: 0` which contradicts the warn paragraph rendered when > 0 — the catch silently reverts a degraded signal to healthy.",
+      "expected_pattern": "Distinguish 'feature not supported' (caller-side stub) from 'feature failed at runtime' (operational error). When countEvents throws, either rethrow (the dashboard renders an error banner) OR set a sentinel like `orphanEvents: null` + `degradedReason: 'orphan count unavailable'`. As-is, an operationally-degraded cluster reports zero orphans — the opposite of the SURFACE-B-011 intent.",
+      "evidence": "src/dashboard/ops-model.ts:92-104 try/catch with empty catch body setting `orphanEvents = 0`. Comment at line 100 acknowledges 'an adapter that throws on this query... is reported as zero'. The overall-health calculation at line 167 uses `hasOrphans = orphanEvents > 0` so a swallowed error becomes 'healthy' (orphanEvents = 0 → hasOrphans = false).",
+      "family_probe": "Probed similar defensive-zero patterns — doctor()'s no_orphaned_mutations check (src/ops/doctor.ts:296-305) does NOT silently default; it pushes an 'unreachable' status when countEvents throws. The ops-model layer should mirror that pattern. Two surfaces sharing the same data plane disagree on how to render adapter-level failure.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V2-B1-012",
+      "severity": "LOW",
+      "category": "context_loss",
+      "file": "src/provenance/trace-builder.ts",
+      "line": 287,
+      "legacy_pattern": "KERNEL-B-006 trace-builder warning messages were mitigated by replacing entity name with `[name]` placeholder (line 287) and filename with `[filename]` (line 351). The structured form lives on `metadata.labelData` per the kernel report. But the warnings array on the ProvenanceGraph is what operators read in CLI explainTrace output (cluster-kernel.ts:1483 `lines.push(\\`  [${w.type}] ${w.message}\\`);`). The placeholder text gives the operator NO actionable detail — they see 'Entity document/[name] exists without supporting provenance' and have no way to identify WHICH entity. The labelData on the corresponding NODE has the answer but the warnings array is what gets surfaced in human-readable form.",
+      "expected_pattern": "Either (a) warnings carry a `subjectUri` (they already do — line 286) and the operator-facing renderer cross-references the node's labelData to compose a full message; or (b) the warning message includes the entity ID (not name) so operators can lookup. As-is, the placeholder is the only operator-visible identifier and it's a literal '[name]' string.",
+      "evidence": "src/provenance/trace-builder.ts:287 `message: \\`Entity ${entity.kind}/[name] exists without supporting provenance\\`` ; src/kernel/cluster-kernel.ts:1483 renders warnings verbatim via `${w.message}`. CLI `db-cluster trace --explain` would emit '[name]' to the operator.",
+      "family_probe": "Probed warning message construction sites — trace-builder lines 277-288 (missing_provenance on entity), 345-352 (missing_provenance on artifact). Both use the same placeholder pattern. The subjectUri field is structurally present so the operator-facing renderer COULD enrich; today it doesn't.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V2-B1-013",
+      "severity": "LOW",
+      "category": "audit_trail",
+      "file": "src/ops/backup.ts",
+      "line": 0,
+      "legacy_pattern": "V1-A4-004 added `staging?: StagingSnapshot[]` to ClusterBackup. The restore() result reports per-file `{restored, skipped, errors}` for staging. But there is no audit-event emission — the cluster's own ledger doesn't record that the staging area was restored. backup() and restore() are explicit recovery operations whose effect on a recovered cluster cannot later be traced via the ledger; an investigator looking at `verify` output later cannot tell that staging files came from a backup vs. a live propose.",
+      "expected_pattern": "Either (a) restore() emits a `cluster_restored` ledger event with detail.staging counts after writing the staging files; or (b) doctor()/verify() check whether the staging dir has files older than the most-recent restoration marker and report any anomalies. As-is the restoration step is invisible in the cluster's own audit trail.",
+      "evidence": "src/ops/backup.ts has no `await stores.ledger.append({ action: 'cluster_restored', ... })` call. The Wave A4 restore() flow writes files and returns RestoreResult, no ledger emission. No mention in src/types/provenance-event.ts of a restoration action.",
+      "family_probe": "Probed for `action: 'cluster_*'` ledger events. Found: `command_approved`, `command_rejected`, `command_compensated`, `mutation_orphaned`, `index_rebuilt`, `entity_created`, `artifact_ingested`, `evidence_linked`, `mutation_committed`. Backup/restore is a write to cluster truth but emits no ledger event. The audit trail has a hole for the recovery operation itself.",
+      "self_assessment": "low-confidence"
+    },
+    {
+      "id": "V2-B1-014",
+      "severity": "LOW",
+      "category": "signal_view_gap",
+      "file": "docs/operations.md",
+      "line": 0,
+      "legacy_pattern": "Docs do not mention any new contract surface shipped this wave: `LedgerStore.countEvents`, `LedgerStore.rotate`, `RotateResult`, `no_orphan_staging` health check, staging snapshots in ClusterBackup, `getRequiredTables`. `grep` across docs/ for these terms returns empty. The operator reading docs/operations.md sees the pre-Wave-B1 surface; new health checks, new backup/restore semantics, new contract methods are invisible.",
+      "expected_pattern": "docs/operations.md updated to enumerate doctor()'s checks (including the new `no_orphan_staging` and its dataDir/commandQueue requirements). docs/backup.md (if it exists) or docs/operations.md updated to mention `staging` field in ClusterBackup. docs/store-contracts.md updated to add rotate + countEvents. The wave's CI/Docs agent shipped a doc-drift detector but didn't update sibling docs to match the new ledger contract.",
+      "evidence": "`grep -rn 'no_orphan_staging\\|countEvents\\|rotate' docs/` returns no matches. CHANGELOG.md:30 single-line mention. docs/store-contracts.md (mentioned in agent-cidocs-report.md:264 as a breadcrumb) was NOT updated; the cross-domain coupling was acknowledged but unaddressed.",
+      "family_probe": "Probed all docs/*.md for the new symbols. Found: zero coverage. The CI/Docs report (.stage-b-amend/agent-cidocs-report.md §7 #2) explicitly flagged docs/store-contracts.md as needing Stores-domain follow-up, and Stores domain shipped without doing it. Cross-domain handoff dropped.",
+      "self_assessment": "high-confidence"
+    },
+    {
+      "id": "V2-B1-015",
+      "severity": "LOW",
+      "category": "error_diagnosability",
+      "file": "src/kernel/commands.ts",
+      "line": 209,
+      "legacy_pattern": "`InvalidContentShapeError` message at src/kernel/errors.ts:217-221 is good — names the actual shape and accepted shapes. But the diagnostic helper `describeContentShape` at src/kernel/commands.ts is supposed to produce a structured shape string. Operators who hit this in production at the propose-validate boundary see only the message, never the structured shape — no MCP `_meta` annotation carries the actualShape field, and CLI's exit code mapping (cli.ts:273 INVALID_CONTENT_SHAPE → 65) gives no programmatic access either. The error CARRIES `actualShape` as a public field on the instance but no surface exposes it.",
+      "expected_pattern": "MCP server.ts catch arm could detect `err instanceof InvalidContentShapeError` and add `{ actualShape: err.actualShape }` to the error response. CLI could emit `actualShape:` line. Same pattern would apply to other typed-error structured fields (ContentHashMismatchError has claimedHash/actualHash, StagedContentTamperedError has stagingPath/actualHash). The surface currently flattens all of them to .message.",
+      "evidence": "src/kernel/errors.ts:213-226 InvalidContentShapeError defines public readonly actualShape but src/mcp/sanitize.ts:191-220 redactError reduces to `{code, message}` only. src/cli.ts:295-297 redactErrorForCli returns just the scrubbed message. The structured fields are wasted on the operator.",
+      "family_probe": "Probed typed errors in src/kernel/errors.ts and src/adapters/local/errors.ts — ContentHashMismatchError.{claimedHash, actualHash}, StagedContentTamperedError.{contentHash, stagingPath, actualHash}, CommandQueueCorruptError.{filePath, innerCause}, CommandQueuePersistenceLostError.{filePath, markerPath}, ImportConflictError fields. All inherit ClusterError.code. None of the structured fields reach operator-facing surfaces — only .message.",
+      "self_assessment": "high-confidence"
+    }
+  ],
+  "lens_self_assessment": {
+    "probe_coverage": "Probed all five domain fixes against operational visibility lens. Specifically: (1) SURFACE-B-011 mutation_orphaned wiring — confirmed signal_view_gap on OperationsPanel (unmounted + shape-mismatched, V2-B1-001). (2) STORES-B-014 countEvents — confirmed wired through doctor/verify but verify's adjacent sample-capped checks (provenance/receipts) still silently truncate, V2-B1-008. (3) Doctor's new no_orphan_staging V1-A4-005 — operator-facing CLI doctor doesn't pass dataDir/commandQueue, check silently skips, V2-B1-002. (4) LedgerStore.rotate STORES-B-013 — no operator-facing CLI/MCP/SDK surface, V2-B1-003; future timestamp safeguard indistinguishable from nothing-to-archive, V2-B1-010. (5) NDJSON ledger STORES-B-002 — tail corruption silently recovered with no operator signal, V2-B1-004. (6) KERNEL-B-006 structured labelData + new RedactionTargets — MCP boundary still uses opaque placeholder, labelData path is wired but unused, V2-B1-005. (7) Error diagnosability: PolicyConfigError absent from BUILTIN_ERROR_CODES, V2-B1-006; PATH_REGEX duplicated, V2-B1-007; typed-error structured fields invisible to operators, V2-B1-015. (8) Audit trail: backup/restore emits no ledger event, V2-B1-013. (9) Documentation: new contract surfaces undocumented, V2-B1-014. (10) ops-model defensive zero collapses degraded → healthy, V2-B1-011. (11) trace-builder warning placeholder gives operator no actionable detail, V2-B1-012. (12) Legacy format auto-conversion undocumented, V2-B1-009.",
+    "blind_spots": "(a) PolicyEnforcedKernel.redactGraphNodes runtime behavior — code-read only; would need a runtime test to confirm the regex still scrubs `by <actor>` after KERNEL-B-006 structural fix. (b) Dashboard panel mounting — the absence of `<OperationsPanel`-mount evidence may mean a host application I cannot see consumes it (the package ships components as window globals via `window.OperationsPanel = OperationsPanel`). If a downstream consumer wires the panel against the actual OpsModel shape, V2-B1-001 fades. The wave-b1-surface-regression test only asserts the source-text contains 'orphan' and 'orphanEvents', not that the panel renders end-to-end. (c) The trace-builder `entity_name` / `artifact_filename` redaction targets ship through the new RedactionTarget union but the policy engine (`policy-engine.ts`) may or may not surface them in policy-explain/test output — I read the trace path but not the policy-explain rendering of label-axis denies. (d) Whether `addStructuredNode` ever sets the label to a redacted form before MCP boundary — the docstring at lines 578-583 claims 'For entity kind, the rendered label is <kind_value> (no name)' but the implementation at line 624-626 (`return renderProvenanceLabel(labelData, [])`) returns the FULL unredacted form. Either the docstring is stale or my read missed a different label-rendering call site. If the docstring is right and there IS a different rendering path that omits the name, my V2-B1-005 framing of 'machinery unused' is partially weakened (the kernel does carry the name in metadata.labelData but the label string itself is partially redacted). Reading post-coordinator-fixup phase4-proof passes confirm the kernel.explainTrace text contains the literal name, which suggests the docstring is stale, not the implementation."
+  }
+}
