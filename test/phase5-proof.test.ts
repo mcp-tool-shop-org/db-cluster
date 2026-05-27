@@ -1,25 +1,24 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import type { ClusterStores } from '../src/contracts/index.js';
 
-const TEST_DIR = join(import.meta.dirname, '.test-phase5-proof');
-
 describe('Phase 5 — Mutation Law and Command Runtime', () => {
     let cluster: ClusterStores;
     let kernel: ClusterKernel;
+    let TEST_DIR: string;
 
     beforeEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
-        mkdirSync(TEST_DIR, { recursive: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-phase5-proof-'));
         cluster = createLocalCluster(TEST_DIR);
         kernel = new ClusterKernel(cluster, { dataDir: TEST_DIR });
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     // ─── Proof 1: No commit without validation ───────────────────────

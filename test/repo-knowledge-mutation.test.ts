@@ -1,25 +1,28 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import { ingestRepoKnowledge } from '../src/integrations/repo-knowledge/ingest.js';
 import { proposeFactUpdate, executeFactUpdate, generateWritebackPayload } from '../src/integrations/repo-knowledge/update-workflow.js';
 import type { IngestSource } from '../src/integrations/repo-knowledge/ingest.js';
 
-const TEST_DIR = join(import.meta.dirname, '.test-rk-mutation');
-const SOURCES_DIR = join(TEST_DIR, 'sources');
-const CLUSTER_DIR = join(TEST_DIR, 'cluster');
-
 describe('Repo-knowledge mutation safety', () => {
     let kernel: ClusterKernel;
     let factEntityId: string;
     let artifactId: string;
-    const sourcePath = join(SOURCES_DIR, 'memory.md');
+    let TEST_DIR: string;
+    let SOURCES_DIR: string;
+    let CLUSTER_DIR: string;
+    let sourcePath: string;
     const originalContent = '# Memory\n\n## Phase Status\n\nPhase 12 complete.\n';
 
     beforeEach(async () => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-rk-mutation-'));
+        SOURCES_DIR = join(TEST_DIR, 'sources');
+        CLUSTER_DIR = join(TEST_DIR, 'cluster');
+        sourcePath = join(SOURCES_DIR, 'memory.md');
         mkdirSync(SOURCES_DIR, { recursive: true });
         const cluster = createLocalCluster(CLUSTER_DIR);
         kernel = new ClusterKernel(cluster, { dataDir: CLUSTER_DIR });
@@ -42,7 +45,7 @@ describe('Repo-knowledge mutation safety', () => {
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     it('agent can propose fact update', async () => {

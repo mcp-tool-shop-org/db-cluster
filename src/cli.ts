@@ -799,6 +799,39 @@ program
 // --- policy ---
 const policy = program.command('policy').description('Policy explain and test surface');
 
+/**
+ * Resolve the policy engine inputs for the policy explain/test dry-run
+ * subcommands.
+ *
+ * SURFACE-B-002 fix (Wave A4): pre-fix, these subcommands hardcoded
+ * `{policies: DEFAULT_POLICIES, trustZones: DEFAULT_TRUST_ZONES}` regardless
+ * of whether `.db-cluster/policies.json` existed. Operators dry-ran policies
+ * that had no relationship to what the cluster actually enforced. The fix
+ * routes through `loadPolicyConfig()` (the same helper `getKernel()` uses)
+ * so the explain/test surface evaluates against the SAME ruleset that
+ * `getKernel()` would wire into a real `PolicyEnforcedKernel`. When no
+ * policies.json is present we still fall back to DEFAULT_POLICIES (so the
+ * subcommand remains usable on a fresh cluster), but emit an explicit
+ * stderr notice so the operator knows what they're seeing.
+ */
+function resolvePolicyDryRunInputs(): { policies: Policy[]; trustZones: TrustZone[]; visibilityRules: VisibilityRule[] } {
+    const config = loadPolicyConfig();
+    if (config === null) {
+        // No .db-cluster/policies.json — fall back to defaults but signal.
+        console.error('Notice: no .db-cluster/policies.json found; evaluating against default policy set.');
+        return {
+            policies: DEFAULT_POLICIES,
+            trustZones: DEFAULT_TRUST_ZONES,
+            visibilityRules: DEFAULT_VISIBILITY_RULES,
+        };
+    }
+    return {
+        policies: config.policies ?? [],
+        trustZones: config.trustZones ?? DEFAULT_TRUST_ZONES,
+        visibilityRules: config.visibilityRules ?? DEFAULT_VISIBILITY_RULES,
+    };
+}
+
 policy
     .command('explain')
     .description('Explain what the policy engine would decide for a given action (dry-run)')
@@ -818,6 +851,8 @@ policy
             trustZone: opts.trustZone,
         };
 
+        const { policies, trustZones, visibilityRules } = resolvePolicyDryRunInputs();
+
         const decision = evaluatePolicy({
             principal,
             capability: opts.capability as Capability,
@@ -826,13 +861,13 @@ policy
             entityKind: opts.kind,
             commandVerb: opts.verb,
             trustZone: opts.trustZone,
-        }, { policies: DEFAULT_POLICIES, trustZones: DEFAULT_TRUST_ZONES });
+        }, { policies, trustZones });
 
         const explanation = explainPolicyDecision(decision);
         console.log(explanation);
 
         if (decision.decision === 'deny' && opts.uri) {
-            const vis = checkVisibility(opts.uri, opts.store, DEFAULT_VISIBILITY_RULES);
+            const vis = checkVisibility(opts.uri, opts.store, visibilityRules);
             console.log(`\nVisibility: existence ${vis.existenceVisible ? 'VISIBLE' : 'HIDDEN'}${vis.emitPlaceholder ? ' (placeholder emitted)' : ''}`);
         }
     });
@@ -854,6 +889,8 @@ policy
             trustZone: opts.trustZone,
         };
 
+        const { policies, trustZones } = resolvePolicyDryRunInputs();
+
         const capabilities = opts.capabilities.split(',') as Capability[];
         const results = capabilities.map((capability) => {
             const decision = evaluatePolicy({
@@ -862,7 +899,7 @@ policy
                 resourceUri: opts.uri,
                 ownerStore: opts.store,
                 trustZone: opts.trustZone,
-            }, { policies: DEFAULT_POLICIES, trustZones: DEFAULT_TRUST_ZONES });
+            }, { policies, trustZones });
             return { capability, decision: decision.decision, reason: decision.reason, policyId: decision.matchedPolicyId };
         });
 

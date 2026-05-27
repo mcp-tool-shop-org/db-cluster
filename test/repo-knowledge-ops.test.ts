@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import { CommandQueue } from '../src/kernel/command-queue.js';
@@ -9,18 +10,19 @@ import { doctor } from '../src/ops/doctor.js';
 import { verify } from '../src/ops/verify.js';
 import { backup, restore } from '../src/ops/backup.js';
 
-const TEST_DIR = join(import.meta.dirname, '.test-rk-ops');
-const SOURCES_DIR = join(TEST_DIR, 'sources');
-const CLUSTER_DIR = join(TEST_DIR, 'cluster');
-
 describe('Repo-knowledge operations and recovery', () => {
     let stores: ReturnType<typeof createLocalCluster>;
     let kernel: ClusterKernel;
     let entityIds: string[];
     let artifactIds: string[];
+    let TEST_DIR: string;
+    let SOURCES_DIR: string;
+    let CLUSTER_DIR: string;
 
     beforeEach(async () => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-rk-ops-'));
+        SOURCES_DIR = join(TEST_DIR, 'sources');
+        CLUSTER_DIR = join(TEST_DIR, 'cluster');
         mkdirSync(SOURCES_DIR, { recursive: true });
 
         writeFileSync(join(SOURCES_DIR, 'status.md'), '# Status\n\nPhase 14.\n');
@@ -43,7 +45,7 @@ describe('Repo-knowledge operations and recovery', () => {
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     it('doctor reports healthy after ingest', async () => {

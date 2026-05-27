@@ -6,3 +6,9 @@ dist/
 examples/**/.db-cluster/
 .stryker-tmp/
 reports/
+
+# Release-gate per-stage log artifacts (CIDOCS-B-025)
+.release-gate-output/
+
+# Stray top-level .txt files (CIDOCS-009 — workspace hygiene)
+/*.txt

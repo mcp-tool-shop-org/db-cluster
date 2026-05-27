@@ -1,27 +1,26 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import { TraceBuilder } from '../src/provenance/trace-builder.js';
 import type { ClusterStores } from '../src/contracts/index.js';
 import type { ProvenanceGraph } from '../src/types/provenance-graph.js';
 
-const TEST_DIR = join(import.meta.dirname, '.test-phase4-proof');
-
 describe('Phase 4 — Provenance Graph Proof Tests', () => {
     let cluster: ClusterStores;
     let kernel: ClusterKernel;
+    let TEST_DIR: string;
 
     beforeEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
-        mkdirSync(TEST_DIR, { recursive: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-phase4-proof-'));
         cluster = createLocalCluster(TEST_DIR);
         kernel = new ClusterKernel(cluster, { dataDir: TEST_DIR });
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     // ─── Proof 1: Cross-store trace ────────────────────────────────────

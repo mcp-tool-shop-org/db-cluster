@@ -5,6 +5,7 @@
  * retrieve evidence bundle, trace provenance.
  */
 
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,14 +18,19 @@ async function main() {
 
     console.log('Cluster initialized at:', dataDir);
 
-    // Ingest an artifact via the command lifecycle.
+    // Ingest an artifact via the command lifecycle. Wave A4 fix-up:
+    // ingest_artifact propose requires `contentHash` for staging-area
+    // integrity (KERNEL-B-007). Pre-hash the Buffer once.
+    const artifactContent = Buffer.from('# Research: AI database safety patterns');
+    const artifactHash = createHash('sha256').update(artifactContent).digest('hex');
     const artifactCmd = await sdk.proposeMutation({
         verb: 'ingest_artifact',
         targetStore: 'artifact',
         payload: {
             filename: 'research-notes.md',
-            content: Buffer.from('# Research: AI database safety patterns'),
+            content: artifactContent,
             mimeType: 'text/markdown',
+            contentHash: artifactHash,
         },
         proposedBy: 'example',
     });

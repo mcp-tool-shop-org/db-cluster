@@ -6,8 +6,8 @@
  * retrieval, provenance, or command-gated mutation law."
  */
 
-import { describe, it, expect } from 'vitest';
-import { mkdtempSync } from 'node:fs';
+import { describe, it, expect, afterEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PolicyEnforcedKernel, PolicyDeniedError } from '../src/kernel/policy-enforced-kernel.js';
@@ -123,8 +123,14 @@ const visibilityRules: VisibilityRule[] = [
  * need to seed via admin AND have restricted see the same command, which
  * only happens if the command queue is shared (i.e., on disk).
  */
+// TESTS-B-002 (Wave A4): track every mkdtempSync directory so the suite
+// no longer leaks ~80 temp dirs per run. Each helper that creates a
+// dataDir pushes here; the global afterEach below rmSyncs them all.
+const _trackedDirs: string[] = [];
+
 function makeStoresWithDir(): { stores: ClusterStores; dataDir: string } {
     const dataDir = mkdtempSync(join(tmpdir(), 'wave6-proof-'));
+    _trackedDirs.push(dataDir);
     return { stores: createLocalCluster(dataDir), dataDir };
 }
 
@@ -138,12 +144,24 @@ function makeKernel(stores: ClusterStores, principal: Principal, dataDir?: strin
 
 function makeSDK(): ClusterSDK {
     const dir = mkdtempSync(join(tmpdir(), 'wave6-sdk-'));
+    _trackedDirs.push(dir);
     return new ClusterSDK({ clusterDir: dir, policies, trustZones, visibilityRules });
 }
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
 
 describe('Wave 6 — Phase 7 Proof Suite: Destructive Policy Proofs', () => {
+
+    // TESTS-B-002 (Wave A4): drain the tracker after every it() so each
+    // mkdtempSync directory is removed promptly instead of leaking until
+    // the OS tmpdir reaper runs. Was previously ~80 dirs per file run.
+    afterEach(() => {
+        while (_trackedDirs.length > 0) {
+            const dir = _trackedDirs.pop();
+            if (!dir) continue;
+            try { rmSync(dir, { recursive: true, force: true }); } catch {}
+        }
+    });
 
     // ═══════════════════════════════════════════════════════════════════════
     // Proof 1: Denied owner-truth read does not leak via resolve, inspect,

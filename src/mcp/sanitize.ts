@@ -19,6 +19,7 @@
 import type { Artifact } from '../types/artifact.js';
 import type { Entity } from '../types/entity.js';
 import type { Receipt } from '../types/receipt.js';
+import { ClusterError } from '../kernel/errors.js';
 
 /** Shape returned to MCP hosts in place of a raw Artifact. */
 export type SanitizedArtifact = Omit<Artifact, 'storagePath'> & {
@@ -94,4 +95,126 @@ export function sanitizeReceiptForOutput(receipt: Receipt | null | undefined): S
 /** Convenience: sanitize a list of artifacts, dropping nulls. */
 export function sanitizeArtifactList(artifacts: Array<Artifact | null | undefined>): SanitizedArtifact[] {
     return artifacts.map(sanitizeArtifactForOutput).filter((a): a is SanitizedArtifact => a !== null);
+}
+
+// ─── Error sanitizer (SURFACE-B-003) ──────────────────────────────────────
+
+/**
+ * Shape returned by {@link redactError} — a stable {code, message} pair
+ * safe to surface across the MCP boundary.
+ */
+export interface RedactedError {
+    code: string;
+    message: string;
+}
+
+/**
+ * Path-scrubbing regex.
+ *
+ * Matches Posix absolute paths (`/foo/bar`) and Windows absolute paths
+ * (`C:\foo\bar` or `C:/foo/bar`, including UNC `\\host\share\…`). Each
+ * match is replaced with the literal `<path>` placeholder.
+ *
+ * Notes on tradeoffs:
+ *  - Posix root `/` is included; this can over-match (e.g. URLs, regex
+ *    literals). The boundary is "fail closed" — over-scrubbing is preferred
+ *    to leaking absolute filesystem paths.
+ *  - The match terminates at the next whitespace or quote, so structured
+ *    error messages like `open /etc/passwd: not found` are scrubbed but
+ *    the `not found` suffix is preserved.
+ */
+const PATH_REGEX = /(?:[A-Za-z]:[\\/]|\\\\[^\s"'`)]+[\\/]|\/)[^\s"'`)]+/g;
+
+/**
+ * Stable code map for common JS-builtin error constructors AND the adapter /
+ * ops / resolver typed errors that extend plain `Error` (not `ClusterError`)
+ * because the no-back-edge import rule forbids them from importing the kernel
+ * error hierarchy. Mapping the class names here gives MCP hosts the same
+ * operator-actionable code surface that ClusterError subclasses already get,
+ * without dragging those typed errors under ClusterError (which would be a
+ * B1-Amend architectural change).
+ */
+const BUILTIN_ERROR_CODES: Record<string, string> = {
+    TypeError: 'INTERNAL_TYPE_ERROR',
+    RangeError: 'INTERNAL_RANGE_ERROR',
+    SyntaxError: 'INTERNAL_SYNTAX_ERROR',
+    ReferenceError: 'INTERNAL_REFERENCE_ERROR',
+    URIError: 'INTERNAL_URI_ERROR',
+    EvalError: 'INTERNAL_EVAL_ERROR',
+    // Wave A4 fix-up (AGG-A4-1): adapter/ops/uri-resolver typed errors that
+    // extend plain Error. Class-name → stable code mapping keeps them out of
+    // the INTERNAL_ERROR fallback bucket so MCP hosts can branch on them.
+    // The message-side path scrubber (scrubMessage above) already handles
+    // any embedded paths in ImportConflictError's truncated JSON payloads,
+    // so no additional message-filtering is needed.
+    CorruptStoreError: 'CORRUPT_STORE',
+    InvalidContentHashError: 'INVALID_CONTENT_HASH',
+    ImportConflictError: 'IMPORT_CONFLICT',
+    LedgerCycleDetectedError: 'LEDGER_CYCLE_DETECTED',
+    ImportSnapshotNotSupportedError: 'IMPORT_SNAPSHOT_NOT_SUPPORTED',
+    ResolveError: 'RESOLVE_NOT_FOUND',
+    ClusterUriError: 'INVALID_CLUSTER_URI',
+};
+
+/** Strip absolute filesystem paths from an error message. */
+function scrubMessage(raw: string): string {
+    return raw.replace(PATH_REGEX, '<path>');
+}
+
+/**
+ * Sanitize an error for MCP-boundary surfacing.
+ *
+ * Why this exists (SURFACE-B-003):
+ * The MCP `CallToolRequest` catch arm previously returned
+ * `JSON.stringify({error: err.message, ...})` with no filtering. Kernel
+ * internals can throw errors whose `.message` carries absolute filesystem
+ * paths, JSON-parse position metadata, or raw store-adapter detail. The
+ * MCP boundary must surface a stable, sanitized shape:
+ *
+ * - `code` is a stable identifier suitable for MCP-host branching.
+ *   - For typed `ClusterError` subclasses (NotFoundError,
+ *     CommandRejectedError, ContentHashMismatchError, …) `err.code` is used.
+ *   - For built-in JS errors (TypeError, RangeError, …) a stable
+ *     `INTERNAL_<KIND>_ERROR` code is mapped.
+ *   - Anything else collapses to `INTERNAL_ERROR`.
+ *
+ * - `message` is a path-scrubbed copy of `err.message`. The `cause` chain
+ *   is intentionally NOT walked — inner causes routinely carry the leakiest
+ *   detail (file paths, JSON-parse positions, adapter internals). When
+ *   `process.env.DEBUG === '1'` the original message is appended to aid
+ *   operator debugging in trusted environments.
+ *
+ * Non-Error inputs (strings, plain objects, undefined) collapse to
+ * `INTERNAL_ERROR` with a generic "an error occurred" message — the
+ * boundary refuses to print arbitrary attacker-controlled values.
+ */
+export function redactError(err: unknown): RedactedError {
+    const debugMode = process.env.DEBUG === '1';
+
+    // Typed ClusterError (preferred path — known shape, known code).
+    if (err instanceof ClusterError) {
+        const code = err.code || 'CLUSTER_ERROR';
+        let message = scrubMessage(err.message || 'cluster error');
+        if (debugMode) message += ` [raw: ${err.message}]`;
+        return { code, message };
+    }
+
+    // Built-in Error subclasses (TypeError, RangeError, …).
+    if (err instanceof Error) {
+        const code = BUILTIN_ERROR_CODES[err.constructor.name] ?? 'INTERNAL_ERROR';
+        let message = scrubMessage(err.message || err.constructor.name);
+        if (debugMode) message += ` [raw: ${err.message}]`;
+        return { code, message };
+    }
+
+    // Plain string error — scrub and surface with a generic code.
+    if (typeof err === 'string') {
+        let message = scrubMessage(err);
+        if (debugMode) message += ` [raw: ${err}]`;
+        return { code: 'INTERNAL_ERROR', message };
+    }
+
+    // Everything else (null, undefined, object, number, …) — refuse to
+    // surface arbitrary content.
+    return { code: 'INTERNAL_ERROR', message: 'An internal error occurred.' };
 }

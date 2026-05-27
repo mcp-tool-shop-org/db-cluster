@@ -6,8 +6,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import { inspectEntity, inspectArtifact, inspectIndexRecord, inspectCommandObject } from '../src/dashboard/inspector-data.js';
@@ -16,15 +17,13 @@ import { generateSnapshot } from '../scripts/dashboard-snapshot.js';
 import { storeToSourceType, buildUri } from '../src/dashboard/dashboard-model.js';
 import type { DashboardObject } from '../src/dashboard/dashboard-model.js';
 
-const TEST_DIR = join(import.meta.dirname, '.test-phase13-proof');
-
 describe('Phase 13 — Dashboard integration proofs', () => {
     let kernel: ClusterKernel;
     let stores: ReturnType<typeof createLocalCluster>;
+    let TEST_DIR: string;
 
     beforeEach(async () => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
-        mkdirSync(TEST_DIR, { recursive: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-phase13-proof-'));
         stores = createLocalCluster(TEST_DIR);
         kernel = new ClusterKernel(stores, { dataDir: TEST_DIR });
 
@@ -34,7 +33,7 @@ describe('Phase 13 — Dashboard integration proofs', () => {
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     // Proof 1: Dashboard model never reads raw adapters directly

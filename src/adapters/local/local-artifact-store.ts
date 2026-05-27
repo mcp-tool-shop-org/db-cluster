@@ -1,13 +1,23 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, basename, join } from 'node:path';
 import type { Artifact } from '../../types/artifact.js';
 import type {
     ArtifactStore,
     ArtifactFilter,
     ArtifactIngestInput,
 } from '../../contracts/artifact-store.js';
-import { CorruptStoreError, InvalidContentHashError, isValidContentHash } from './errors.js';
+import {
+    CorruptStoreError,
+    InvalidContentHashError,
+    isValidContentHash,
+    assertContentMatch,
+} from './errors.js';
+import {
+    buildRandomTmpPath,
+    cleanupOrphanTmpFiles,
+    sweepContentDirOrphans,
+} from './tmp-cleanup.js';
 
 /**
  * Local artifact store — filesystem-backed immutable artifact persistence.
@@ -29,6 +39,15 @@ export class LocalArtifactStore implements ArtifactStore {
         this.metaPath = join(dataDir, 'artifacts.json');
         this.contentDir = join(dataDir, 'content');
         mkdirSync(this.contentDir, { recursive: true });
+        // STORES-B-001: sweep orphan random-suffix tmp files for the
+        // metadata file AND for every content-hash file in the content dir.
+        // The content dir's basenames are sha256 hex hashes — we can't list
+        // every basename, so we sweep with a permissive base pattern. Since
+        // content files are named [a-f0-9]{64} their tmp variants look like
+        // `<hash>.<pid>-<rand>.tmp` — the existing helper takes a baseName
+        // so we run the sweep for each .tmp suffix file we discover.
+        cleanupOrphanTmpFiles(dirname(this.metaPath), basename(this.metaPath));
+        sweepContentDirOrphans(this.contentDir);
         this.artifacts = this.load();
     }
 
@@ -104,9 +123,16 @@ export class LocalArtifactStore implements ArtifactStore {
         // symmetry. On failure we unlink the tmp file (best-effort) so no
         // `.tmp` orphan accumulates and rethrow so the caller sees the
         // failure (matches the previous semantics).
+        //
+        // STORES-B-001 (Wave A4): the tmp path now embeds process.pid and
+        // a random suffix so two processes ingesting the same content
+        // concurrently never race on the same tmp file. The dedup gate
+        // (`if (!existsSync(contentPath))`) still wins on the final path —
+        // content addressing means both writers produce byte-identical
+        // bytes anyway, so the loser's renameSync is harmless.
         const contentPath = join(this.contentDir, contentHash);
         if (!existsSync(contentPath)) {
-            const tmpContentPath = `${contentPath}.tmp`;
+            const tmpContentPath = buildRandomTmpPath(contentPath);
             try {
                 writeFileSync(tmpContentPath, input.content);
                 renameSync(tmpContentPath, contentPath);
@@ -144,8 +170,18 @@ export class LocalArtifactStore implements ArtifactStore {
      * `contentHash = '../../escape'` would write outside the artifact contentDir
      * (STORES-006). InvalidContentHashError is thrown on bad input.
      *
-     * Idempotent: returns the existing record if an artifact with the same id
-     * is already present.
+     * Idempotent on byte-identical re-import: if an artifact with the same id
+     * is already present and its metadata content equals the incoming snapshot
+     * (excluding store-stamped `owner` and `storagePath` which is rewritten on
+     * import), the existing record is returned.
+     *
+     * Throws ImportConflictError (STORES-B-003) when an artifact with the same
+     * id exists but its metadata DIFFERS. Pre-fix the existing record was
+     * silently returned, masking tampered backups. We exclude `storagePath`
+     * from the comparison because that field is intentionally rewritten on
+     * import to point at the current cluster's contentDir — so two snapshots
+     * of the same artifact in two different clusters legitimately have
+     * different storagePath values.
      */
     async importSnapshot(metadata: Artifact, content: Buffer): Promise<Artifact> {
         if (!isValidContentHash(metadata.contentHash)) {
@@ -154,6 +190,23 @@ export class LocalArtifactStore implements ArtifactStore {
 
         const existing = this.artifacts.get(metadata.id);
         if (existing) {
+            // STORES-B-003: assert content equality between existing and
+            // incoming, excluding owner (store-stamped) and storagePath
+            // (intentionally rewritten on import).
+            const existingComparable = {
+                ...(existing as unknown as Record<string, unknown>),
+                storagePath: undefined,
+            };
+            const incomingComparable = {
+                ...(metadata as unknown as Record<string, unknown>),
+                storagePath: undefined,
+            };
+            assertContentMatch(
+                'artifact',
+                metadata.id,
+                existingComparable,
+                incomingComparable,
+            );
             return existing;
         }
 
@@ -166,9 +219,13 @@ export class LocalArtifactStore implements ArtifactStore {
         // writeFileSync opens/truncates the target but before it finishes
         // writing. The restore path now matches the ingest path: write to
         // tmp, rename atomically, clean up tmp on failure.
+        //
+        // STORES-B-001 (Wave A4): tmp path uses random suffix so a
+        // concurrent restore in a sibling process cannot race on the
+        // same tmp file.
         const contentPath = join(this.contentDir, metadata.contentHash);
         if (!existsSync(contentPath)) {
-            const tmpContentPath = `${contentPath}.tmp`;
+            const tmpContentPath = buildRandomTmpPath(contentPath);
             try {
                 writeFileSync(tmpContentPath, content);
                 renameSync(tmpContentPath, contentPath);
@@ -222,7 +279,8 @@ export class LocalArtifactStore implements ArtifactStore {
 
     private persist(): void {
         const arr = Array.from(this.artifacts.values());
-        const tmpPath = `${this.metaPath}.tmp`;
+        // STORES-B-001: random-suffix tmp path. See local-canonical-store.
+        const tmpPath = buildRandomTmpPath(this.metaPath);
         writeFileSync(tmpPath, JSON.stringify(arr, null, 2));
         renameSync(tmpPath, this.metaPath);
     }

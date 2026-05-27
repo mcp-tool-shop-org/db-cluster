@@ -1,25 +1,24 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import { buildOpsModel } from '../src/dashboard/ops-model.js';
 
-const TEST_DIR = join(import.meta.dirname, '.test-dashboard-ops');
-
 describe('Dashboard operations model', () => {
     let kernel: ClusterKernel;
     let stores: ReturnType<typeof createLocalCluster>;
+    let TEST_DIR: string;
 
     beforeEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
-        mkdirSync(TEST_DIR, { recursive: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-dashboard-ops-'));
         stores = createLocalCluster(TEST_DIR);
         kernel = new ClusterKernel(stores, { dataDir: TEST_DIR });
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     it('reports healthy when all stores are reachable', async () => {

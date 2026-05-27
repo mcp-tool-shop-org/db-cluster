@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { ClusterSDK } from '../src/sdk/cluster-sdk.js';
 import { handleTool, TOOLS } from '../src/mcp/index.js';
 import type { AnnotatedTool } from '../src/mcp/index.js';
-
-const TEST_DIR = join(import.meta.dirname, '.test-parity');
 
 /**
  * Wave 5 — Parity Tests
@@ -15,10 +15,10 @@ const TEST_DIR = join(import.meta.dirname, '.test-parity');
  */
 describe('Wave 5 — MCP / SDK Parity', () => {
     let sdk: ClusterSDK;
+    let TEST_DIR: string;
 
     beforeEach(async () => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
-        mkdirSync(TEST_DIR, { recursive: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-parity-'));
         sdk = new ClusterSDK({ clusterDir: TEST_DIR });
 
         // Seed data via SDK so both surfaces have something to query.
@@ -45,7 +45,7 @@ describe('Wave 5 — MCP / SDK Parity', () => {
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     // ─── Parity 1: retrieveBundle ────────────────────────────────────
@@ -127,8 +127,8 @@ describe('Wave 5 — MCP / SDK Parity', () => {
 
     // ─── Parity 3: why ───────────────────────────────────────────────
 
-    describe('Parity 3: why returns same explanation', () => {
-        it('MCP why returns same text as SDK why', async () => {
+    describe('Parity 3: why returns structurally-equivalent explanation', () => {
+        it('MCP why returns sanitized-but-structurally-aligned text vs SDK why', async () => {
             const bundle = await sdk.retrieveBundle('parity-testing');
             const uri = bundle.resolvedEntities[0]?.uri;
             if (!uri) return;
@@ -136,7 +136,25 @@ describe('Wave 5 — MCP / SDK Parity', () => {
             const sdkExplanation = await sdk.why(uri);
             const mcpResult = await handleTool('cluster_why', { uri }, sdk) as any;
 
-            expect(mcpResult.explanation).toBe(sdkExplanation);
+            // Wave A4 fix-up (AGG-A4-3): MCP cluster_why intentionally
+            // DIVERGES from SDK why on text content — the MCP boundary
+            // sanitizes the provenance graph before rendering so node
+            // labels embedding owner-truth (`${kind}: ${name}`) become
+            // opaque placeholders (`[type in ownerStore]`). The structural
+            // properties stay aligned (same line count, same `(type in
+            // ownerStore)` suffix on the first line). SDK retains the
+            // full text because callers there are inside the trust
+            // boundary; MCP must not.
+            expect(typeof mcpResult.explanation).toBe('string');
+            expect(typeof sdkExplanation).toBe('string');
+            // Line count matches — same logical content shape.
+            const mcpLines = (mcpResult.explanation as string).split('\n');
+            const sdkLines = sdkExplanation.split('\n');
+            expect(mcpLines.length).toBe(sdkLines.length);
+            // The first line of both ends with `(type in ownerStore)`.
+            expect(mcpLines[0]).toMatch(/\(\w+ in \w+\)$/);
+            expect(sdkLines[0]).toMatch(/\(\w+ in \w+\)$/);
+            // _meta unchanged.
             expect(mcpResult._meta.operation).toBe('read');
             expect(mcpResult._meta.uri).toBe(uri);
         });
@@ -419,12 +437,17 @@ describe('Wave 5 — MCP / SDK Parity', () => {
             const cmd = await sdk.proposeMutation({
                 verb: 'ingest_artifact',
                 targetStore: 'artifact',
-                payload: {
-                    filename: 'report.md',
-                    sourceUri: 'file:///test/report.md',
-                    content: 'This is sensitive artifact content that should not leak through MCP.',
-                    mediaType: 'text/markdown',
-                },
+                payload: (() => {
+                    // Wave A4 KERNEL-B-007: Buffer + contentHash side-channel.
+                    const buf = Buffer.from('This is sensitive artifact content that should not leak through MCP.', 'utf-8');
+                    return {
+                        filename: 'report.md',
+                        sourceUri: 'file:///test/report.md',
+                        content: buf,
+                        contentHash: createHash('sha256').update(buf).digest('hex'),
+                        mediaType: 'text/markdown',
+                    };
+                })(),
                 proposedBy: 'parity-test',
             });
             await sdk.validateMutation(cmd.id);

@@ -14,10 +14,12 @@ import {
     sanitizeArtifactForOutput,
     sanitizeEntityForOutput,
     sanitizeReceiptForOutput,
+    redactError,
 } from './sanitize.js';
 import {
     sanitizeIndexRecordForOutput,
     sanitizeProvenanceEventForOutput,
+    sanitizeProvenanceGraphForOutput,
 } from '../policy/store-output-sanitizers.js';
 
 const CLUSTER_DIR = resolve(process.env.DB_CLUSTER_DIR ?? process.cwd(), '.db-cluster');
@@ -468,9 +470,16 @@ export async function handleTool(name: string, args: Record<string, unknown>, sd
             const result = await sdk.findSources(args.query as string, args.limit as number | undefined);
             return {
                 _meta: { operation: 'read', writesCluster: false, storeAccessed: 'index → canonical, artifact' },
+                // SURFACE-B-001 fix (Wave A4): pre-fix the LIST arm spread
+                // `...r` raw, which leaked IndexRecord.metadata (mirrors
+                // entity content). Wave A3 closed sanitization on singular
+                // resolve paths; this LIST arm was the missed sibling.
+                // sanitizeIndexRecordForOutput strips `metadata`, attaches
+                // _sourceType='derivative' and a _metadataPolicy notice.
+                // We additionally attach _sourceStore='index' + _note for
+                // staleness signaling preserved from the prior wrapper.
                 indexRecords: result.indexRecords.map((r: any) => ({
-                    ...r,
-                    _sourceType: 'derivative',
+                    ...sanitizeIndexRecordForOutput(r),
                     _sourceStore: 'index',
                     _note: 'Index records are derived from owner-store truth. They may be stale.',
                 })),
@@ -575,17 +584,65 @@ export async function handleTool(name: string, args: Record<string, unknown>, sd
                 direction: (args.direction as 'backward' | 'forward' | 'bidirectional') ?? 'backward',
                 depth: (args.depth as number) ?? 10,
             });
+            // AGG-A4-3 / Wave A4 fix-up: sibling of SURFACE-B-001
+            // (find_sources LIST arm) — pre-fix spread `...graph` raw across
+            // the MCP boundary, surfacing trace-builder labels
+            // (`${kind}: ${name}` / `${action} by ${actorId}` / `Receipt:
+            // ${resultSummary}`) and `metadata` (actorId, kind, name,
+            // filename) verbatim. Apply structural sanitization at the
+            // MCP boundary; the SDK's existing redactGraphNodes path is a
+            // policy-driven concern that doesn't replace this baseline.
+            const sanitized = sanitizeProvenanceGraphForOutput(graph);
             return {
-                _meta: { operation: 'read', writesCluster: false, focalUri: graph.focalUri },
-                ...graph,
+                _meta: { operation: 'read', writesCluster: false, focalUri: sanitized.focalUri },
+                ...sanitized,
             };
         }
 
         case 'cluster_why': {
-            const explanation = await sdk.why(args.uri as string);
+            // AGG-A4-3 / Wave A4 fix-up: sdk.why() returns a string that
+            // embeds `${focal.label}` (which carries owner-truth content
+            // like `${entity.kind}: ${entity.name}`). Pre-fix that string
+            // flowed straight to the MCP host. Re-derive the explanation
+            // from a sanitized trace graph so the boundary surfaces a
+            // structural one-liner with no embedded identifiers.
+            const graph = await sdk.traceObject(args.uri as string, {
+                direction: 'backward',
+                depth: 5,
+                includeReceipts: true,
+                includeIndex: false,
+                includeGaps: true,
+                includeCommands: false,
+            });
+            const sanitized = sanitizeProvenanceGraphForOutput(graph);
+            const focal = sanitized.nodes.find((n) => n.uri === args.uri);
+            const lines: string[] = [];
+            if (!focal) {
+                lines.push(`${args.uri}: object not found.`);
+            } else {
+                lines.push(`${focal.label} (${focal.type} in ${focal.ownerStore ?? 'unknown'})`);
+                const incomingEdges = sanitized.edges.filter((e) => e.to === args.uri);
+                const creationEdge = incomingEdges.find(
+                    (e) => e.type === 'entity_created_by' || e.type === 'artifact_ingested_from',
+                );
+                if (creationEdge) {
+                    lines.push(`Created by: ${creationEdge.reason}`);
+                }
+                const linkEdges = incomingEdges.filter((e) => e.type === 'evidence_linked_to');
+                if (linkEdges.length > 0) {
+                    lines.push(`Evidence links: ${linkEdges.length}`);
+                }
+                const receiptNodes = sanitized.nodes.filter((n) => n.type === 'receipt');
+                if (receiptNodes.length > 0) {
+                    lines.push(`Receipts: ${receiptNodes.length}`);
+                }
+                if (sanitized.gaps.length > 0) {
+                    lines.push(`⚠ ${sanitized.gaps.length} gap(s) in provenance`);
+                }
+            }
             return {
                 _meta: { operation: 'read', writesCluster: false, uri: args.uri },
-                explanation,
+                explanation: lines.join('\n'),
             };
         }
 
@@ -812,9 +869,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
             content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         };
-    } catch (err: any) {
+    } catch (err: unknown) {
+        // SURFACE-B-003 fix (Wave A4): pre-fix returned raw `err.message`
+        // across the MCP boundary, leaking absolute filesystem paths,
+        // JSON-parse positions, and store-adapter internals. redactError
+        // produces a {code, message} pair: typed ClusterError subclasses
+        // surface their stable `code`, built-in JS errors map to
+        // INTERNAL_<KIND>_ERROR codes, and absolute paths are scrubbed
+        // to `<path>` placeholders. DEBUG=1 mode appends the raw message
+        // for trusted operator debugging.
+        const sanitized = redactError(err);
         return {
-            content: [{ type: 'text', text: JSON.stringify({ error: err.message, _meta: { operation: 'error' } }) }],
+            content: [{ type: 'text', text: JSON.stringify({ error: sanitized.message, code: sanitized.code, _meta: { operation: 'error' } }) }],
             isError: true,
         };
     }

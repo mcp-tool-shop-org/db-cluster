@@ -229,8 +229,20 @@ const visibilityRules: VisibilityRule[] = [
  * CommandQueue. Without this the in-memory queues diverge and a command
  * proposed via admin would be invisible to the restricted kernel that
  * tries to inspectCommand / commitMutation against it.
+ *
+ * TESTS-B-004 (Wave A4): previously this helper returned only the
+ * restricted kernel and attached the admin kernel as a hidden `__admin`
+ * property via double-cast. That bypassed TypeScript's structural checks
+ * entirely and was invisible to verb-parity allowlist enforcement. The
+ * helper now returns a typed tuple so call sites destructure both kernels
+ * by name. Eliminates the cast; makes the test reader's job obvious.
  */
-function makePolicyKernel(principal: Principal): PolicyEnforcedKernel {
+interface PolicyKernelPair {
+    restricted: PolicyEnforcedKernel;
+    admin: PolicyEnforcedKernel;
+}
+
+function makePolicyKernel(principal: Principal): PolicyKernelPair {
     const dir = mkdtempSync(join(tmpdir(), 'policy-kernel-'));
     const stores = createLocalCluster(dir);
     const restricted = new PolicyEnforcedKernel(
@@ -238,21 +250,16 @@ function makePolicyKernel(principal: Principal): PolicyEnforcedKernel {
         { principal },
         { policies, trustZones, visibilityRules, dataDir: dir },
     );
-    const adminWrapped = new PolicyEnforcedKernel(
+    const adminKernel = new PolicyEnforcedKernel(
         stores,
         { principal: admin },
         { policies, trustZones, visibilityRules, dataDir: dir },
     );
-    (restricted as unknown as { __admin: PolicyEnforcedKernel }).__admin = adminWrapped;
-    return restricted;
+    return { restricted, admin: adminKernel };
 }
 
-function seedKernel(restricted: PolicyEnforcedKernel): PolicyEnforcedKernel {
-    return (restricted as unknown as { __admin: PolicyEnforcedKernel }).__admin;
-}
-
-async function seedEntity(restricted: PolicyEnforcedKernel): Promise<string> {
-    const result = await seedKernel(restricted).createEntity({
+async function seedEntity(adminKernel: PolicyEnforcedKernel): Promise<string> {
+    const result = await adminKernel.createEntity({
         kind: 'concept',
         name: 'Test Entity',
         attributes: { domain: 'test' },
@@ -269,15 +276,15 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
 
     describe('Proof 1: denied principal cannot inspect owner truth', () => {
         it('denied principal gets PolicyDeniedError on inspectEntity', async () => {
-            const pk = makePolicyKernel(deniedPrincipal);
-            const entityId = await seedEntity(pk);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(deniedPrincipal);
+            const entityId = await seedEntity(adminK);
 
             await expect(pk.inspectEntity(entityId)).rejects.toThrow(PolicyDeniedError);
         });
 
         it('denied principal error includes decision details', async () => {
-            const pk = makePolicyKernel(deniedPrincipal);
-            const entityId = await seedEntity(pk);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(deniedPrincipal);
+            const entityId = await seedEntity(adminK);
 
             try {
                 await pk.inspectEntity(entityId);
@@ -296,9 +303,9 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
 
     describe('Proof 2: index-only principal can discover derivative but not resolve owner truth', () => {
         it('index reader can findSources (discover_existence) — but cannot see canonical-backed records', async () => {
-            const pk = makePolicyKernel(indexOnlyReader);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(indexOnlyReader);
             // Seed via the admin-bound helper kernel (indexOnlyReader has no commit_command).
-            await seedKernel(pk).createEntity({
+            await adminK.createEntity({
                 kind: 'concept',
                 name: 'Discoverable',
                 attributes: {},
@@ -318,14 +325,14 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
         });
 
         it('index reader cannot inspectEntity', async () => {
-            const pk = makePolicyKernel(indexOnlyReader);
-            const entityId = await seedEntity(pk);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(indexOnlyReader);
+            const entityId = await seedEntity(adminK);
             await expect(pk.inspectEntity(entityId)).rejects.toThrow(PolicyDeniedError);
         });
 
         it('index reader can retrieveBundle (read_derivative)', async () => {
-            const pk = makePolicyKernel(indexOnlyReader);
-            await seedKernel(pk).createEntity({
+            const { restricted: pk, admin: adminK } = makePolicyKernel(indexOnlyReader);
+            await adminK.createEntity({
                 kind: 'concept',
                 name: 'BundleTest',
                 attributes: {},
@@ -341,22 +348,22 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
 
     describe('Proof 3: trace requires trace_provenance', () => {
         it('principal without trace_provenance cannot traceObject', async () => {
-            const pk = makePolicyKernel(indexOnlyReader);
-            const entityId = await seedEntity(pk);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(indexOnlyReader);
+            const entityId = await seedEntity(adminK);
 
             await expect(pk.traceObject(`cluster://canonical/${entityId}`)).rejects.toThrow(PolicyDeniedError);
         });
 
         it('principal without trace_provenance cannot call why', async () => {
-            const pk = makePolicyKernel(indexOnlyReader);
-            const entityId = await seedEntity(pk);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(indexOnlyReader);
+            const entityId = await seedEntity(adminK);
 
             await expect(pk.why(`cluster://canonical/${entityId}`)).rejects.toThrow(PolicyDeniedError);
         });
 
         it('proposer (with trace_provenance) can trace', async () => {
-            const pk = makePolicyKernel(proposer);
-            const entityId = await seedEntity(pk);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(proposer);
+            const entityId = await seedEntity(adminK);
 
             const graph = await pk.traceObject(`cluster://canonical/${entityId}`);
             expect(graph.nodes.length).toBeGreaterThan(0);
@@ -367,7 +374,7 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
 
     describe('Proof 4: proposer can propose but cannot commit', () => {
         it('proposer can propose a mutation', async () => {
-            const pk = makePolicyKernel(proposer);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(proposer);
             const cmd = await pk.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
@@ -378,7 +385,7 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
         });
 
         it('proposer cannot commit', async () => {
-            const pk = makePolicyKernel(proposer);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(proposer);
             const cmd = await pk.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
@@ -390,7 +397,7 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
         });
 
         it('proposer cannot approve', async () => {
-            const pk = makePolicyKernel(proposer);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(proposer);
             const cmd = await pk.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
@@ -406,11 +413,11 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
 
     describe('Proof 5: approver can approve but cannot mutate owner truth directly', () => {
         it('approver cannot commit', async () => {
-            const pk = makePolicyKernel(approver);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(approver);
             // Seed a command via the admin-bound helper kernel since
             // approver has no propose_mutation. The _kernel bypass was
             // removed in Wave A2 (KERNEL-R003).
-            const cmd = await seedKernel(pk).proposeMutation({
+            const cmd = await adminK.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
                 payload: { kind: 'concept', name: 'ApproverTest', attributes: {} },
@@ -421,23 +428,22 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
         });
 
         it('approver can approve a validated command', async () => {
-            const pk = makePolicyKernel(approver);
-            const seedK = seedKernel(pk);
-            const cmd = await seedK.proposeMutation({
+            const { restricted: pk, admin: adminK } = makePolicyKernel(approver);
+            const cmd = await adminK.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
                 payload: { kind: 'concept', name: 'Approvable', attributes: {} },
                 proposedBy: 'someone',
             });
-            await seedK.validateMutation(cmd.id);
+            await adminK.validateMutation(cmd.id);
 
             const approved = await pk.approveMutation(cmd.id, 'approver-1', 'looks good');
             expect(approved.status).toBe('approved');
         });
 
         it('approver cannot read owner truth directly', async () => {
-            const pk = makePolicyKernel(approver);
-            const entityId = await seedEntity(pk);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(approver);
+            const entityId = await seedEntity(adminK);
 
             await expect(pk.inspectEntity(entityId)).rejects.toThrow(PolicyDeniedError);
         });
@@ -447,12 +453,12 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
 
     describe('Proof 6: commit requires commit_command', () => {
         it('receipt-reader cannot commit', async () => {
-            const pk = makePolicyKernel(receiptReader);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(receiptReader);
             await expect(pk.commitMutation('any-id', 'auditor-1')).rejects.toThrow(PolicyDeniedError);
         });
 
         it('admin (with commit_command) can commit', async () => {
-            const pk = makePolicyKernel(admin);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(admin);
             const cmd = await pk.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
@@ -471,18 +477,18 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
 
     describe('Proof 7: receipt reads require read_receipts', () => {
         it('proposer cannot list receipts', async () => {
-            const pk = makePolicyKernel(proposer);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(proposer);
             await expect(pk.listReceipts()).rejects.toThrow(PolicyDeniedError);
         });
 
         it('receipt-reader can list receipts', async () => {
-            const pk = makePolicyKernel(receiptReader);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(receiptReader);
             const receipts = await pk.listReceipts();
             expect(Array.isArray(receipts)).toBe(true);
         });
 
         it('denied principal cannot list receipts', async () => {
-            const pk = makePolicyKernel(deniedPrincipal);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(deniedPrincipal);
             await expect(pk.listReceipts()).rejects.toThrow(PolicyDeniedError);
         });
     });
@@ -491,14 +497,14 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
 
     describe('Proof 8: explain retrieval requires explain_retrieval', () => {
         it('principal without explain_retrieval cannot explain', async () => {
-            const pk = makePolicyKernel(proposer);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(proposer);
             const bundle = await pk.retrieveBundle('anything');
             // proposer doesn't have explain_retrieval
             await expect(pk.explainRetrieval(bundle)).rejects.toThrow(PolicyDeniedError);
         });
 
         it('explainer can explain retrieval', async () => {
-            const pk = makePolicyKernel(explainer);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(explainer);
             const bundle = await pk.retrieveBundle('anything');
             const explanation = await pk.explainRetrieval(bundle);
             expect(explanation.summary).toBeTruthy();
@@ -509,15 +515,15 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
 
     describe('Proof 9: denied resolution hides or redacts according to visibility rule', () => {
         it('visibility check reports canonical as hidden for external', () => {
-            const pk = makePolicyKernel(deniedPrincipal);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(deniedPrincipal);
             const vis = pk.checkVisibility('cluster://canonical/entity-1', 'canonical');
             expect(vis.existenceVisible).toBe(false);
             expect(vis.emitPlaceholder).toBe(true);
         });
 
         it('findSources filters resolved entities when principal lacks read_owner_truth', async () => {
-            const pk = makePolicyKernel(indexOnlyReader);
-            await seedKernel(pk).createEntity({
+            const { restricted: pk, admin: adminK } = makePolicyKernel(indexOnlyReader);
+            await adminK.createEntity({
                 kind: 'concept',
                 name: 'Filtered Entity',
                 attributes: {},
@@ -542,7 +548,7 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
 
     describe('Proof 10: policy denial does not bypass existing command validation', () => {
         it('admin still subject to command lifecycle rules', async () => {
-            const pk = makePolicyKernel(admin);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(admin);
 
             // Propose with invalid payload (no filename for ingest_artifact)
             const cmd = await pk.proposeMutation({
@@ -557,7 +563,7 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
         });
 
         it('admin cannot commit a rejected command', async () => {
-            const pk = makePolicyKernel(admin);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(admin);
             const cmd = await pk.proposeMutation({
                 verb: 'create_entity',
                 targetStore: 'canonical',
@@ -573,7 +579,7 @@ describe('Wave 3 — Kernel Policy Enforcement', () => {
         });
 
         it('policy allow does not skip verb validation', async () => {
-            const pk = makePolicyKernel(admin);
+            const { restricted: pk, admin: adminK } = makePolicyKernel(admin);
             const cmd = await pk.proposeMutation({
                 verb: 'nonexistent_verb' as any,
                 targetStore: 'canonical',

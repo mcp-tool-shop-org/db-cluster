@@ -1,18 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { rmSync, mkdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import { generateSnapshot, type DashboardSnapshot } from '../scripts/dashboard-snapshot.js';
 
-const TEST_DIR = join(import.meta.dirname, '.test-dashboard-snapshot');
-
 describe('Dashboard snapshot generation', () => {
     let snapshot: DashboardSnapshot;
+    let TEST_DIR: string;
 
     beforeAll(async () => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
-        mkdirSync(TEST_DIR, { recursive: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-dashboard-snapshot-'));
         const cluster = createLocalCluster(TEST_DIR);
         const kernel = new ClusterKernel(cluster, { dataDir: TEST_DIR });
 
@@ -45,7 +44,7 @@ describe('Dashboard snapshot generation', () => {
     });
 
     afterAll(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     it('snapshot contains objects from the cluster', () => {

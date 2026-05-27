@@ -1,24 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import { inspectCommandObject } from '../src/dashboard/inspector-data.js';
 
-const TEST_DIR = join(import.meta.dirname, '.test-dashboard-cmd-preview');
-
 describe('Dashboard command preview', () => {
     let kernel: ClusterKernel;
+    let TEST_DIR: string;
 
     beforeEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
-        mkdirSync(TEST_DIR, { recursive: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-dashboard-cmd-preview-'));
         const cluster = createLocalCluster(TEST_DIR);
         kernel = new ClusterKernel(cluster, { dataDir: TEST_DIR });
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     it('proposed command shows proposed status', async () => {

@@ -18,6 +18,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, rmSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
@@ -198,11 +199,16 @@ describe('Phase 15 — Release Readiness & Package Boundary (10 Proofs)', () => 
       const ingestPropose = await sdk.proposeMutation({
         verb: 'ingest_artifact',
         targetStore: 'artifact',
-        payload: {
-          filename: 'phase15-proof.txt',
-          content: 'Phase 15 proof: the package boundary holds.',
-          mediaType: 'text/plain',
-        },
+        payload: (() => {
+          // Wave A4 KERNEL-B-007: Buffer + contentHash side-channel.
+          const buf = Buffer.from('Phase 15 proof: the package boundary holds.', 'utf-8');
+          return {
+            filename: 'phase15-proof.txt',
+            content: buf,
+            contentHash: createHash('sha256').update(buf).digest('hex'),
+            mediaType: 'text/plain',
+          };
+        })(),
         proposedBy: 'proof-actor',
       });
       await sdk.validateMutation(ingestPropose.id);

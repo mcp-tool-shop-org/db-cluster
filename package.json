@@ -48,6 +48,7 @@
     "lint": "tsc --noEmit && npm run lint:examples",
     "lint:examples": "tsc -p tsconfig.examples.json",
     "prepack": "npm run build",
+    "prepublishOnly": "node scripts/release-gate.mjs",
     "smoke:pack": "npm pack --dry-run",
     "release-gate": "node scripts/release-gate.mjs",
     "completeness": "node scripts/completeness-checks.mjs"

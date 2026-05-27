@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, basename, join } from 'node:path';
 import type { IndexRecord } from '../../types/index-record.js';
 import type { IndexStore, IndexQuery } from '../../contracts/index-store.js';
 import { CorruptStoreError } from './errors.js';
+import { buildRandomTmpPath, cleanupOrphanTmpFiles } from './tmp-cleanup.js';
 
 /**
  * Local index store — file-backed derivative index.
@@ -21,6 +22,8 @@ export class LocalIndexStore implements IndexStore {
     constructor(dataDir: string) {
         mkdirSync(dataDir, { recursive: true });
         this.filePath = join(dataDir, 'index-records.json');
+        // STORES-B-001: sweep orphan random-suffix tmp files before load.
+        cleanupOrphanTmpFiles(dirname(this.filePath), basename(this.filePath));
         this.records = this.load();
     }
 
@@ -125,7 +128,8 @@ export class LocalIndexStore implements IndexStore {
 
     private persist(): void {
         const arr = Array.from(this.records.values());
-        const tmpPath = `${this.filePath}.tmp`;
+        // STORES-B-001: random-suffix tmp path. See local-canonical-store.
+        const tmpPath = buildRandomTmpPath(this.filePath);
         writeFileSync(tmpPath, JSON.stringify(arr, null, 2));
         renameSync(tmpPath, this.filePath);
     }

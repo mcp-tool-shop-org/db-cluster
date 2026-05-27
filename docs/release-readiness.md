@@ -68,11 +68,67 @@ the tag from going out:
    `workflow_dispatch` button against that SHA.
 4. **Create the tag** (`v0.1.1`). `release-gate.yml` runs on tag push
    AND `smoke-install.yml` runs on tag push as a final defense.
-5. **If smoke fails on tag push:** the tag is already published but the
+5. **Publish to npm.** `npm publish` runs the `prepublishOnly` script
+   (which invokes `node scripts/release-gate.mjs`) on the maintainer's
+   workstation as a locally-enforced gate — the same gate that
+   `release-gate.yml` runs in CI. This catches issues even on a
+   workstation that bypassed the PR flow above. `prepack` runs `npm run
+   build` for the tarball; `prepublishOnly` runs the full 7-stage gate
+   only when `npm publish` is invoked (not on `npm pack`).
+6. **If smoke fails on tag push:** the tag is already published but the
    release is broken. Roll back by publishing a fixed patch (e.g.,
    `0.1.2`) with the smoke-install fix; leave the broken tag in place
    for audit traceability and mark the GitHub release as a draft or
    pre-release.
+
+## Diagnosing a failing release-gate run
+
+`scripts/release-gate.mjs` writes per-stage logs to
+`.release-gate-output/` (gitignored). Every stage writes a log file —
+PASS or FAIL — so you can diff successive runs or grep across them.
+
+**File layout:** `.release-gate-output/stage-{N}-{slug}-{stamp}.log`
+
+The run stamp is shared across all stages of a given invocation
+(e.g., `20260527-091803Z`), so log files from one run sort together
+and a single `ls` shows the full stage sequence.
+
+Each file begins with a header (stage number, label, status, run stamp,
+cwd) followed by full stdout, a `---STDERR---` divider, then full stderr.
+
+On failure, the console also prints the last 8 KB of stdout and stderr
+(wide enough to capture a failing vitest test name even in a 699-test
+suite) plus the path to the full log file:
+
+```
+  vitest run... FAIL
+    stdout: <tail of last 8 KB>
+    stderr: <tail of last 8 KB>
+    Full output at: E:/AI/db-cluster/.release-gate-output/stage-2-vitest-run-20260527-091803Z.log
+```
+
+### Stage map
+
+| Stage | Label | Expected output |
+|-------|-------|-----------------|
+| 1 | `tsc --noEmit`, `npm run build` | Clean TypeScript compile, populated `dist/`. |
+| 2 | `vitest run` | Full suite pass (699+ tests). Flake here usually surfaces a missing setup/teardown — log file shows which test file. |
+| 3 | `npm pack` + tarball presence | Tarball `db-cluster-<version>.tgz` exists at repo root. |
+| 4 | `smoke-install` | Tarball installs in a temp directory; CLI, MCP bin, SDK import, subpath exports, and quickstart all succeed. |
+| 5 | `docs-drift` | No `from '../../src/'` references in `examples/` or `dashboard/lib/` (paths that ship in the npm tarball must not import from `src/`, which does not ship). |
+| 6 | `package-exports` | Every path in `package.json` `exports` resolves to a real file inside `dist/`. |
+| 7 | `completeness-checks` | Mechanical ast-grep gates for known legacy patterns. |
+
+### Cleaning the log directory
+
+`.release-gate-output/` accumulates across runs. Delete it manually
+between debugging sessions if you want a clean view:
+
+```sh
+rm -rf .release-gate-output
+# Windows
+Remove-Item -Recurse -Force .release-gate-output
+```
 
 ## What is NOT blocking release
 

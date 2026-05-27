@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import { ClusterResolver, ResolveError } from '../src/resolver/index.js';
@@ -13,23 +14,21 @@ import {
 } from '../src/uri/index.js';
 import type { ClusterStores } from '../src/contracts/index.js';
 
-const TEST_DIR = join(import.meta.dirname, '.test-phase2-proof');
-
 describe('Phase 2 — Proof Tests', () => {
     let cluster: ClusterStores;
     let kernel: ClusterKernel;
     let resolver: ClusterResolver;
+    let TEST_DIR: string;
 
     beforeEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
-        mkdirSync(TEST_DIR, { recursive: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-phase2-proof-'));
         cluster = createLocalCluster(TEST_DIR);
         kernel = new ClusterKernel(cluster, { dataDir: TEST_DIR });
         resolver = new ClusterResolver(cluster);
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     describe('URI roundtrip: parse → format → resolve', () => {

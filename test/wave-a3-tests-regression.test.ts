@@ -64,6 +64,7 @@ import fc from 'fast-check';
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { LocalCanonicalStore } from '../src/adapters/local/local-canonical-store.js';
@@ -240,18 +241,21 @@ describe('Wave A3 — Tests regression nets', () => {
             };
             await store.importSnapshot(first);
 
-            // Second import with a DIFFERENT body but the same id MUST NOT
-            // overwrite the existing record. The idempotency invariant is
-            // load-bearing — backup/restore re-runs depend on it (STORES-002).
-            const second: Entity = {
-                ...first,
-                name: 'Different Name — attempted overwrite',
-                attributes: { v: 2 },
-                updatedAt: '2024-09-09T09:09:09.000Z',
-            };
-            const returned = await store.importSnapshot(second);
+            // Wave A4 (STORES-B-003): backup/restore re-runs with IDENTICAL
+            // content remain idempotent — silent return-of-existing. The
+            // pre-A4 test attempted a DIFFERENT body at the same id and
+            // asserted silent-first-write-wins; STORES-B-003 reclassified
+            // that as a silent-tampering security hole, replacing it with a
+            // typed ImportConflictError. True idempotency (same id + same
+            // bytes returns existing) is now the load-bearing invariant
+            // backup/restore actually relies on; the conflict-on-diff case
+            // is covered in test/wave-a4-stores-regression.test.ts
+            // (STORES-B-003 — content conflict).
+            const returned = await store.importSnapshot(first);
+            expect(returned.id).toBe('idem-fixed-uuid');
             expect(returned.name).toBe('Original Name');
             expect((returned.attributes as Record<string, unknown>).v).toBe(1);
+            expect(returned.createdAt).toBe('2024-01-01T00:00:00.000Z');
             expect(returned.updatedAt).toBe('2024-01-01T00:00:00.000Z');
 
             // List has exactly one record for that id.
@@ -458,11 +462,16 @@ describe('Wave A3 — Tests regression nets', () => {
             const cmd = await sdk.proposeMutation({
                 verb: 'ingest_artifact',
                 targetStore: 'artifact',
-                payload: {
-                    filename: 'r2-003-evidence.md',
-                    content: '# evidence body — TESTS-R2-003 canary',
-                    mediaType: 'text/markdown',
-                },
+                payload: (() => {
+                    // Wave A4 KERNEL-B-007: Buffer + contentHash side-channel.
+                    const buf = Buffer.from('# evidence body — TESTS-R2-003 canary', 'utf-8');
+                    return {
+                        filename: 'r2-003-evidence.md',
+                        content: buf,
+                        contentHash: createHash('sha256').update(buf).digest('hex'),
+                        mediaType: 'text/markdown',
+                    };
+                })(),
                 proposedBy: 'setup',
             });
             await sdk.validateMutation(cmd.id);

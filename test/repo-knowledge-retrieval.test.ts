@@ -1,20 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import { ingestRepoKnowledge } from '../src/integrations/repo-knowledge/ingest.js';
 import { compareRetrieval, generateComparisonReport } from '../src/integrations/repo-knowledge/compare-retrieval.js';
 import type { IngestSource } from '../src/integrations/repo-knowledge/ingest.js';
 
-const TEST_DIR = join(import.meta.dirname, '.test-rk-retrieval');
-const SOURCES_DIR = join(TEST_DIR, 'sources');
-
 describe('Repo-knowledge retrieval comparison', () => {
     let kernel: ClusterKernel;
+    let TEST_DIR: string;
+    let SOURCES_DIR: string;
 
     beforeEach(async () => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-rk-retrieval-'));
+        SOURCES_DIR = join(TEST_DIR, 'sources');
         mkdirSync(SOURCES_DIR, { recursive: true });
         const cluster = createLocalCluster(join(TEST_DIR, 'cluster'));
         kernel = new ClusterKernel(cluster, { dataDir: join(TEST_DIR, 'cluster') });
@@ -45,7 +46,7 @@ describe('Repo-knowledge retrieval comparison', () => {
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     it('returns evidence bundles, not plain search hits', async () => {

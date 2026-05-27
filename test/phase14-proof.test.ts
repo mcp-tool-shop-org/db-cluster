@@ -6,8 +6,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { rmSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import { CommandQueue } from '../src/kernel/command-queue.js';
@@ -19,19 +20,20 @@ import { doctor } from '../src/ops/doctor.js';
 import { verify } from '../src/ops/verify.js';
 import { backup, restore } from '../src/ops/backup.js';
 
-const PROOF_DIR = join(import.meta.dirname, '.test-phase14-proofs');
-const SOURCES_DIR = join(PROOF_DIR, 'sources');
-const CLUSTER_DIR = join(PROOF_DIR, 'cluster');
-
 describe('Phase 14 Integration Gate — 12 Proofs', () => {
     let stores: ReturnType<typeof createLocalCluster>;
     let kernel: ClusterKernel;
     let entityIds: string[];
     let artifactIds: string[];
     let repoEntityId: string;
+    let PROOF_DIR: string;
+    let SOURCES_DIR: string;
+    let CLUSTER_DIR: string;
 
     beforeAll(async () => {
-        rmSync(PROOF_DIR, { recursive: true, force: true });
+        PROOF_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-phase14-proof-'));
+        SOURCES_DIR = join(PROOF_DIR, 'sources');
+        CLUSTER_DIR = join(PROOF_DIR, 'cluster');
         mkdirSync(SOURCES_DIR, { recursive: true });
 
         writeFileSync(join(SOURCES_DIR, 'phase-status.md'), '# Phase Status\n\nPhase 13 complete. Phase 14 active.\n');
@@ -58,7 +60,7 @@ describe('Phase 14 Integration Gate — 12 Proofs', () => {
     });
 
     afterAll(() => {
-        rmSync(PROOF_DIR, { recursive: true, force: true });
+        try { rmSync(PROOF_DIR, { recursive: true, force: true }); } catch {}
     });
 
     // --- Proof 1: Traceability ---

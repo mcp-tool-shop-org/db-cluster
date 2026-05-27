@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execSync } from 'node:child_process';
-import { rmSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
-const TEST_DIR = join(import.meta.dirname, '.test-cli');
+let TEST_DIR: string;
 const CLI = `node ${join(import.meta.dirname, '..', 'dist', 'cli.js')}`;
 
 function run(cmd: string): string {
@@ -12,12 +13,11 @@ function run(cmd: string): string {
 
 describe('Wave 4 — Golden-Path CLI', () => {
     beforeEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
-        mkdirSync(TEST_DIR, { recursive: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-cli-'));
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     it('full golden-path scenario', async () => {

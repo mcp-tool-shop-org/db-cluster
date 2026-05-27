@@ -11,6 +11,31 @@ import type { ProvenanceEvent } from '../types/provenance-event.js';
 import type { Receipt } from '../types/receipt.js';
 import type { Command } from '../types/command.js';
 import { ImportSnapshotNotSupportedError } from './errors.js';
+import { assertContentMatch } from '../adapters/local/errors.js';
+
+/**
+ * Extract the stable identity-bearing fields from an Artifact metadata record
+ * for the Wave A4 fix-up byte-equivalence check on re-restore. Excludes
+ * `storagePath` (adapter-impl-specific, varies per data dir) and `owner`
+ * (already excluded by assertContentMatch but spelled out here for clarity).
+ *
+ * If a backup tampers with id, filename, contentHash, mimeType, sizeBytes,
+ * version, or ingestedAt, that mismatch surfaces as an ImportConflictError.
+ * Tampering with storagePath alone is a no-op — the field is recomputed by
+ * the artifact adapter on restore from contentHash, and pre-existing local
+ * storagePath values for the same id naturally differ across data dirs.
+ */
+function stableArtifactFields(metadata: Record<string, unknown>): Record<string, unknown> {
+    return {
+        id: metadata.id,
+        filename: metadata.filename,
+        contentHash: metadata.contentHash,
+        mimeType: metadata.mimeType,
+        sizeBytes: metadata.sizeBytes,
+        version: metadata.version,
+        ingestedAt: metadata.ingestedAt,
+    };
+}
 
 export interface ArtifactSnapshot {
     metadata: Artifact;
@@ -116,8 +141,20 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
     }
     for (const entity of data.entities) {
         try {
-            const exists = await stores.canonical.exists(entity.id);
-            if (exists) {
+            const existsAlready = await stores.canonical.exists(entity.id);
+            if (existsAlready) {
+                // STORES-B-003 / Wave A4 fix-up: verify byte-equivalence before
+                // declaring an idempotent skip. Pre-fix, restore() short-circuited
+                // on exists() without ever calling importSnapshot() — so the new
+                // ImportConflictError path inside the adapter was unreachable from
+                // the end-to-end backup→restore flow, and a tampered backup with
+                // a matching id but altered fields still silently masked. Calling
+                // assertContentMatch here surfaces the mismatch via the
+                // surrounding try/catch into result.entities.errors[].
+                const existing = await stores.canonical.get(entity.id);
+                if (existing) {
+                    assertContentMatch('canonical', entity.id, existing as unknown as Record<string, unknown>, entity as unknown as Record<string, unknown>);
+                }
                 result.entities.skipped++;
             } else {
                 await canonicalImport.call(stores.canonical, entity);
@@ -141,8 +178,29 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
         }
         for (const snapshot of snapshots) {
             try {
-                const exists = await stores.artifact.exists(snapshot.metadata.id);
-                if (exists) {
+                const existsAlready = await stores.artifact.exists(snapshot.metadata.id);
+                if (existsAlready) {
+                    // STORES-B-003 / Wave A4 fix-up: same rationale as the
+                    // entities arm — short-circuiting on exists() without a
+                    // byte-equivalence check meant a tampered artifact metadata
+                    // record with a matching id but altered filename/mimeType/
+                    // contentHash was silently masked. Fetch the existing
+                    // metadata and call assertContentMatch; mismatches throw
+                    // ImportConflictError, captured by the surrounding catch.
+                    //
+                    // Compare ONLY the operator-meaningful fields. `storagePath`
+                    // is an implementation-only field stamped by the local
+                    // adapter — its value reflects the target data dir, which
+                    // differs from the backup's source data dir even for an
+                    // identical artifact. Excluding it here keeps idempotent
+                    // re-restore working while still surfacing tampering of
+                    // the identity-bearing fields.
+                    const existing = await stores.artifact.get(snapshot.metadata.id);
+                    if (existing) {
+                        const existingCmp = stableArtifactFields(existing as unknown as Record<string, unknown>);
+                        const incomingCmp = stableArtifactFields(snapshot.metadata as unknown as Record<string, unknown>);
+                        assertContentMatch('artifact', snapshot.metadata.id, existingCmp, incomingCmp);
+                    }
                     result.artifacts.skipped++;
                 } else if (snapshot.contentBase64) {
                     const content = Buffer.from(snapshot.contentBase64, 'base64');
@@ -178,8 +236,15 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
     }
     for (const event of data.events) {
         try {
-            const exists = await stores.ledger.getEvent(event.id);
-            if (exists) {
+            const existing = await stores.ledger.getEvent(event.id);
+            if (existing) {
+                // STORES-B-003 / Wave A4 fix-up: events are append-only by
+                // intent, but a tampered backup could still try to overlay an
+                // existing event id with altered detail/actorId/parentEventId.
+                // Apply the same byte-equivalence gate as entities/artifacts
+                // for symmetry — the silent first-write-wins hole would
+                // otherwise persist on this arm.
+                assertContentMatch('ledger-event', event.id, existing as unknown as Record<string, unknown>, event as unknown as Record<string, unknown>);
                 result.events.skipped++;
             } else {
                 await ledgerImportEvent!.call(stores.ledger, event);
@@ -198,8 +263,12 @@ export async function restore(stores: ClusterStores, data: ClusterBackup, option
     }
     for (const receipt of data.receipts) {
         try {
-            const exists = await stores.ledger.getReceipt(receipt.id);
-            if (exists) {
+            const existing = await stores.ledger.getReceipt(receipt.id);
+            if (existing) {
+                // STORES-B-003 / Wave A4 fix-up: same byte-equivalence gate
+                // as events for symmetry. A tampered backup could overlay an
+                // existing receipt id with altered resultSummary/affectedIds.
+                assertContentMatch('ledger-receipt', receipt.id, existing as unknown as Record<string, unknown>, receipt as unknown as Record<string, unknown>);
                 result.receipts.skipped++;
             } else {
                 await ledgerImportReceipt!.call(stores.ledger, receipt);

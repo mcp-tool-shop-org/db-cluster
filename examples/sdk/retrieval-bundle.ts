@@ -4,6 +4,7 @@
  * Demonstrates: structured retrieval, freshness reporting, and explainRetrieval.
  */
 
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,10 +27,15 @@ async function main() {
     }
 
     async function ingestArtifact(filename: string, content: string, mimeType: string) {
+        // Wave A4 fix-up: ingest_artifact propose requires `contentHash` for
+        // staging-area integrity (KERNEL-B-007). Pre-hash the Buffer once and
+        // hand both content + hash to the kernel.
+        const contentBuf = Buffer.from(content);
+        const contentHash = createHash('sha256').update(contentBuf).digest('hex');
         const cmd = await sdk.proposeMutation({
             verb: 'ingest_artifact',
             targetStore: 'artifact',
-            payload: { filename, content: Buffer.from(content), mimeType },
+            payload: { filename, content: contentBuf, mimeType, contentHash },
             proposedBy: 'example',
         });
         await sdk.validateMutation(cmd.id);

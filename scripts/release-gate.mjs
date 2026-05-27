@@ -4,48 +4,114 @@
  * Exit 0 = releasable. Exit 1 = not ready.
  *
  * Usage: node scripts/release-gate.mjs
+ *
+ * Diagnostics:
+ *   Every stage writes full stdout+stderr to `.release-gate-output/`
+ *   (gitignored). On failure, the file path is printed so operators can
+ *   inspect the complete output rather than a tail. The console fail
+ *   summary uses an 8 KB slice (8000 chars), which is wide enough to
+ *   surface a failing vitest test name even in a 699-test suite.
+ *   See docs/release-readiness.md "Diagnosing a failing release-gate run".
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
+const LOG_DIR = join(ROOT, '.release-gate-output');
+const TAIL_BYTES = 8000;
+
+mkdirSync(LOG_DIR, { recursive: true });
+
+// Timestamp shared across this run so all stage logs sort together.
+function isoStamp() {
+  // 20260527-091803Z
+  const d = new Date();
+  const pad = (n, w = 2) => String(n).padStart(w, '0');
+  return (
+    `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
+    `-${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`
+  );
+}
+const RUN_STAMP = isoStamp();
+
 let failures = 0;
+let stageIndex = 0;
+
+function slugify(s) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'stage';
+}
+
+function writeStageLog(stageNum, label, stdout, stderr, status) {
+  const slug = slugify(label);
+  const file = join(LOG_DIR, `stage-${stageNum}-${slug}-${RUN_STAMP}.log`);
+  const header = [
+    `# release-gate stage ${stageNum} — ${label}`,
+    `# status: ${status}`,
+    `# run: ${RUN_STAMP}`,
+    `# cwd: ${ROOT}`,
+    '',
+  ].join('\n');
+  const body = `${stdout || ''}\n---STDERR---\n${stderr || ''}\n`;
+  try {
+    writeFileSync(file, header + body, 'utf8');
+  } catch (e) {
+    console.error(`    (warning: could not write log file ${file}: ${e.message})`);
+  }
+  return file;
+}
 
 function run(label, cmd, opts = {}) {
+  stageIndex++;
+  const stageNum = opts.stageNum ?? stageIndex;
   process.stdout.write(`  ${label}... `);
+  let stdout = '';
+  let stderr = '';
   try {
-    execSync(cmd, { cwd: opts.cwd || ROOT, stdio: 'pipe', timeout: opts.timeout ?? 120_000 });
+    const buf = execSync(cmd, {
+      cwd: opts.cwd || ROOT,
+      stdio: 'pipe',
+      timeout: opts.timeout ?? 120_000,
+    });
+    stdout = buf ? buf.toString() : '';
     console.log('OK');
+    writeStageLog(stageNum, label, stdout, stderr, 'PASS');
     return true;
   } catch (e) {
+    stdout = e.stdout ? e.stdout.toString() : '';
+    stderr = e.stderr ? e.stderr.toString() : '';
     console.log('FAIL');
-    if (e.stdout) console.error('    stdout:', e.stdout.toString().slice(-500));
-    if (e.stderr) console.error('    stderr:', e.stderr.toString().slice(-500));
+    if (stdout) console.error('    stdout:', stdout.slice(-TAIL_BYTES));
+    if (stderr) console.error('    stderr:', stderr.slice(-TAIL_BYTES));
+    const file = writeStageLog(stageNum, label, stdout, stderr, 'FAIL');
+    console.error(`    Full output at: ${file}`);
     failures++;
     return false;
   }
 }
 
-console.log('\n=== Release Gate ===\n');
+console.log('\n=== Release Gate ===');
+console.log(`Run stamp: ${RUN_STAMP}`);
+console.log(`Logs: ${LOG_DIR}\n`);
 
 // 1. Build
 console.log('[1/7] Build');
-run('tsc --noEmit', 'npx tsc --noEmit');
-run('npm run build', 'npm run build');
+run('tsc --noEmit', 'npx tsc --noEmit', { stageNum: 1 });
+run('npm run build', 'npm run build', { stageNum: 1 });
 
 // 2. Test suite
 console.log('\n[2/7] Tests');
-run('vitest run', 'npx vitest run', { timeout: 300_000 });
+run('vitest run', 'npx vitest run', { stageNum: 2, timeout: 300_000 });
 
 // 3. Pack
 console.log('\n[3/7] Package');
-run('npm pack', 'npm pack');
+run('npm pack', 'npm pack', { stageNum: 3 });
 const tgz = join(ROOT, 'db-cluster-0.1.0.tgz');
 if (!existsSync(tgz)) {
   console.log('  FAIL: tarball not found at', tgz);
+  writeStageLog(3, 'tarball-presence', '', `expected tarball not found: ${tgz}`, 'FAIL');
   failures++;
 }
 
@@ -53,7 +119,7 @@ if (!existsSync(tgz)) {
 console.log('\n[4/7] Fresh install smoke');
 const smokeDir = mkdtempSync(join(tmpdir(), 'release-gate-'));
 try {
-  run('smoke-install', `node ${join(ROOT, 'scripts', 'smoke-install.mjs')} ${tgz}`, { cwd: smokeDir });
+  run('smoke-install', `node ${join(ROOT, 'scripts', 'smoke-install.mjs')} ${tgz}`, { stageNum: 4, cwd: smokeDir });
 } finally {
   rmSync(smokeDir, { recursive: true, force: true });
 }
@@ -92,27 +158,36 @@ const offenders = scanAllShippedDirs();
 if (offenders.length > 0) {
   console.log('FAIL — found src/ imports');
   for (const o of offenders) console.error(`    ${o}`);
+  const file = writeStageLog(5, 'docs-drift', offenders.join('\n'), '', 'FAIL');
+  console.error(`    Full output at: ${file}`);
   failures++;
 } else {
   console.log('OK');
+  writeStageLog(5, 'docs-drift', `scanned dirs: examples, dashboard/lib\nno offenders\n`, '', 'PASS');
 }
 
 // 6. Package exports exist in dist
 console.log('\n[6/7] Export paths exist in dist');
-const exports = ['dist/index.js', 'dist/sdk/index.js', 'dist/mcp/index.js', 'dist/policy/index.js', 'dist/types/index.js'];
-for (const exp of exports) {
+const exportPaths = ['dist/index.js', 'dist/sdk/index.js', 'dist/mcp/index.js', 'dist/policy/index.js', 'dist/types/index.js'];
+const exportResults = [];
+let exportFailed = false;
+for (const exp of exportPaths) {
   process.stdout.write(`  ${exp}... `);
   if (existsSync(join(ROOT, exp))) {
     console.log('OK');
+    exportResults.push(`OK  ${exp}`);
   } else {
     console.log('FAIL');
+    exportResults.push(`FAIL ${exp}`);
     failures++;
+    exportFailed = true;
   }
 }
+writeStageLog(6, 'package-exports', exportResults.join('\n') + '\n', '', exportFailed ? 'FAIL' : 'PASS');
 
 // 7. Completeness — mechanical ast-grep gates for known legacy patterns
 console.log('\n[7/7] Completeness');
-run('completeness-checks', `node ${join(ROOT, 'scripts', 'completeness-checks.mjs')}`, { timeout: 180_000 });
+run('completeness-checks', `node ${join(ROOT, 'scripts', 'completeness-checks.mjs')}`, { stageNum: 7, timeout: 180_000 });
 
 // Verdict
 console.log('\n=== Verdict ===');
@@ -120,6 +195,7 @@ if (failures === 0) {
   console.log('PASS — ready for release\n');
   process.exit(0);
 } else {
-  console.log(`FAIL — ${failures} check(s) failed\n`);
+  console.log(`FAIL — ${failures} check(s) failed`);
+  console.log(`Logs: ${LOG_DIR}\n`);
   process.exit(1);
 }

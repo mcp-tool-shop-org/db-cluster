@@ -1,22 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import type { ClusterStores } from '../src/contracts/index.js';
 
-const TEST_DIR = join(import.meta.dirname, '.test-cluster');
-
 describe('Wave 2 — Local Store Adapters', () => {
     let cluster: ClusterStores;
+    let tmpDir: string;
 
     beforeEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
-        mkdirSync(TEST_DIR, { recursive: true });
-        cluster = createLocalCluster(TEST_DIR);
+        tmpDir = mkdtempSync(join(tmpdir(), 'db-cluster-adapters-'));
+        cluster = createLocalCluster(tmpDir);
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
     });
 
     describe('Cluster factory', () => {

@@ -42,6 +42,20 @@ const KERNEL_INTERNAL_METHODS = new Set<string>([
     // the prototype since TS private is compile-time only. No reason to
     // expose this through the policy wrapper.
     'performIndexRebuild',
+    // Wave A4 KERNEL-B-007 (Buffer side-channel): private helpers for the
+    // pending-content staging area at `.db-cluster/pending-content/`. The
+    // kernel writes Buffer payloads here at propose-time (keyed by sha256)
+    // and reads them back at commit-time after re-validation. Both are
+    // `private` on the class; mechanically on the prototype. They are not
+    // verbs — they're persistence-layer plumbing for the ingest_artifact
+    // lifecycle path. PolicyEnforcedKernel intentionally does not wrap them.
+    'getStagingDir',
+    'deleteStagingFile',
+    // Wave A4 fix-up (AGG-A4-2): inline orphan-sweep for the staging dir.
+    // Mirrors the local-store adapters' constructor-time sweep. Private
+    // persistence-layer plumbing — same rationale as getStagingDir /
+    // deleteStagingFile above. PolicyEnforcedKernel does not wrap it.
+    'sweepStagingOrphans',
 ]);
 
 /**

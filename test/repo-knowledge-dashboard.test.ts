@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import { ingestRepoKnowledge } from '../src/integrations/repo-knowledge/ingest.js';
@@ -8,15 +9,16 @@ import { generateRepoKnowledgeSnapshot } from '../scripts/repo-knowledge-dashboa
 import { inspectEntity } from '../src/dashboard/inspector-data.js';
 import type { IngestSource } from '../src/integrations/repo-knowledge/ingest.js';
 
-const TEST_DIR = join(import.meta.dirname, '.test-rk-dashboard');
-const SOURCES_DIR = join(TEST_DIR, 'sources');
-const CLUSTER_DIR = join(TEST_DIR, 'cluster');
-
 describe('Repo-knowledge dashboard inspection', () => {
     let kernel: ClusterKernel;
+    let TEST_DIR: string;
+    let SOURCES_DIR: string;
+    let CLUSTER_DIR: string;
 
     beforeEach(async () => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-rk-dashboard-'));
+        SOURCES_DIR = join(TEST_DIR, 'sources');
+        CLUSTER_DIR = join(TEST_DIR, 'cluster');
         mkdirSync(SOURCES_DIR, { recursive: true });
         const cluster = createLocalCluster(CLUSTER_DIR);
         kernel = new ClusterKernel(cluster, { dataDir: CLUSTER_DIR });
@@ -43,7 +45,7 @@ describe('Repo-knowledge dashboard inspection', () => {
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     it('generates dashboard snapshot from imported memory', async () => {

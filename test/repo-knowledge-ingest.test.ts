@@ -1,19 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
 import { ingestRepoKnowledge, extractFacts } from '../src/integrations/repo-knowledge/ingest.js';
 import type { IngestSource } from '../src/integrations/repo-knowledge/ingest.js';
 
-const TEST_DIR = join(import.meta.dirname, '.test-rk-ingest');
-const SOURCES_DIR = join(TEST_DIR, 'sources');
-
 describe('Repo-knowledge parallel ingest', () => {
     let kernel: ClusterKernel;
+    let TEST_DIR: string;
+    let SOURCES_DIR: string;
 
     beforeEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        TEST_DIR = mkdtempSync(join(tmpdir(), 'db-cluster-rk-ingest-'));
+        SOURCES_DIR = join(TEST_DIR, 'sources');
         mkdirSync(SOURCES_DIR, { recursive: true });
         const cluster = createLocalCluster(join(TEST_DIR, 'cluster'));
         kernel = new ClusterKernel(cluster, { dataDir: join(TEST_DIR, 'cluster') });
@@ -25,7 +26,7 @@ describe('Repo-knowledge parallel ingest', () => {
     });
 
     afterEach(() => {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+        try { rmSync(TEST_DIR, { recursive: true, force: true }); } catch {}
     });
 
     it('creates artifacts from source files', async () => {

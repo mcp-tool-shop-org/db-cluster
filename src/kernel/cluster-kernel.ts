@@ -1,3 +1,15 @@
+import { createHash, randomBytes } from 'node:crypto';
+import {
+    existsSync,
+    mkdirSync,
+    readdirSync,
+    readFileSync,
+    renameSync,
+    statSync,
+    unlinkSync,
+    writeFileSync,
+} from 'node:fs';
+import { join } from 'node:path';
 import type { ClusterStores } from '../contracts/index.js';
 import type { Entity } from '../types/entity.js';
 import type { Artifact } from '../types/artifact.js';
@@ -10,7 +22,14 @@ import type { ProvenanceGraph, TraceOptions, TraceSummary } from '../types/prove
 import { proposeCommand, validateCommand, approveCommand, rejectCommand, markCommitted, markRejected, markCompensated } from './commands.js';
 import { recordProvenance, traceSubjectProvenance } from './provenance.js';
 import { emitReceipt } from './receipts.js';
-import { NotFoundError, CommandNotValidatedError, CommandRejectedError, ReceiptFailedError } from './errors.js';
+import {
+    NotFoundError,
+    CommandNotValidatedError,
+    CommandRejectedError,
+    ReceiptFailedError,
+    ContentHashMismatchError,
+    StagedContentTamperedError,
+} from './errors.js';
 import { CommandQueue } from './command-queue.js';
 import { RetrievalPlanner } from '../retrieval/retrieval-planner.js';
 import { TraceBuilder } from '../provenance/trace-builder.js';
@@ -74,14 +93,115 @@ export interface CommitMutationResult {
 export class ClusterKernel implements ClusterKernelInterface {
     private commandQueue: CommandQueue | null;
     private memoryCommands = new Map<string, Command>();
+    /**
+     * Kernel-local working directory. When `dataDir` is provided to the
+     * constructor we use it as the root for both the {@link CommandQueue}
+     * and the `ingest_artifact` staging area (KERNEL-B-007). When omitted
+     * (in-memory kernel) Buffer payloads on ingest_artifact still flow
+     * through commitMutation via the in-memory command map without touching
+     * disk — the staging-area path is bypassed and content is held in the
+     * payload itself, which is safe because no JSON round-trip happens.
+     */
+    private readonly dataDir: string | null;
+    /**
+     * Set to true after the first call to {@link getStagingDir} has performed
+     * the one-shot orphan sweep of the staging directory. Cached so subsequent
+     * proposeMutation calls don't repeatedly scan disk.
+     */
+    private stagingSwept = false;
 
     constructor(
         private readonly stores: ClusterStores,
         options?: KernelOptions,
     ) {
+        this.dataDir = options?.dataDir ?? null;
         this.commandQueue = options?.dataDir
             ? new CommandQueue(options.dataDir)
             : null;
+    }
+
+    /**
+     * Resolve the staging directory for ingest_artifact buffer payloads
+     * (KERNEL-B-007). Returns null in the in-memory mode (no `dataDir`).
+     * Creates the directory on first call AND sweeps orphan random-suffix
+     * tmp files from any previous crashed process (AGG-A4-2 / Wave A4 fix-up).
+     */
+    private getStagingDir(): string | null {
+        if (!this.dataDir) return null;
+        const stagingDir = join(this.dataDir, 'pending-content');
+        if (!existsSync(stagingDir)) mkdirSync(stagingDir, { recursive: true });
+        if (!this.stagingSwept) {
+            // AGG-A4-2 / Wave A4 fix-up: orphan-sweep mirrors the local-store
+            // adapters' constructor-time sweep. Pre-fix the kernel produced
+            // `<hash>.<pid>-<rand16>.tmp` tmp files but had NO sweep — a crash
+            // between writeFileSync and renameSync left them lingering forever.
+            // We can't simply call sweepContentDirOrphans because the kernel
+            // is forbidden from importing adapters/ (no back-edge rule
+            // documented in src/kernel/errors.ts). Inline the same shape +
+            // 5-min age threshold so the producer + sweep agree mechanically.
+            //
+            // The regex matches `<sha256-hex>.<pid>-<1-6 hex>.tmp` which is
+            // what the proposeMutation arm below produces.
+            try {
+                this.sweepStagingOrphans(stagingDir);
+            } catch {
+                // Best-effort: a half-broken filesystem must not block ingest.
+            }
+            this.stagingSwept = true;
+        }
+        return stagingDir;
+    }
+
+    /**
+     * Inline orphan-sweep for the staging dir. Mirrors
+     * src/adapters/local/tmp-cleanup.ts::sweepContentDirOrphans but lives
+     * here to honour the no-back-edge rule (kernel → adapters import is
+     * forbidden). 5-minute age threshold protects young tmp files belonging
+     * to actively-writing sibling processes.
+     */
+    private sweepStagingOrphans(stagingDir: string): void {
+        const maxAgeMs = 5 * 60 * 1000;
+        const cutoff = Date.now() - maxAgeMs;
+        const orphanPattern = /^[a-f0-9]{64}\.\d+-[a-z0-9]{1,6}\.tmp$/;
+        let entries: string[];
+        try {
+            entries = readdirSync(stagingDir);
+        } catch {
+            return;
+        }
+        for (const entry of entries) {
+            if (!orphanPattern.test(entry)) continue;
+            const fullPath = join(stagingDir, entry);
+            let mtimeMs: number;
+            try {
+                mtimeMs = statSync(fullPath).mtimeMs;
+            } catch {
+                continue;
+            }
+            if (mtimeMs >= cutoff) continue;
+            try {
+                unlinkSync(fullPath);
+            } catch {
+                // Best-effort.
+            }
+        }
+    }
+
+    /**
+     * Best-effort cleanup of a staging file for a rejected / compensated
+     * ingest_artifact command. Silent on file-not-present. Errors swallowed
+     * because rejection/compensation paths cannot fail on lateral cleanup —
+     * the worst case is a stale staging file that the next sweep can clear.
+     */
+    private deleteStagingFile(contentHash: unknown): void {
+        const stagingDir = this.getStagingDir();
+        if (!stagingDir || typeof contentHash !== 'string' || !contentHash) return;
+        const stagingPath = join(stagingDir, contentHash);
+        try {
+            if (existsSync(stagingPath)) unlinkSync(stagingPath);
+        } catch {
+            // Silent: see method docstring.
+        }
     }
 
     private getCommand(id: string): Command | undefined {
@@ -422,12 +542,65 @@ export class ClusterKernel implements ClusterKernelInterface {
     /**
      * Propose a mutation. Does NOT mutate any store.
      * Returns a command that can later be committed.
+     *
+     * KERNEL-B-007 (Buffer side-channel for ingest_artifact): when the verb is
+     * `ingest_artifact` and `payload.content` is a Buffer, we:
+     *
+     *  1. Recompute `sha256(content)` and verify it equals the caller's
+     *     supplied `payload.contentHash`. Mismatch throws
+     *     {@link ContentHashMismatchError} BEFORE any disk write so a
+     *     misbehaving caller can never seed a poisoned hash → buffer mapping.
+     *  2. Write the Buffer to a staging file at
+     *     `.db-cluster/pending-content/{contentHash}` via tmp+rename so the
+     *     write is atomic. Crash mid-write leaves the prior good state.
+     *  3. Replace `payload.content` with the contentHash string so the
+     *     command persists as pure JSON (no Buffer round-trip corruption).
+     *     Persisted payload shape:
+     *     `{ filename, content: '<contentHash>', mimeType, contentHash }`.
+     *
+     * Commit-time then reads the buffer back from staging, re-validates the
+     * hash (catching post-propose tampering), and only then calls the
+     * artifact store. See {@link commitMutation} `ingest_artifact` arm.
+     *
+     * When the kernel is constructed without a `dataDir` (in-memory mode),
+     * the staging-area path is bypassed because the in-memory command map
+     * does not serialize the payload — the Buffer survives intact.
      */
     async proposeMutation(input: ProposeMutationInput): Promise<Command> {
+        let payload = input.payload;
+        if (input.verb === 'ingest_artifact' && Buffer.isBuffer(payload.content)) {
+            const stagingDir = this.getStagingDir();
+            if (stagingDir) {
+                const buffer = payload.content as Buffer;
+                const claimedHash = typeof payload.contentHash === 'string' ? payload.contentHash : '';
+                const actualHash = createHash('sha256').update(buffer).digest('hex');
+                if (claimedHash !== actualHash) {
+                    throw new ContentHashMismatchError(claimedHash || '<missing>', actualHash);
+                }
+                // Atomic stage: write to a per-pid+rand tmp then rename.
+                // AGG-A4-2 / Wave A4 fix-up: the random suffix shrunk from
+                // randomBytes(8) (16 hex chars) to randomBytes(3) (6 hex chars)
+                // so it matches the staging-orphan sweep regex
+                // `[a-f0-9]{64}\.\d+-[a-z0-9]{1,6}\.tmp$`. Collision risk over
+                // a single propose lifecycle (the tmp file lives milliseconds
+                // between writeFileSync and renameSync) is negligible — pid +
+                // 24 bits of randomness is plenty.
+                const stagingPath = join(stagingDir, actualHash);
+                const tmpPath = `${stagingPath}.${process.pid}-${randomBytes(3).toString('hex')}.tmp`;
+                writeFileSync(tmpPath, buffer);
+                renameSync(tmpPath, stagingPath);
+                // Mutate the payload: content field becomes the hash string.
+                payload = {
+                    ...payload,
+                    content: actualHash,
+                    contentHash: actualHash,
+                };
+            }
+        }
         const command = proposeCommand(
             input.verb,
             input.targetStore,
-            input.payload,
+            payload,
             input.proposedBy,
         );
         this.saveCommand(command);
@@ -525,12 +698,55 @@ export class ClusterKernel implements ClusterKernelInterface {
                 break;
             }
             case 'ingest_artifact': {
-                const { filename, content, mimeType } = readyCommand.payload as {
+                const { filename, content, mimeType, contentHash } = readyCommand.payload as {
                     filename: string;
-                    content: Buffer;
+                    content: unknown;
                     mimeType: string;
+                    contentHash?: string;
                 };
-                const artifact = await this.stores.artifact.ingest({ filename, content, mimeType });
+
+                // KERNEL-B-007: resolve the actual buffer to ingest. Two paths:
+                //  - dataDir present + payload.content is the hash string: read
+                //    from the staging area + re-validate the hash to catch
+                //    post-propose tampering. This is the primary, safe path.
+                //  - in-memory kernel: payload.content is still a Buffer (no
+                //    JSON round-trip happened); use it directly.
+                let resolvedContent: Buffer;
+                let stagingPathForCleanup: string | null = null;
+                const stagingDir = this.getStagingDir();
+                if (stagingDir && typeof content === 'string' && contentHash && content === contentHash) {
+                    const stagingPath = join(stagingDir, contentHash);
+                    if (!existsSync(stagingPath)) {
+                        throw new StagedContentTamperedError(contentHash, stagingPath, '<missing>');
+                    }
+                    const stagedBuffer = readFileSync(stagingPath);
+                    const actualHash = createHash('sha256').update(stagedBuffer).digest('hex');
+                    if (actualHash !== contentHash) {
+                        // Tampered. Throw WITHOUT deleting the staging file so
+                        // operators can inspect the corrupt bytes.
+                        throw new StagedContentTamperedError(contentHash, stagingPath, actualHash);
+                    }
+                    resolvedContent = stagedBuffer;
+                    stagingPathForCleanup = stagingPath;
+                } else if (Buffer.isBuffer(content)) {
+                    // In-memory kernel path: Buffer survived because no JSON
+                    // serialization happened. No staging area, no hash check
+                    // required (no round-trip risk).
+                    resolvedContent = content;
+                } else {
+                    // Defensive: unknown shape. Should not happen — propose
+                    // either staged the Buffer or kept it in-memory.
+                    throw new ContentHashMismatchError(
+                        typeof contentHash === 'string' ? contentHash : '<missing>',
+                        '<no-content>',
+                    );
+                }
+
+                const artifact = await this.stores.artifact.ingest({
+                    filename,
+                    content: resolvedContent,
+                    mimeType,
+                });
                 affectedIds.push(artifact.id);
                 resultSummary = `Ingested artifact: ${filename}`;
                 primarySubjectStore = 'artifact';
@@ -548,6 +764,18 @@ export class ClusterKernel implements ClusterKernelInterface {
                         version: artifact.version,
                     },
                 });
+
+                // Clean up the staging file ONLY on successful artifact ingest.
+                // If we reach here the artifact store has the bytes and the
+                // index entry exists; the staging file has served its purpose.
+                if (stagingPathForCleanup) {
+                    try {
+                        unlinkSync(stagingPathForCleanup);
+                    } catch {
+                        // Best-effort: a leftover staging file is recoverable
+                        // out-of-band; don't fail commit on cleanup.
+                    }
+                }
                 break;
             }
             case 'link_evidence': {
@@ -694,6 +922,11 @@ export class ClusterKernel implements ClusterKernelInterface {
 
     /**
      * Reject a proposed or validated command.
+     *
+     * KERNEL-B-007: ingest_artifact commands stage their Buffer payload to
+     * `.db-cluster/pending-content/{contentHash}`. Rejection cleans that
+     * file up so a rejected propose doesn't leak staged content into the
+     * working directory.
      */
     async rejectMutation(commandId: string, rejectedBy: string, reason: string): Promise<Command> {
         const command = this.getCommand(commandId);
@@ -701,6 +934,11 @@ export class ClusterKernel implements ClusterKernelInterface {
 
         const rejected = rejectCommand(command, rejectedBy, reason);
         this.saveCommand(rejected);
+
+        // Cleanup any staged Buffer payload for ingest_artifact rejections.
+        if (command.verb === 'ingest_artifact') {
+            this.deleteStagingFile((command.payload as { contentHash?: unknown }).contentHash);
+        }
 
         // Record rejection provenance
         await recordProvenance(
@@ -745,6 +983,14 @@ export class ClusterKernel implements ClusterKernelInterface {
             { originalCommandId, reason, ...compPayload },
             compensatedBy,
         );
+
+        // KERNEL-B-007: belt-and-suspenders cleanup. A committed
+        // ingest_artifact's staging file is normally deleted on successful
+        // commit. If something pathological left it behind and the command
+        // is now being compensated, sweep it now.
+        if (original.verb === 'ingest_artifact') {
+            this.deleteStagingFile((original.payload as { contentHash?: unknown }).contentHash);
+        }
 
         // Fast-track: validate + commit the compensating command
         const validated = validateCommand(compensatingCmd);
