@@ -1,0 +1,32 @@
+id: content-read-without-hash-check
+language: typescript
+severity: error
+message: |
+  An artifact content-byte read returns raw bytes WITHOUT an adjacent
+  sha256 integrity check (PROV-001, Wave S2-A1). A `getContent`-shaped
+  method that reads the on-disk blob MUST re-hash those bytes against the
+  recorded `contentHash` via `createHash('sha256')` and throw / refuse on
+  mismatch — otherwise a tampered blob is returned (and indexed) silently.
+  This guards the hardened `ArtifactStore.getContent` from regressing back
+  to the existence-only behaviour that PROV-001 fixed.
+
+  If a getContent implementation legitimately delegates the hash check to a
+  helper, inline a `createHash('sha256')` reference (or call the helper in a
+  way that keeps the check adjacent) so this gate can see it.
+rule:
+  kind: method_definition
+  all:
+    - has:
+        field: name
+        regex: "^getContent$"
+    - has:
+        field: body
+        pattern: $BODY
+  not:
+    has:
+      pattern: createHash($$$)
+      stopBy: end
+files:
+  - "src/adapters/**/*.ts"
+ignores:
+  - "test/**"

@@ -199,7 +199,16 @@ for (const exp of exportPaths) {
 }
 writeStageLog(6, 'package-exports', exportResults.join('\n') + '\n', '', exportFailed ? 'FAIL' : 'PASS');
 
-// 7. Completeness — mechanical ast-grep gates for known legacy patterns
+// 7. Completeness — mechanical ast-grep gates for known legacy patterns.
+//
+// Runs `completeness-checks.mjs`, which executes every ast-grep rule under
+// `scripts/checks/` and FAILS the gate on any effective match. Wave S2-A1
+// added the PROV integrity regression nets here so the tamper-evidence fixes
+// cannot silently regress:
+//   R6 — getContent-shaped read without an adjacent sha256 check (PROV-001)
+//   R7 — update_entity mutation_committed detail missing `previous` (PROV-002)
+//   R8 — ledger append/appendReceipt persisting without the integrity stamp (PROV-004)
+// (alongside the pre-existing R1–R5 structural gates).
 console.log('\n[7/9] Completeness');
 run('completeness-checks', `node ${join(ROOT, 'scripts', 'completeness-checks.mjs')}`, { stageNum: 7, timeout: 180_000 });
 

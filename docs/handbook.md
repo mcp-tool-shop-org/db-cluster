@@ -752,15 +752,26 @@ await sdk.compensateMutation(cmd.id, 'operator', 'Name was wrong');
 
 ### 12.6 Operations
 
-```typescript
-import { doctor, verify, backup, restore, createLocalCluster } from '@mcptoolshop/db-cluster';
+The policed root handle binds the four ops to its stores for you — no raw
+store handle needed (and none exposed):
 
-const stores = createLocalCluster('.db-cluster');
-const health = await doctor(stores);
-const proof = await verify(stores);
-const snapshot = await backup(stores);
-await restore(newStores, snapshot);
+```typescript
+import { createSafeCluster } from '@mcptoolshop/db-cluster';
+
+const cluster = createSafeCluster({ rootDir: '.db-cluster' });
+const health = await cluster.doctor();
+const proof = await cluster.verify();
+const snapshot = await cluster.backup();
+
+const target = createSafeCluster({ rootDir: '.db-cluster-restore' });
+await target.restore(snapshot);
 ```
+
+> Need to call `doctor` / `verify` / `backup` / `restore` against raw stores
+> directly (operator tooling, custom kernels)? Import the raw factories from
+> the explicit escape hatch — `import { createLocalCluster } from
+> '@mcptoolshop/db-cluster/unsafe'` — and pass `stores` to the standalone ops.
+> That path is unpoliced by design.
 
 ### 12.7 SDK anti-patterns
 

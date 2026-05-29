@@ -981,12 +981,52 @@ export class ClusterKernel implements ClusterKernelInterface {
         let resultSummary = '';
         let primarySubjectStore: ProvenanceEvent['subjectStore'] = readyCommand.targetStore;
 
+        // PROV-002 (Wave S2-A1): for commit arms that mutate canonical state via
+        // an append-a-version `update`, capture a snapshot of the DISPLACED prior
+        // version + a lineage parent BEFORE the mutation. These flow into the
+        // `mutation_committed` event below so `why` / `traceProvenance` can
+        // reconstruct pre-mutation truth and walk the version chain. Null for
+        // arms (create / ingest / link / reindex) that do not displace a prior
+        // canonical version.
+        let mutationPrevious: Record<string, unknown> | undefined;
+        let mutationParentEventId: string | undefined;
+
         switch (readyCommand.verb) {
             case 'update_entity': {
                 const { entityId, patch } = readyCommand.payload as {
                     entityId: string;
                     patch: Record<string, unknown>;
                 };
+                // PROV-002: fetch the CURRENT latest (version N) BEFORE the
+                // append-a-version `update` returns version N+1, so we can record
+                // the displaced version's truth. `canonical.update` now retains
+                // prior versions immutably, but the provenance event is the
+                // operator-facing record of "what was true before this mutation"
+                // and must carry that snapshot regardless of store mechanics.
+                const priorVersion = await this.stores.canonical.get(entityId);
+                if (priorVersion) {
+                    mutationPrevious = {
+                        entityId: priorVersion.id,
+                        version: priorVersion.version,
+                        name: priorVersion.name,
+                        attributes: priorVersion.attributes,
+                    };
+                }
+                // PROV-002 lineage: chain the mutation_committed event to the
+                // most recent prior ledger event for this subject (its creation
+                // or the previous mutation) so the version chain is walkable via
+                // `trace()`. Captured pre-mutation so the parent is a real,
+                // already-persisted event. `listEvents({ subjectId })` returns
+                // events in append order (oldest first) per the LedgerStore
+                // contract, so the tail is the youngest. Undefined when the
+                // subject has no prior events (defensive — leaves the new event
+                // as a chain root rather than fabricating a parent).
+                const priorSubjectEvents = await this.stores.ledger.listEvents({ subjectId: entityId });
+                mutationParentEventId =
+                    priorSubjectEvents.length > 0
+                        ? priorSubjectEvents[priorSubjectEvents.length - 1].id
+                        : undefined;
+
                 // KERNEL-017 alignment: only forward the fields CanonicalStore.update
                 // accepts (`name`, `attributes`). Other keys are dropped to
                 // honour the contract typing instead of bypassing with `as any`.
@@ -1180,13 +1220,39 @@ export class ClusterKernel implements ClusterKernelInterface {
                 actorId,
                 affectedIds[0] ?? commandId,
                 readyCommand.targetStore,
-                { commandId, verb: readyCommand.verb, payload: readyCommand.payload },
+                {
+                    commandId,
+                    verb: readyCommand.verb,
+                    payload: readyCommand.payload,
+                    // PROV-002: when this commit displaced a prior canonical
+                    // version, carry the pre-mutation snapshot so `why` /
+                    // `traceProvenance` can reconstruct what was true before.
+                    // Omitted (undefined → dropped by canonicalSerialize) for
+                    // non-displacing verbs.
+                    ...(mutationPrevious ? { previous: mutationPrevious } : {}),
+                },
+                // PROV-002 lineage: parent the event to the subject's prior
+                // ledger event so the version chain is walkable via trace().
+                mutationParentEventId,
             );
 
             // Persist the committed-state command AFTER provenance so we never
             // have a 'committed' record without an associated provenance event.
             this.saveCommand(committed);
 
+            // PROV-005: command↔receipt bijection guard. A receipt is proof a
+            // committed command executed — mint it ONLY for a command whose
+            // status is `committed`. This closes the orphan-receipt window on
+            // the policed path (a receipt minted for a non-committed / unknown
+            // command). `committed` is produced by `markCommitted` immediately
+            // above, so this holds today; the explicit guard prevents a future
+            // refactor of this flow from re-opening the hole. The inverse window
+            // ("mutation landed, receipt write threw") is handled by the
+            // surrounding try/catch → ReceiptFailedError + recordOrphanMutation,
+            // and is intentionally unchanged.
+            if (committed.status !== 'committed') {
+                throw new InvalidStateTransitionError(committed.status, 'committed', committed.id);
+            }
             receipt = await emitReceipt(
                 this.stores.ledger,
                 committed,

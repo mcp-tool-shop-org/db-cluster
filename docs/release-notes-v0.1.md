@@ -75,19 +75,28 @@ db-cluster doctor
 ## Package exports
 
 ```typescript
-import { createLocalCluster, createCluster, doctor, verify, backup, restore } from '@mcptoolshop/db-cluster';
+import { createSafeCluster, doctor, verify, backup, restore } from '@mcptoolshop/db-cluster';
 import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
 import { PolicyEnforcedKernel } from '@mcptoolshop/db-cluster/policy';
+// Raw, UNPOLICED store factories live behind the explicit escape hatch:
+import { createCluster, createLocalCluster } from '@mcptoolshop/db-cluster/unsafe';
 ```
 
-The raw `ClusterKernel` class is no longer publicly exported (KERNEL-013); drive
-the kernel via `ClusterSDK` (recommended) or `PolicyEnforcedKernel` for
-in-process callers that need policy-enforced direct kernel access.
+The raw `ClusterKernel` class is not publicly exported (KERNEL-013), and as of
+Wave S2-A1 the package root no longer exports the raw store factories either
+(KERNEL-001) — the root's `createSafeCluster()` returns a policy-enforced
+handle. Drive the kernel via that handle, via `ClusterSDK` (recommended), or
+via `PolicyEnforcedKernel`. The raw factories (`createCluster` /
+`createLocalCluster`) remain available only through
+`@mcptoolshop/db-cluster/unsafe`, which bypasses policy/receipts/provenance for
+operator-tooling and test use.
 
 ## Postgres (optional)
 
 Default: filesystem stores, zero config.  
-Optional: Postgres canonical backend via `createCluster({ backends: { canonical: 'postgres' }, postgresUrl })`.
+Optional: Postgres canonical backend via the policed root —
+`createSafeCluster({ rootDir, backends: { canonical: 'postgres' }, postgresUrl })`
+— or, for raw stores, `createCluster({ ... })` from `@mcptoolshop/db-cluster/unsafe`.
 
 ## Status
 

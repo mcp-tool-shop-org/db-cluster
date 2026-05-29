@@ -38,6 +38,17 @@
  *   LocalLedgerStore.rotate() for the two operator-intent-mismatch cases.
  * - BackupTargetExistsError — raised by `backup({ outputPath })` when the
  *   target path already exists and `force` is not set (STORES-C-006).
+ * - ContentReadIntegrityError — raised by LocalArtifactStore.getContent (Wave
+ *   S2-A1, PROV-001) when sha256(on-disk content bytes) does not match the
+ *   metadata's recorded contentHash. The on-disk blob was altered out from
+ *   under its metadata; refusing to hand back the tampered bytes. Carries the
+ *   artifact id + expected/actual contentHash (NOT the absolute storage path).
+ * - LedgerIntegrityError — raised by LocalLedgerStore.getEvent / getReceipt
+ *   (and importEvent / importReceipt verification) (Wave S2-A1, PROV-004) when
+ *   computeIntegrityHash(storedRecord) does not match the record's stored
+ *   integrityHash. A ledger record was tampered with after it was appended;
+ *   refusing to return it. Carries the record kind + id + expected/actual hash
+ *   (NOT the absolute ledger file path).
  */
 
 /**
@@ -319,6 +330,112 @@ export class BackupTargetExistsError extends Error implements AdapterErrorShape 
         );
         this.name = 'BackupTargetExistsError';
         this.outputPath = outputPath;
+        this.remediationHint = hint;
+    }
+}
+
+/**
+ * Thrown by `LocalArtifactStore.getContent(id)` when the bytes currently on
+ * disk no longer hash to the artifact's recorded `contentHash`.
+ *
+ * Closes PROV-001 (Wave S2-A1, Protocol-v2 amend). Pre-fix `getContent`
+ * validated the contentHash *shape* (path-traversal defence) and then returned
+ * `readFileSync(contentPath)` verbatim — if the on-disk blob was edited out
+ * from under its metadata, the altered bytes were handed back silently. The
+ * artifact store is content-addressed and immutable; a content/hash mismatch is
+ * tamper or corruption by definition. Post-fix `getContent` recomputes
+ * `sha256(on-disk bytes)` and throws this typed error on mismatch rather than
+ * returning the bytes — the contractually-required throw the ArtifactStore
+ * JSDoc now mandates.
+ *
+ * Diagnostics carry the artifact id + expected/actual hash. The absolute
+ * `storagePath` is DELIBERATELY excluded from the message — operators correlate
+ * via the contentHash, and leaking absolute filesystem paths into error strings
+ * that may surface across the MCP/CLI boundary is avoided (matches the
+ * no-absolute-path discipline of the other adapter errors).
+ */
+export class ContentReadIntegrityError extends Error implements AdapterErrorShape {
+    public readonly code = 'CONTENT_READ_INTEGRITY';
+    public readonly retryable = false;
+    public readonly remediationHint: string;
+    public readonly artifactId: string;
+    /** The contentHash recorded in the artifact metadata (the expected hash). */
+    public readonly expectedHash: string;
+    /** sha256 of the bytes actually found on disk (the actual hash). */
+    public readonly actualHash: string;
+    constructor(artifactId: string, expectedHash: string, actualHash: string) {
+        const hint =
+            `The on-disk content blob no longer matches its recorded hash — the file ` +
+            `was altered or corrupted. Restore the cluster from a known-good backup ` +
+            `(db-cluster restore <backup.json>), or re-ingest the original source for ` +
+            `this artifact. Do NOT trust the current bytes.`;
+        super(
+            `Artifact content failed read-integrity check for artifact ${artifactId}: ` +
+                `expected sha256 ${expectedHash} but on-disk bytes hash to ${actualHash}. ` +
+                `The stored content has been tampered with or corrupted. ` +
+                `Refusing to return the altered bytes. Recovery: ${hint}`,
+        );
+        this.name = 'ContentReadIntegrityError';
+        this.artifactId = artifactId;
+        this.expectedHash = expectedHash;
+        this.actualHash = actualHash;
+        this.remediationHint = hint;
+    }
+}
+
+/**
+ * Thrown by `LocalLedgerStore.getEvent` / `getReceipt` (verify-on-read) and by
+ * `importEvent` / `importReceipt` (verify-on-restore) when a stored ledger
+ * record's recomputed `computeIntegrityHash` does not match the
+ * `integrityHash` persisted with it.
+ *
+ * Closes PROV-004 (Wave S2-A1, Protocol-v2 amend). The ledger is now
+ * tamper-EVIDENT, not merely append-only: every record carries an
+ * `integrityHash` over its own content (and its `prevHash` chain link). Reading
+ * a record recomputes that hash via the single-source-of-truth helper in
+ * `src/types/integrity.ts`; a mismatch means the on-disk record was edited
+ * after it was appended (the hash was not — and could not be — recomputed by a
+ * tamperer without the writer code). The read path throws this rather than
+ * returning a record whose content no longer matches its commitment.
+ *
+ * Diagnostics carry the record kind (`event` | `receipt`) + id + expected
+ * (stored) / actual (recomputed) hash. The absolute ledger file path is
+ * excluded for the same reason as the other adapter errors.
+ */
+export class LedgerIntegrityError extends Error implements AdapterErrorShape {
+    public readonly code = 'LEDGER_INTEGRITY';
+    public readonly retryable = false;
+    public readonly remediationHint: string;
+    /** `'event'` or `'receipt'` — which ledger record kind failed. */
+    public readonly recordKind: 'event' | 'receipt';
+    public readonly recordId: string;
+    /** The integrityHash stored with the record (what the writer committed). */
+    public readonly expectedHash: string;
+    /** computeIntegrityHash() of the record as it currently sits on disk. */
+    public readonly actualHash: string;
+    constructor(
+        recordKind: 'event' | 'receipt',
+        recordId: string,
+        expectedHash: string,
+        actualHash: string,
+    ) {
+        const hint =
+            `A ledger ${recordKind} was modified after it was appended (its content no ` +
+            `longer matches its integrity hash). Run db-cluster verify to locate every ` +
+            `broken record in the chain, then restore from a known-good backup. The ` +
+            `ledger is append-only and tamper-evident; in-place edits are never valid.`;
+        super(
+            `Ledger ${recordKind} failed integrity verification: id=${recordId}. ` +
+                `Stored integrityHash=${expectedHash} but recomputed hash=${actualHash}. ` +
+                `The record's content has been tampered with since it was appended. ` +
+                `Refusing to return a record that does not match its commitment. ` +
+                `Recovery: ${hint}`,
+        );
+        this.name = 'LedgerIntegrityError';
+        this.recordKind = recordKind;
+        this.recordId = recordId;
+        this.expectedHash = expectedHash;
+        this.actualHash = actualHash;
         this.remediationHint = hint;
     }
 }

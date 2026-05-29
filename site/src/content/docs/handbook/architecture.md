@@ -86,14 +86,14 @@ Currently supported:
 - **Local** (JSON files) — all four stores.
 - **Postgres** — canonical store only (artifact / index / ledger remain local).
 
-The Postgres adapter respects `DB_CLUSTER_POSTGRES_SSL`, attaches an `pool.on('error', …)` handler (so an idle-client RST doesn't crash the process), and uses `INSERT … ON CONFLICT` to close the TOCTOU window on concurrent imports.
+The Postgres adapter attaches a `pool.on('error', …)` handler (so an idle-client RST doesn't crash the process) and uses `INSERT … ON CONFLICT` to close the TOCTOU window on concurrent imports. It is also append-a-version (parity with the local store): each entity id owns one immutable row per `version`. **SSL/TLS is not configured by db-cluster in v1.0.0** — the connection is plaintext unless your connection string enforces TLS (e.g. `sslmode=require`, which the `pg` driver honours), a TLS proxy, or a private network. Driver-managed `ssl` config is planned for a future release.
 
 ## Layers
 
 ```
 CLI / SDK / MCP                      ← surfaces (operator, developer, AI-agent)
       │
-PolicyEnforcedKernel                 ← policy + redaction (the only exported entry)
+PolicyEnforcedKernel                 ← policy + redaction (the root's createSafeCluster handle)
       │
   ClusterKernel                      ← routing, retrieval, mutation lifecycle
       │
@@ -104,7 +104,7 @@ Canonical Artifact Index Ledger      ← stores
  or local)
 ```
 
-`PolicyEnforcedKernel` is the **only** exported kernel entry. `ClusterKernel` is intentionally not on the public surface — there is no policy-bypass code path through the public API.
+db-cluster is **policy-enforced by default**. The package root factory `createSafeCluster()` returns a handle whose only door to cluster truth is a `PolicyEnforcedKernel` — there is no policy-bypass code path through the default public surface, and the raw `ClusterKernel` class is not exported. Raw, unpoliced stores are reachable only via the explicit `@mcptoolshop/db-cluster/unsafe` escape hatch (operator tooling and tests), which deliberately bypasses policy/receipts/provenance.
 
 ## Cross-cutting concerns
 

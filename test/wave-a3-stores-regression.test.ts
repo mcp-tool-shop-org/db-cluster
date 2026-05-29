@@ -336,15 +336,21 @@ describe('Wave A3 — Stores regression nets', () => {
 
                 const result = await verify(stores);
 
-                // The four checks verify() defines today, by name. This
-                // pinned set is the contract; an added check forces an
-                // explicit update here (catches "new check added that hides
-                // regression" per TESTS-B-016).
+                // The checks verify() defines today, by name. This pinned set
+                // is the contract; an added check forces an explicit update
+                // here (catches "new check added that hides regression" per
+                // TESTS-B-016). Wave S2-A1 (PROV-003) added the tamper-detecting
+                // checks below; 'command_receipt_bijection' is emitted ONLY when
+                // verify() is given a commandQueue handle, so verify(stores)
+                // here does not include it.
                 const expectedCheckNames = [
                     'index_references_valid',
                     'provenance_references_valid',
                     'no_orphaned_mutations',
                     'receipts_provenance_valid',
+                    'artifact_content_integrity',
+                    'ledger_integrity_chain',
+                    'canonical_lineage_intact',
                 ];
                 expect(
                     result.checks.map((c) => c.name).sort(),

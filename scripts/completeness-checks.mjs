@@ -11,6 +11,9 @@
  *   R3 — raw-cluster-resolver-instantiation
  *   R4 — switch-on-resolved-store-incomplete   (case-completeness gate)
  *   R5 — optional-import-contract-method       (STORES-R2-002 regression net)
+ *   R6 — content-read-without-hash-check       (PROV-001 regression net)
+ *   R7 — update-mutation-without-previous      (PROV-002 lineage regression net)
+ *   R8 — ledger-append-without-integrity-stamp (PROV-004 regression net)
  *
  * R4 has a post-process step: ast-grep reports every switch on `*.store`,
  * then this script asserts that the matched text contains all 5 case
@@ -64,6 +67,21 @@ const RULES = [
         id: 'R5',
         file: 'R5-optional-import-contract-method.yml',
         label: 'optional importSnapshot/importEvent/importReceipt in contracts',
+    },
+    {
+        id: 'R6',
+        file: 'R6-content-read-without-hash-check.yml',
+        label: 'getContent-shaped read without an adjacent sha256 integrity check (PROV-001)',
+    },
+    {
+        id: 'R7',
+        file: 'R7-update-mutation-without-previous.yml',
+        label: "update_entity mutation_committed detail missing `previous` lineage key (PROV-002)",
+    },
+    {
+        id: 'R8',
+        file: 'R8-ledger-append-without-integrity-stamp.yml',
+        label: 'ledger append/appendReceipt persisting without computeIntegrityHash stamp (PROV-004)',
     },
 ];
 
@@ -244,7 +262,7 @@ function main() {
         if (toolFailure) {
             console.log('VERDICT: ERROR — ast-grep tool failure (see above)');
         } else if (totalEffectiveMatches === 0) {
-            console.log('VERDICT: PASS — all 5 rules report 0 effective matches');
+            console.log(`VERDICT: PASS — all ${RULES.length} rules report 0 effective matches`);
         } else {
             console.log(`VERDICT: FAIL — ${totalEffectiveMatches} effective match(es) across rules`);
         }

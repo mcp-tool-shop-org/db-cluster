@@ -14,7 +14,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';
-import { createLocalCluster, backup, restore, doctor } from '@mcptoolshop/db-cluster';
+import { backup, restore, doctor } from '@mcptoolshop/db-cluster';
+// Raw stores come from the explicit /unsafe escape hatch (KERNEL-001): the
+// package root no longer exports the raw factories. This example builds raw
+// stores purely to hand them to backup/restore/doctor (operator-tooling use).
+import { createLocalCluster } from '@mcptoolshop/db-cluster/unsafe';
 
 async function main() {
     const dataDir = mkdtempSync(join(tmpdir(), 'project-memory-'));

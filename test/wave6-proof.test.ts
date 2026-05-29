@@ -382,9 +382,18 @@ describe('Wave 6 — Phase 6 Proof: MCP Cannot Bypass Cluster Law', () => {
             // It must NOT export the raw kernel class (KERNEL-013).
             expect(keys).not.toContain('ClusterKernel');
 
-            // It MUST export the cluster factory + URI utilities.
-            expect(keys).toContain('createLocalCluster');
-            expect(keys).toContain('createCluster');
+            // KERNEL-001 (Wave S2-A1): the raw store factories must NOT be on
+            // the public root either — handing them back bypassed the policed
+            // kernel. They live behind '@mcptoolshop/db-cluster/unsafe' now.
+            // This strengthens "no raw adapter/store exported through the
+            // public surface": the factory that built raw stores is gone too.
+            expect(keys).not.toContain('createLocalCluster');
+            expect(keys).not.toContain('createCluster');
+            expect(keys).not.toContain('createClusterFromEnv');
+
+            // It MUST export the POLICY-ENFORCED cluster factory + URI utilities.
+            expect(keys).toContain('createSafeCluster');
+            expect(keys).toContain('parseClusterUri');
         });
 
         it('MCP index does not export store adapters or kernel', async () => {

@@ -1,0 +1,37 @@
+id: ledger-append-without-integrity-stamp
+language: typescript
+severity: error
+message: |
+  A ledger `append` / `appendReceipt` writer persists a record WITHOUT
+  stamping its tamper-evidence hash (PROV-004, Wave S2-A1). Every appended
+  event and receipt MUST be stamped with `integrityHash` (and `prevHash`)
+  computed via the shared `computeIntegrityHash` helper
+  (`src/types/integrity.ts`) — directly, or through a `stamp*Integrity`
+  helper that routes to it. A persist path that skips the stamp produces a
+  ledger that is merely append-only, not tamper-evident: `verify`'s
+  `ledger_integrity_chain` check can no longer detect a hand edit.
+
+  This rule fires on an `append`/`appendReceipt` method whose body references
+  NEITHER `computeIntegrityHash` NOR a `stamp...Integrity(...)` call. Route
+  the stamp through the shared helper to clear the gate; NEVER hand-roll the
+  hash.
+rule:
+  kind: method_definition
+  all:
+    - has:
+        field: name
+        regex: "^(append|appendReceipt)$"
+    - has:
+        field: body
+        pattern: $BODY
+  not:
+    has:
+      any:
+        - pattern: computeIntegrityHash($$$)
+        - pattern: this.stampEventIntegrity($$$)
+        - pattern: this.stampReceiptIntegrity($$$)
+      stopBy: end
+files:
+  - "src/adapters/**/*.ts"
+ignores:
+  - "test/**"

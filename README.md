@@ -28,7 +28,7 @@
 - **AI error envelopes** — `{code, message, retryable, remediation_hint, context, next_valid_actions}` schema; AI agents can branch on `code` and `retryable` instead of parsing prose.
 - **Receipts on every mutation** — content-addressable; provenance graph; rebuild-from-truth contract on the index store.
 - **MCP server with safety annotations** — read-only / staged / approval / write tools each carry machine-readable `readOnlyHint` / `destructiveHint` flags.
-- **SDK with policy enforcement** — `PolicyEnforcedKernel` is the only path; `ClusterKernel` is intentionally not exported.
+- **Policy-enforced by default** — the package root factory `createSafeCluster()` hands back a policed handle (a `PolicyEnforcedKernel` + read-only ops, no raw store mutators). Raw, unpoliced stores are reachable only via the explicit `@mcptoolshop/db-cluster/unsafe` escape hatch.
 
 ## Quickstart (3 steps)
 
@@ -116,7 +116,7 @@ PASS, lint clean.
 - **Typed errors with `remediationHint` everywhere** — `ClusterError` base + per-class subclasses; CLI maps to sysexits.h (65/70/77/78); `AiErrorEnvelope` at every AI boundary.
 - **Mutation lifecycle** — propose → validate → approve → commit → (compensate). Every commit emits a content-addressable receipt.
 - **MCP server** — 16 tools with safety annotations (`readOnlyHint` / `destructiveHint` / `requiresApprovalHint`); structured error results, never raw stacks.
-- **Policy & redaction** — `PolicyEnforcedKernel` is the only exported kernel entry; `Principal` / `Capability` / `Policy` / `TrustZone` / `VisibilityRule` types; redaction at every read path.
+- **Policy & redaction** — policy-enforced by default: the root `createSafeCluster()` returns a policed `PolicyEnforcedKernel` handle (raw stores only via `@mcptoolshop/db-cluster/unsafe`); `Principal` / `Capability` / `Policy` / `TrustZone` / `VisibilityRule` types; redaction at every read path.
 - **Operator surface** — `doctor`, `verify`, `rebuild index`, `backup`, `restore`, `compensate`, `migration-status`. Destructive commands gated by `--yes` + interactive TTY confirmation.
 - **Dashboard demo** — viewer-only React dashboard for cluster truth (`dashboard/`), with `ComponentState<T>` + `StateBoundary` HOC for loading/empty/error states.
 - **Release gate** — 9 stages enforced by `scripts/release-gate.mjs`: build, tests, pack, smoke-install, docs-drift, package-exports, completeness, doc-drift, JSDoc-completeness.
@@ -142,7 +142,11 @@ db-cluster runs **locally**. It reads + writes a `.db-cluster/` directory in the
 working directory you point it at and reads artifacts you pass to `ingest`.
 There is **no network egress** by default and **no telemetry**. The only
 optional outbound connection is to a Postgres host if you set
-`DB_CLUSTER_POSTGRES_URL` (with `DB_CLUSTER_POSTGRES_SSL` respected).
+`DB_CLUSTER_POSTGRES_URL`. **db-cluster does not configure SSL/TLS for that
+connection in v1.0.0** — the transport is plaintext unless your connection
+string enforces it (e.g. `sslmode=require`, which the `pg` driver honours), a
+TLS-terminating proxy, or a private network. Driver-managed TLS config is
+planned for a future release.
 
 The MCP server tools read + write the local stores only — they never reach the
 network, and structured `AiErrorEnvelope` responses never leak stack traces or

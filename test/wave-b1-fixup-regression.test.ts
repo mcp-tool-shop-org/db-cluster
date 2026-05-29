@@ -179,17 +179,20 @@ describe('AGG-B1-2a — rotate() atomicity (persist FIRST, mutate AFTER)', () =>
         });
         // Boundary: at newEvent.timestamp so old-1 archives, new-1 retains.
         const boundary = newEvent.timestamp;
-        // Hook persistEvents to throw on first call (post-archive-write,
-        // pre-completion). Replace the method on the instance — the actual
-        // class method is private but we reach it through `as any`.
-        const storeAny = store as unknown as { persistEvents(): void; events: unknown[]; receipts: unknown[] };
+        // PROV-006: rotate() no longer calls persistEvents — it stages the
+        // retained active files via serializeNdjson() + writeFileSync(tmp),
+        // then renames, and mutates in-memory ONLY after both renames succeed.
+        // Hook serializeNdjson to throw on its first call (post-archive-write,
+        // pre-rename, pre-in-memory-mutation) — the exact "mid-persist" point
+        // the AGG-B1-2a invariant guards. Private method reached via `as any`.
+        const storeAny = store as unknown as { serializeNdjson(records: unknown[]): string; events: unknown[]; receipts: unknown[] };
         const snapshotEvents = [...storeAny.events];
         const snapshotReceipts = [...storeAny.receipts];
-        const origPersistEvents = storeAny.persistEvents.bind(store);
+        const origSerialize = storeAny.serializeNdjson.bind(store);
         let calls = 0;
-        storeAny.persistEvents = function () {
+        storeAny.serializeNdjson = function () {
             calls++;
-            throw new Error('simulated persistEvents failure');
+            throw new Error('simulated mid-rotate persist failure');
         };
         let threw = false;
         try {
@@ -198,7 +201,7 @@ describe('AGG-B1-2a — rotate() atomicity (persist FIRST, mutate AFTER)', () =>
             threw = true;
         }
         // Restore method for cleanup.
-        storeAny.persistEvents = origPersistEvents;
+        storeAny.serializeNdjson = origSerialize;
         expect(threw).toBe(true);
         expect(calls).toBe(1);
         // In-memory snapshot is restored — the array MUST be the same as

@@ -25,14 +25,14 @@ const ROOT = resolve(import.meta.dirname, '..');
 describe('Phase 15 — Release Readiness & Package Boundary (10 Proofs)', () => {
 
   // Proof 1: Public API exports are intentional and complete
-  it('Proof 1: main entry exports factory, ops, URI, types — NOT raw ClusterKernel', async () => {
+  it('Proof 1: main entry exports the SAFE factory, ops, URI, types — NOT raw ClusterKernel or raw store factories', async () => {
     const mainExports = await import('../src/index.js');
     const keys = Object.keys(mainExports);
 
-    // Must include these core symbols
-    expect(keys).toContain('createLocalCluster');
-    expect(keys).toContain('createCluster');
-    expect(keys).toContain('createClusterFromEnv');
+    // Must include these core symbols. KERNEL-001 (Wave S2-A1): the root now
+    // exports the POLICY-ENFORCED factory `createSafeCluster` instead of the
+    // raw store factories.
+    expect(keys).toContain('createSafeCluster');
     expect(keys).toContain('doctor');
     expect(keys).toContain('verify');
     expect(keys).toContain('backup');
@@ -42,6 +42,13 @@ describe('Phase 15 — Release Readiness & Package Boundary (10 Proofs)', () => 
     expect(keys).toContain('isClusterUri');
     expect(keys).toContain('uriForObject');
     expect(keys).toContain('ClusterUriError');
+
+    // KERNEL-001: the raw store factories must NOT be on the package root —
+    // they handed back unpoliced ClusterStores. They live behind the explicit
+    // '@mcptoolshop/db-cluster/unsafe' escape hatch now.
+    expect(keys).not.toContain('createLocalCluster');
+    expect(keys).not.toContain('createCluster');
+    expect(keys).not.toContain('createClusterFromEnv');
 
     // Must NOT include internal details, including the raw ClusterKernel class
     // (KERNEL-013: ClusterKernel was previously exported as public API, which
@@ -181,8 +188,12 @@ describe('Phase 15 — Release Readiness & Package Boundary (10 Proofs)', () => 
   it('Proof 9: ingest → create → retrieve → ops cycle via public exports', async () => {
     // KERNEL-013: ClusterKernel is no longer publicly exported from the main
     // entry. The supported in-process write path is `db-cluster/sdk`. The
-    // ops + factory + URI surface still lives on the main entry as before.
-    const { createLocalCluster, doctor, verify, backup, restore } = await import('../src/index.js');
+    // ops + URI surface still lives on the main entry. KERNEL-001 (Wave
+    // S2-A1): the raw `createLocalCluster` factory moved off the root to the
+    // '/unsafe' escape hatch, so this proof builds its raw stores there (it
+    // exercises the ops, which legitimately operate on raw ClusterStores).
+    const { doctor, verify, backup, restore } = await import('../src/index.js');
+    const { createLocalCluster } = await import('../src/unsafe.js');
     const { ClusterSDK } = await import('../src/sdk/index.js');
 
     const testDir = join(ROOT, '.test-phase15-lifecycle');

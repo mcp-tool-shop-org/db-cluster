@@ -4,6 +4,10 @@ export type { IndexRecord } from './index-record.js';
 export type { ProvenanceEvent } from './provenance-event.js';
 export type { Command, CommandVerb, CommandStatus, ValidationResult, ValidationCheck } from './command.js';
 export type { Receipt } from './receipt.js';
+// Wave S2-A1 — ledger tamper-evidence (PROV-001 / PROV-004). Single source of
+// truth for the integrity hash; both writers (adapters) and readers (ops/verify)
+// MUST route through these.
+export { canonicalSerialize, computeIntegrityHash } from './integrity.js';
 export type {
     EvidenceBundle,
     ResolvedEvidence,

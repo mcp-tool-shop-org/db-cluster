@@ -16,7 +16,7 @@ Optional for the Postgres canonical backend:
 
 - **PostgreSQL 16+**.
 - `DB_CLUSTER_POSTGRES_URL` environment variable (e.g. `postgres://user:pass@host:5432/db`).
-- `DB_CLUSTER_POSTGRES_SSL=true` if your host requires SSL.
+- For TLS, put `sslmode=require` in the connection string itself — the `pg` driver honours it. db-cluster does **not** configure SSL/TLS in v1.0.0 and there is no `DB_CLUSTER_POSTGRES_SSL` variable; the connection is plaintext unless the URL (or a TLS proxy / private network) enforces it.
 
 ## Install
 

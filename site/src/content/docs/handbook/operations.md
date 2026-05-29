@@ -111,7 +111,7 @@ The `docs/runbooks/` directory in the repo carries one runbook per recurring fai
 - **corrupt-store** — `CommandQueueCorruptError`, `CorruptStoreError`. JSON parse failures, truncated writes.
 - **orphan-mutations** — `mutation_orphaned` ledger events. Receipt-failed commands whose state needs reconciliation.
 - **index-stale** — index records older than canonical / artifact truth. Use `rebuild check` then `rebuild index`.
-- **postgres-unreachable** — pool connect failures. SSL config, network, credential checks.
+- **postgres-unreachable** — pool connect failures. Network, credential, and connection-string TLS (`sslmode`) checks.
 
 Read these before paging anyone.
 

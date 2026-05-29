@@ -22,15 +22,26 @@ export interface ArtifactStore {
      * Fetch the raw content bytes for an artifact, or `null` if the artifact
      * doesn't exist OR its content has been moved (e.g. archived adapter).
      *
-     * Implementations MUST verify the on-disk hash matches the metadata's
-     * `contentHash` before returning the bytes — STORES-006 / STORES-R005
-     * defence against tampered artifacts.json overwriting the content path.
+     * Read-integrity is ENFORCED, not best-effort (Wave S2-A1, finding
+     * PROV-001). Implementations MUST recompute `sha256(on-disk bytes)` and
+     * compare it against the metadata's `contentHash` before returning. On
+     * mismatch the implementation THROWS a typed read-integrity error
+     * (`ContentReadIntegrityError`) rather than returning the bytes — a
+     * mismatch means the on-disk content was altered out from under its
+     * metadata (the exact tamper that STORES-006 / STORES-R005 defends, now
+     * promoted from an aspirational "MUST verify" note to a contractually
+     * required throw). Callers can therefore treat a successful (non-throwing,
+     * non-null) return as proof the bytes match their recorded hash.
      *
      * @param id  Artifact id.
      * @returns   Buffer of raw content, or `null` if absent.
      * @throws    {@link InvalidContentHashError} when the `contentHash` on
      *            the metadata record fails the 64-char-hex shape check
      *            (path-traversal defence).
+     * @throws    `ContentReadIntegrityError` (PROV-001) when
+     *            `sha256(on-disk bytes) !== artifact.contentHash` — the stored
+     *            content has been tampered with. Never silently returns the
+     *            altered bytes.
      */
     getContent(id: string): Promise<Buffer | null>;
 

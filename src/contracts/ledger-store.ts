@@ -5,6 +5,21 @@ import type { Receipt } from '../types/receipt.js';
  * LedgerStore contract.
  * Owns: actions, links, mutations, receipts, lineage.
  * Append-only. No updates, no deletes (except via {@link rotate}).
+ *
+ * Tamper-evidence (Wave S2-A1, findings PROV-004):
+ *  - Every appended record (event AND receipt) is stamped with an
+ *    `integrityHash` = `computeIntegrityHash(record)` and a `prevHash` chaining
+ *    it to the immediately-preceding record of the same kind in the same
+ *    ledger file (the first record's `prevHash` is undefined — genesis). See
+ *    `src/types/integrity.ts` for the single-source-of-truth hash.
+ *  - READ contract: {@link getEvent} / {@link getReceipt} recompute
+ *    `computeIntegrityHash` on the stored record and throw a typed integrity
+ *    error on mismatch (per-record tamper detection).
+ *  - WHOLE-LEDGER contract: the cluster's `verify` operation (in
+ *    `src/ops/verify.ts`) walks the `prevHash` chain end-to-end — each record's
+ *    `prevHash` must equal the prior record's `integrityHash`, and each
+ *    record's `integrityHash` must equal its recomputed value — surfacing any
+ *    break (reorder, insert, delete, edit) as a degraded check.
  */
 export interface LedgerStore {
     /**
@@ -19,24 +34,38 @@ export interface LedgerStore {
      *
      * Postconditions:
      *  - The returned ProvenanceEvent has `id` (UUID), `timestamp` (ISO-8601),
-     *    and `owner='ledger'` stamped by the adapter. Caller-supplied values
-     *    for those fields are IGNORED — the adapter rewrites them via the
-     *    post-spread stamp pattern (closes STORES-B-021).
+     *    `owner='ledger'`, and the Wave S2-A1 tamper-evidence fields
+     *    `integrityHash` + `prevHash` stamped by the adapter. Caller-supplied
+     *    values for ALL of those fields are IGNORED — the adapter rewrites them
+     *    via the post-spread stamp pattern (closes STORES-B-021). `prevHash` is
+     *    set to the `integrityHash` of the immediately-preceding event in this
+     *    ledger file (undefined for the genesis event); `integrityHash` is
+     *    `computeIntegrityHash` of the fully-assembled record (PROV-004).
      *  - Persistence is durable before the promise resolves; NDJSON
      *    adapters append + fsync (STORES-B-002).
      *
      * Throws:
      *  - Adapter-level I/O errors (corrupt store, disk full, etc.) propagate.
      */
-    append(event: Omit<ProvenanceEvent, 'id' | 'timestamp' | 'owner'>): Promise<ProvenanceEvent>;
+    append(
+        event: Omit<ProvenanceEvent, 'id' | 'timestamp' | 'owner' | 'integrityHash' | 'prevHash'>,
+    ): Promise<ProvenanceEvent>;
 
     /**
      * Fetch a single provenance event by id, or `null` if absent.
+     *
+     * Verify-on-read is ENFORCED (Wave S2-A1, finding PROV-004): the
+     * implementation recomputes `computeIntegrityHash` on the stored record and
+     * THROWS a typed integrity error when it does not match the stored
+     * `integrityHash`. A non-throwing, non-null return is therefore proof the
+     * record's content has not been tampered with since it was appended.
      *
      * @param id  The event id stamped at `append` / `importEvent` time.
      * @returns   The matching event, or `null` if no event with that id
      *            exists in the active ledger (archived events are NOT
      *            visible — see {@link rotate}).
+     * @throws    A typed integrity error (PROV-004) when the stored event's
+     *            recomputed `integrityHash` does not match its stored value.
      */
     getEvent(id: string): Promise<ProvenanceEvent | null>;
 
@@ -95,23 +124,40 @@ export interface LedgerStore {
     /**
      * Append a receipt for a committed command. Same stamp discipline as
      * {@link append}: caller-supplied `id`/`committedAt` are ignored; the
-     * adapter stamps both via the post-spread pattern (STORES-B-004).
+     * adapter stamps both via the post-spread pattern (STORES-B-004). Wave
+     * S2-A1 adds the same tamper-evidence stamping the events path uses.
      *
      * Postconditions:
-     *  - Returned Receipt has `id` (UUID) and `committedAt` (ISO-8601)
-     *    stamped by the adapter.
+     *  - Returned Receipt has `id` (UUID), `committedAt` (ISO-8601), and the
+     *    Wave S2-A1 tamper-evidence fields `integrityHash` + `prevHash` stamped
+     *    by the adapter (caller-supplied values for all of those are IGNORED).
+     *    `prevHash` is the `integrityHash` of the immediately-preceding receipt
+     *    in this ledger file (undefined for the genesis receipt);
+     *    `integrityHash` is `computeIntegrityHash` of the assembled record
+     *    (PROV-004).
      *  - Persistence durable before resolve.
      *
-     * @param receipt Receipt body without `id` / `committedAt`.
+     * @param receipt Receipt body without `id` / `committedAt` /
+     *                `integrityHash` / `prevHash` (the adapter stamps all four).
      * @returns       The stamped Receipt.
      * @throws        Adapter I/O failures propagate.
      */
-    appendReceipt(receipt: Omit<Receipt, 'id' | 'committedAt'>): Promise<Receipt>;
+    appendReceipt(
+        receipt: Omit<Receipt, 'id' | 'committedAt' | 'integrityHash' | 'prevHash'>,
+    ): Promise<Receipt>;
 
     /**
      * Fetch a single receipt by id, or `null` if absent.
      *
+     * Verify-on-read is ENFORCED (Wave S2-A1, finding PROV-004): the
+     * implementation recomputes `computeIntegrityHash` on the stored receipt
+     * and THROWS a typed integrity error when it does not match the stored
+     * `integrityHash`. A non-throwing, non-null return is proof the receipt's
+     * content is intact.
+     *
      * @param id  Receipt id stamped at append / import time.
+     * @throws    A typed integrity error (PROV-004) when the stored receipt's
+     *            recomputed `integrityHash` does not match its stored value.
      */
     getReceipt(id: string): Promise<Receipt | null>;
 

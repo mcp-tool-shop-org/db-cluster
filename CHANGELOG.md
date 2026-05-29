@@ -8,6 +8,30 @@ The CHANGELOG audience is **external readers** — operators, developers, and AI
 
 Internal swarm-finding IDs (KERNEL-X-NNN, STORES-X-NNN, AGG-NNN) appear as **backlinks at the bottom** of each wave section so the audit trail is preserved, but the body text is written for the external reader.
 
+## Wave S2-A1 — Protocol-v2 amend (security surface)
+
+### Breaking changes
+
+- **The package root no longer exports the raw store factories** (`createCluster`, `createClusterFromEnv`, `createLocalCluster`). Handing those back from the public root let any consumer obtain raw `ClusterStores` and mutate truth with no policy, no redaction, no receipts, and no provenance — a policy-bypass surface (KERNEL-001). The root now exports a single **policy-enforced** factory, `createSafeCluster(config)`, which returns a `SafeCluster` handle: a `PolicyEnforcedKernel` plus the read-only ops (`doctor` / `verify` / `backup` / `restore`), and **no raw store mutators**. The raw factories remain available — unchanged in signature — but only via the explicit, documented escape hatch `@mcptoolshop/db-cluster/unsafe`, which is loudly marked as bypassing policy/receipts/provenance for operator-tooling and test use.
+
+### Security
+
+- **SSL/TLS claim for the Postgres backend is RETRACTED** (EGRESS-001). Earlier docs stated that `DB_CLUSTER_POSTGRES_SSL` was "respected/honored." It was never implemented: db-cluster does not set `ssl` on the `pg` pool and does not read that variable. In v1.0.0 the Postgres connection is **plaintext unless your connection string enforces TLS** (e.g. `sslmode=require`, which the `pg` driver honours), you terminate TLS at a proxy, or you use a private network. Driver-managed `ssl` config is planned for a future release. A `pool.on('error', ...)` handler is now attached at every Pool site (factory + CLI) so an idle-client TCP RST does not crash the host process — this part of STORES-B-006 is real and unchanged.
+
+### Stores
+
+- **Postgres canonical store is now append-a-version** (PROV-002), identical to the local store: `create()` stamps version 1, `update()` appends version N+1 (prior versions retained immutably), `get()` returns the latest version, and `listVersions(id)` / `getVersion(id, n)` expose history. New migration `002_add_entity_version` adds the `version` column and swaps the primary key to `(id, version)`; it is idempotent and safe to run on an existing v1.0.0 (migration 001) table.
+
+### Migration notes
+
+- **`import { createLocalCluster } from '@mcptoolshop/db-cluster'` no longer resolves.** Either migrate to the policed root factory — `import { createSafeCluster } from '@mcptoolshop/db-cluster'` and drive the cluster via `cluster.kernel` — or, if you specifically need raw stores, change the import to `@mcptoolshop/db-cluster/unsafe`. The `/sdk`, `/mcp`, `/policy`, and `/types` subpath exports are unchanged.
+- **Postgres operators:** run `db-cluster migration-status` / your migration step to apply `002_add_entity_version` before relying on entity versioning. No data is lost: existing rows backfill to `version = 1`.
+- **Anyone who believed `DB_CLUSTER_POSTGRES_SSL` was encrypting their Postgres traffic:** it was not. Enforce TLS via your connection string (`sslmode=require`), a proxy, or a private network.
+
+### Backlinks
+
+KERNEL-001 (root facade) · EGRESS-001 (SSL retraction + pool error handler) · PROV-002 (Postgres versioning) · STORES-B-006 (pool error handler).
+
 ## v1.0.0 — Phase 10 Full Treatment release (2026-05-27)
 
 First shipped release. db-cluster exits the dogfood-swarm protocol with all
@@ -141,10 +165,14 @@ full audit + `.stage-b-amend/agent-*-report.md` for per-domain reports.
 ### Stores
 - `LedgerStore.rotate` + `LedgerStore.countEvents` contract additions —
   archival hook for the unbounded-ledger growth concern (STORES-B-013).
-- Postgres pool hardening — SSL config respected when
-  `DB_CLUSTER_POSTGRES_SSL` env is set; `pool.on('error', ...)` handler
-  attached so an idle-client RST does not crash the process
-  (STORES-B-006).
+- Postgres pool hardening — a `pool.on('error', ...)` handler is attached
+  at every Pool site so an idle-client TCP RST does not crash the process
+  (STORES-B-006). **Correction (Wave S2-A1):** an earlier draft of this line
+  claimed "SSL config respected when `DB_CLUSTER_POSTGRES_SSL` is set." That
+  was never implemented — db-cluster does not set `ssl` on the pool and does
+  not read a `DB_CLUSTER_POSTGRES_SSL` variable. The claim is **retracted**;
+  see the v1.0.0 §Security note below. Transport is plaintext unless your
+  connection string enforces TLS.
 - `restore()` now propagates `rebuildIndex` failure on the returned
   `RestoreResult.index` field (STORES-B-007).
 - `appendReceipt`/`importReceipt` stamp `owner` so the post-A4 dataset

@@ -9,9 +9,13 @@ export interface CanonicalStore {
     /**
      * Fetch a single entity by id, or `null` if absent.
      *
+     * Returns the LATEST version (highest `version`) of the entity (Wave
+     * S2-A1). Prior versions are retained immutably and are reachable via
+     * {@link listVersions} / {@link getVersion}.
+     *
      * @param id  Entity id stamped at `create()` / `importSnapshot()` time.
-     * @returns   The matching entity, or `null` if no entity with that id
-     *            exists in the store.
+     * @returns   The latest-version entity, or `null` if no entity with that
+     *            id exists in the store.
      * @throws    Adapter I/O errors propagate (corrupt store, transient
      *            DB failure, etc.).
      */
@@ -40,42 +44,75 @@ export interface CanonicalStore {
     exists(id: string): Promise<boolean>;
 
     /**
-     * Create a new entity, stamping `id`, `createdAt`, `updatedAt`, and
-     * `owner='canonical'` at the adapter boundary. Caller-supplied
-     * values for those fields are IGNORED (the adapter uses the
-     * post-spread stamp pattern from STORES-B-021).
+     * Create a new entity, stamping `id`, `version`, `createdAt`, `updatedAt`,
+     * and `owner='canonical'` at the adapter boundary. Caller-supplied values
+     * for those fields are IGNORED (the adapter uses the post-spread stamp
+     * pattern from STORES-B-021).
      *
      * Preconditions:
      *  - `entity.kind` and `entity.name` are non-empty strings.
      *
      * Postconditions:
-     *  - Returned Entity has `id` (UUID), `createdAt` / `updatedAt`
+     *  - Returned Entity has `id` (UUID), `version=1` (Wave S2-A1 — a freshly
+     *    created entity is its own first version), `createdAt` / `updatedAt`
      *    (ISO-8601), and `owner='canonical'` stamped by the adapter.
      *  - Persistence durable before resolve.
      *
      * @throws  Adapter I/O failures propagate.
      */
-    create(entity: Omit<Entity, 'id' | 'createdAt' | 'updatedAt' | 'owner'>): Promise<Entity>;
+    create(entity: Omit<Entity, 'id' | 'version' | 'createdAt' | 'updatedAt' | 'owner'>): Promise<Entity>;
 
     /**
-     * Update an existing entity's `name` and/or `attributes`. The `id`,
-     * `kind`, `createdAt`, and `owner` fields are immutable post-create;
-     * `updatedAt` is restamped by the adapter.
+     * Append a new VERSION of an existing entity (Wave S2-A1 — append, not
+     * overwrite). This creates version N+1 from the current latest version,
+     * applying `patch` (`name` and/or `attributes`) on top of it. Prior
+     * versions are retained IMMUTABLY — nothing is mutated or deleted. The
+     * returned Entity is the new latest (highest `version`); a subsequent
+     * {@link get} resolves to it.
+     *
+     * `id`, `kind`, `createdAt`, and `owner` are carried forward unchanged from
+     * the latest version; `version` is incremented; `updatedAt` is restamped by
+     * the adapter.
      *
      * Preconditions:
-     *  - An entity with `id` exists. A NotFoundError is thrown if not.
+     *  - At least one version of `id` exists. A NotFoundError is thrown if not.
      *  - `patch` is a non-empty subset of `{name, attributes}`.
      *
      * Postconditions:
-     *  - Returned Entity reflects the patched fields with a fresh
-     *    `updatedAt` stamp.
+     *  - A new immutable version (latest `version` + 1) is persisted; earlier
+     *    versions remain readable via {@link listVersions} / {@link getVersion}.
+     *  - Returned Entity is the new latest version with the patched fields and a
+     *    fresh `updatedAt`.
      *
-     * @param id     Id of the entity to update.
-     * @param patch  Partial fields to update (name and/or attributes).
+     * @param id     Id of the entity to version.
+     * @param patch  Partial fields to apply to the new version (name and/or
+     *               attributes).
      * @throws       {@link NotFoundError} when `id` doesn't exist;
      *               adapter I/O failures propagate.
      */
     update(id: string, patch: Partial<Pick<Entity, 'name' | 'attributes'>>): Promise<Entity>;
+
+    /**
+     * List ALL versions of an entity, ascending by `version` (Wave S2-A1).
+     *
+     * @param id  Entity id.
+     * @returns   Every retained version of the entity, ordered oldest-first
+     *            (`version` ascending). Empty array if the id is unknown;
+     *            never returns `null`.
+     * @throws    Adapter I/O failures propagate.
+     */
+    listVersions(id: string): Promise<Entity[]>;
+
+    /**
+     * Fetch one specific version of an entity (Wave S2-A1).
+     *
+     * @param id       Entity id.
+     * @param version  The exact `version` number to fetch (integer ≥ 1).
+     * @returns        The matching version, or `null` if the id is unknown or
+     *                 has no such version.
+     * @throws         Adapter I/O failures propagate.
+     */
+    getVersion(id: string, version: number): Promise<Entity | null>;
 
     /**
      * Import a full entity snapshot preserving the original `id`, `createdAt`,

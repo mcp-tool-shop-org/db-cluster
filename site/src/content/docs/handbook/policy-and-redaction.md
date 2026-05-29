@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-Policy and redaction are **native** to db-cluster — not bolted on. `PolicyEnforcedKernel` is the only exported kernel entry, and every read path applies redaction before returning.
+Policy and redaction are **native** to db-cluster — not bolted on. The package is policy-enforced by default: the root factory `createSafeCluster()` hands back a `PolicyEnforcedKernel`-backed handle (raw stores only via the explicit `@mcptoolshop/db-cluster/unsafe` escape hatch), and every read path applies redaction before returning.
 
 This page is the canonical reference. Other docs (CLI, SDK, MCP) link here rather than restate.
 

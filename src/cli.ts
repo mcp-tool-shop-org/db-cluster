@@ -1896,6 +1896,10 @@ stores
             try {
                 const { Pool } = await import('pg');
                 const pool = new Pool({ connectionString: postgresUrl });
+                // EGRESS-001: swallow idle-client pool errors so a dropped
+                // backend connection can't crash the CLI mid-command. Log the
+                // message only (no stack / connection string / secret).
+                pool.on('error', (err) => console.error(`postgres pool error: ${err.message}`));
                 const result = await pool.query('SELECT 1 AS ok');
                 if (result.rows[0].ok === 1) {
                     console.log('  ✓ Postgres connection: OK');
@@ -1948,6 +1952,8 @@ stores
         const { Pool } = await import('pg');
         const { PostgresCanonicalStore } = await import('./adapters/postgres/postgres-canonical-store.js');
         const pool = new Pool({ connectionString: postgresUrl });
+        // EGRESS-001: idle-client pool errors must not crash the CLI.
+        pool.on('error', (err) => console.error(`postgres pool error: ${err.message}`));
         const store = new PostgresCanonicalStore(pool);
         await store.migrate();
         console.log('✓ Migrations applied: canonical_entities table ready');
@@ -2053,8 +2059,17 @@ program
     .action(cliCommand(async (opts) => {
         const stores = createLocalCluster(CLUSTER_DIR);
         const { verify } = await import('./ops/verify.js');
+        // Wave S2-A1 fix-up (Task 2): thread a CommandQueue so the
+        // `command_receipt_bijection` check actually runs. verify() SKIPS that
+        // check entirely when no queue is supplied — pre-fix `verify(stores,
+        // {...})` meant `db-cluster verify` never detected an orphan/forged
+        // receipt. MIRRORS the doctor action's CommandQueue(CLUSTER_DIR)
+        // pattern above.
+        const { CommandQueue } = await import('./kernel/command-queue.js');
+        const commandQueue = new CommandQueue(CLUSTER_DIR);
         const health = await verify(stores, {
             sampleLimit: parseInt(opts.sample, 10),
+            commandQueue,
             // Wave C1-Amend fix-up (V2-C1-005): wire onProgress to the
             // verify ops contract so operators see per-step progress on
             // long verifies (large clusters) instead of staring at blank.
@@ -2269,6 +2284,8 @@ program
         }
         const pg = await import('pg');
         const pool = new pg.default.Pool({ connectionString: url });
+        // EGRESS-001: idle-client pool errors must not crash the CLI.
+        pool.on('error', (err) => console.error(`postgres pool error: ${err.message}`));
         try {
             const { checkMigrationStatus } = await import('./ops/migrations.js');
             const status = await checkMigrationStatus(pool);
@@ -2297,6 +2314,8 @@ program
         }
         const pg = await import('pg');
         const pool = new pg.default.Pool({ connectionString: url });
+        // EGRESS-001: idle-client pool errors must not crash the CLI.
+        pool.on('error', (err) => console.error(`postgres pool error: ${err.message}`));
         try {
             const { verifySchema } = await import('./ops/migrations.js');
             const result = await verifySchema(pool);

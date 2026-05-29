@@ -4,9 +4,24 @@
  * PUBLIC (exported here):
  *   - Store contracts (interfaces)
  *   - Domain types (Entity, Artifact, IndexRecord, ProvenanceEvent, Command, Receipt)
- *   - Store factory (createCluster, createClusterFromEnv, createLocalCluster)
+ *   - Safe cluster factory (createSafeCluster) — policy-enforced by default
  *   - Ops (doctor, verify, backup, restore)
  *   - URI utilities
+ *
+ * POLICY-ENFORCED BY DEFAULT (KERNEL-001, Wave S2-A1):
+ *   The package root exports {@link createSafeCluster}, which returns a
+ *   {@link SafeCluster} handle whose only door to cluster truth is a
+ *   PolicyEnforcedKernel (policy + redaction + receipts + provenance +
+ *   mutation law). The root NO LONGER exports the raw store factories
+ *   (`createCluster` / `createClusterFromEnv` / `createLocalCluster`) — handing
+ *   those back from the public root let any consumer bypass policy entirely.
+ *   The raw factories are still reachable, but ONLY via the explicit,
+ *   documented escape hatch:
+ *
+ *     import { createLocalCluster } from '@mcptoolshop/db-cluster/unsafe';
+ *
+ *   `/unsafe` returns raw, UNPOLICED stores (no policy / receipts / provenance)
+ *   for operator tooling and tests. See `src/unsafe.ts` for the full warning.
  *
  * SUBPATH EXPORTS (import from '@mcptoolshop/db-cluster/sdk', '@mcptoolshop/db-cluster/mcp', etc.):
  *   - @mcptoolshop/db-cluster/sdk — ClusterSDK high-level client (recommended for application code)
@@ -14,6 +29,7 @@
  *   - @mcptoolshop/db-cluster/policy — PolicyEnforcedKernel + redaction (use this for in-process callers
  *                          who need direct kernel access — DO NOT bypass with raw ClusterKernel)
  *   - @mcptoolshop/db-cluster/types — all type re-exports
+ *   - @mcptoolshop/db-cluster/unsafe — raw store factories (UNPOLICED escape hatch)
  *
  * NOT PUBLIC (internal, not exported):
  *   - Raw `ClusterKernel` class (KERNEL-013): exporting this publicly bypassed
@@ -22,7 +38,8 @@
  *     (@mcptoolshop/db-cluster/policy). Tests / dogfood scripts that still need the raw
  *     class import it from the internal-only `./kernel/cluster-kernel.js`
  *     path inside this package.
- *   - Raw adapter implementations (local stores, postgres store)
+ *   - Raw adapter implementations (local stores, postgres store) — reachable
+ *     only via the explicit `@mcptoolshop/db-cluster/unsafe` escape hatch.
  *   - Test helpers
  *   - Dashboard demo internals
  *   - Integration harnesses (repo-knowledge adapter)
@@ -88,13 +105,20 @@ export {
     InvalidContentShapeError,
 } from './kernel/errors.js';
 export { PolicyDeniedError } from './kernel/policy-enforced-kernel.js';
+// Adapter integrity error (PROV-001) — thrown by the artifact store's
+// getContent() when stored bytes no longer hash to the recorded contentHash
+// (tamper-evidence on read). Surfaced here so consumers can branch on it
+// without deep-importing the adapter barrel.
+export { ContentReadIntegrityError } from './adapters/local/errors.js';
 export type { AiErrorEnvelope, EmptyResultMeta, ComponentState } from './types/index.js';
 export { formatForUser, errorToAiEnvelope } from './policy/error-formatter.js';
 
-// --- Store factory ---
-export { createCluster, createClusterFromEnv } from './adapters/factory.js';
-export type { ClusterConfig, ClusterWithPool } from './adapters/factory.js';
-export { createLocalCluster } from './adapters/local/index.js';
+// --- Safe (policy-enforced) cluster factory (KERNEL-001) ---
+// The root exports ONLY the policed factory. The raw store factories
+// (createCluster / createClusterFromEnv / createLocalCluster) are NOT
+// re-exported here — they are reachable only via '@mcptoolshop/db-cluster/unsafe'.
+export { createSafeCluster } from './adapters/factory.js';
+export type { SafeCluster, SafeClusterConfig, ClusterConfig, ClusterWithPool } from './adapters/factory.js';
 
 // --- Ops ---
 export { doctor } from './ops/doctor.js';

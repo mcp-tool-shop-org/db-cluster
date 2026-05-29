@@ -1,0 +1,39 @@
+id: update-mutation-without-previous
+language: typescript
+severity: error
+message: |
+  An `update_entity` mutation provenance detail is constructed WITHOUT a
+  `previous` key (PROV-002 lineage, Wave S2-A1). When the kernel commits an
+  `update_entity` it appends a new entity version and displaces the prior
+  one; the `mutation_committed` provenance event for that verb MUST capture
+  the displaced prior version under a `previous` detail key so canonical
+  lineage is reconstructable and `verify`'s `canonical_lineage_intact` check
+  can prove no version was silently dropped.
+
+  This rule fires on an object literal that contains a `verb: 'update_entity'`
+  property (the literal verb) but NO `previous` property. The generic
+  `{ commandId, verb: cmd.verb, payload }` detail does NOT match — its verb
+  value is a variable, not the `update_entity` string literal. Add a
+  `previous` entry to the update arm's detail to clear the gate.
+rule:
+  kind: object
+  all:
+    - has:
+        kind: pair
+        all:
+          - has:
+              field: key
+              regex: "^verb$"
+          - has:
+              field: value
+              regex: "update_entity"
+  not:
+    has:
+      kind: pair
+      has:
+        field: key
+        regex: "^previous$"
+files:
+  - "src/kernel/**/*.ts"
+ignores:
+  - "test/**"

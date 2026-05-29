@@ -10,6 +10,7 @@ import type {
 import {
     CorruptStoreError,
     InvalidContentHashError,
+    ContentReadIntegrityError,
     isValidContentHash,
     assertContentMatch,
 } from './errors.js';
@@ -58,17 +59,36 @@ export class LocalArtifactStore implements ArtifactStore {
     async getContent(id: string): Promise<Buffer | null> {
         const artifact = this.artifacts.get(id);
         if (!artifact) return null;
-        // Defense-in-depth (STORES-R005): re-validate contentHash before using
-        // it as a path component. The in-memory map mirrors artifacts.json; if
-        // that file is tampered after load, the hash here could carry a path
-        // traversal payload. importSnapshot validates on write; getContent
-        // validates on read. Both gates are required.
+        // Gate 1 — shape / path-traversal defence (STORES-R005). Re-validate
+        // contentHash before using it as a path component. The in-memory map
+        // mirrors artifacts.json; if that file is tampered after load, the hash
+        // here could carry a path traversal payload. importSnapshot validates
+        // on write; getContent validates on read.
         if (!isValidContentHash(artifact.contentHash)) {
             throw new InvalidContentHashError(String(artifact.contentHash));
         }
         const contentPath = join(this.contentDir, artifact.contentHash);
         if (!existsSync(contentPath)) return null;
-        return readFileSync(contentPath);
+        const buf = readFileSync(contentPath);
+        // Gate 2 — content read-integrity (PROV-001). The artifact store is
+        // content-addressed and immutable: the bytes at this path MUST hash to
+        // the recorded contentHash. If they no longer do, the on-disk blob was
+        // altered out from under its metadata (the exact tamper STORES-006 /
+        // STORES-R005 defends). The prior implementation returned these bytes
+        // verbatim — promoted here from aspirational to an enforced throw. Both
+        // gates are required: gate 1 stops a malicious *path*, gate 2 stops
+        // malicious *bytes* at a legitimate path.
+        const actualHash = createHash('sha256').update(buf).digest('hex');
+        if (actualHash !== artifact.contentHash) {
+            // Deliberately pass the contentHash (not the absolute contentPath)
+            // so no absolute filesystem path leaks into the error message.
+            throw new ContentReadIntegrityError(
+                artifact.id,
+                artifact.contentHash,
+                actualHash,
+            );
+        }
+        return buf;
     }
 
     async list(filter?: ArtifactFilter): Promise<Artifact[]> {

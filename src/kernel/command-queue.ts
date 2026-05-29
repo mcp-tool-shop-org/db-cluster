@@ -123,6 +123,20 @@ export class CommandQueue {
         return Array.from(this.load().values());
     }
 
+    /**
+     * PROV-005 (Wave S2-A1): read-only enumeration of persisted commands in a
+     * given lifecycle status. Used by the cluster `verify` operation (ops,
+     * Agent 5) to walk the command↔receipt bijection in BOTH directions —
+     * `listByStatus('committed')` yields every committed command so verify can
+     * assert each has a receipt, and the receipt side asserts each receipt's
+     * commandId resolves back to a committed command.
+     *
+     * Pure read over {@link list}; never mutates the queue.
+     */
+    listByStatus(status: Command['status']): Command[] {
+        return this.list().filter((c) => c.status === status);
+    }
+
     save(command: Command): void {
         const commands = this.load();
         commands.set(command.id, command);

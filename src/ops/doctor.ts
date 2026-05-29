@@ -8,6 +8,11 @@ import type { ClusterHealth, HealthCheck } from '../types/health.js';
 import { buildClusterHealth } from './health.js';
 import { CANONICAL_TABLE, getRequiredTables } from '../adapters/postgres/schema.js';
 import type { Command } from '../types/command.js';
+import {
+    checkArtifactContentIntegrity,
+    checkLedgerIntegrityChain,
+    checkCommandReceiptBijection,
+} from './integrity-checks.js';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -61,6 +66,12 @@ export interface DoctorOptions {
  *   4. Policy defaults loadable.
  *   5. Orphaned mutations — surfaces `mutation_orphaned` ledger events.
  *   6. Orphan staging files — surfaces unreferenced pending-content/.
+ *   7. Artifact content integrity — re-hash on-disk bytes vs contentHash
+ *      (Wave S2-A1 fix-up, Defect 2; shared with verify()).
+ *   8. Ledger integrity + chain — recompute integrityHash + walk prevHash
+ *      (Wave S2-A1 fix-up, Defect 2; shared with verify()).
+ *   9. Command↔receipt bijection — both directions, only when `commandQueue`
+ *      is supplied (shared with verify()).
  *
  * Every check produced with `repairAvailable: true` ALSO carries
  * {@link HealthCheck.suggestedCommand} so operator-facing surfaces can
@@ -96,10 +107,11 @@ export interface DoctorOptions {
 export async function doctor(stores: ClusterStores, options?: DoctorOptions): Promise<ClusterHealth> {
     const checks: HealthCheck[] = [];
     const onProgress = options?.onProgress;
-    // Conservative upper bound — actual count depends on postgresPool presence
-    // and dataDir presence; the CLI clamps display at `current ≤ total` so a
-    // slight over-count is fine.
-    const totalSteps = 8;
+    // Conservative upper bound — actual count depends on postgresPool presence,
+    // dataDir presence, and commandQueue presence; the CLI clamps display at
+    // `current ≤ total` so a slight over-count is fine. Includes the Wave S2-A1
+    // fix-up integrity checks (artifact + ledger + optional bijection).
+    const totalSteps = 11;
     let step = 0;
     const tick = (label: string) => {
         step++;
@@ -576,6 +588,34 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
                 'Verify the cluster data directory and pending-content/ subdirectory permissions.',
             ],
         });
+    }
+
+    // --- Integrity-awareness (Wave S2-A1 fix-up, Defect 2) ---
+    // PROV-003's scope named `doctor`, but pre-fix only verify /
+    // provenance-check / receipt-check got the tamper-detecting checks.
+    // `db-cluster doctor` — the operator's FIRST-LINE command — therefore gave a
+    // clean bill to a tampered store that `verify()` calls `corrupt`. We add the
+    // SAME artifact-content + ledger-chain checks here, calling the SHARED check
+    // bodies in src/ops/integrity-checks.ts (no duplicated sha256 / chain-walk
+    // logic — verify and doctor are now one source of truth). The ClusterHealth
+    // output shape + severity model are unchanged; these are additive checks.
+    //
+    // Sample bound: doctor has no `sampleLimit` option, so we reuse the same
+    // implicit sample size doctor's other multi-record checks use (100). This
+    // keeps a large-cluster doctor run bounded — operators wanting an exhaustive
+    // sweep run `db-cluster verify` with an explicit `--sample-limit`.
+    const INTEGRITY_SAMPLE_LIMIT = 100;
+    tick('artifact_content_integrity');
+    checks.push(await checkArtifactContentIntegrity(stores, INTEGRITY_SAMPLE_LIMIT));
+    tick('ledger_integrity_chain');
+    checks.push(await checkLedgerIntegrityChain(stores));
+    // Bijection requires the committed-command set. The CLI doctor path wires a
+    // CommandQueue (cli.ts), so this check runs there; when no queue handle is
+    // supplied it is skipped ENTIRELY (no entry pushed) — matching verify()'s
+    // contract so a bare doctor(stores) call adds no false-alarm advisory.
+    if (options?.commandQueue) {
+        tick('command_receipt_bijection');
+        checks.push(await checkCommandReceiptBijection(stores, options.commandQueue));
     }
 
     return buildClusterHealth(checks);

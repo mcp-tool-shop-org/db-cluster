@@ -422,11 +422,27 @@ describe('Wave 5 — Proof Tests', () => {
                 attributes: { v: 99 },
             });
 
-            // Data changed in canonical truth.
+            // Latest canonical truth reflects the bypass: `get` returns the new
+            // latest version. Wave S2-A1: `update` no longer overwrites in place
+            // — it APPENDS version N+1, so the drift signal here is "a new latest
+            // version exists with no command behind it", and crucially the PRIOR
+            // truth is NOT destroyed (it remains recoverable below).
             const raw = await cluster.canonical.get(entity.id);
             expect(raw).not.toBeNull();
             expect(raw!.name).toBe('Drifted');
             expect(raw!.attributes).toEqual({ v: 99 });
+
+            // Truth-integrity invariant (the point of this proof): the displaced
+            // prior version is RECOVERABLE — the direct `update` appended rather
+            // than destroyed, so pre-drift truth ("Original" / { v: 1 }) is still
+            // reachable via listVersions / getVersion. Drift changes the latest
+            // pointer; it does not erase history.
+            const versions = await cluster.canonical.listVersions(entity.id);
+            expect(versions.length).toBeGreaterThanOrEqual(2);
+            const priorVersion = await cluster.canonical.getVersion(entity.id, raw!.version - 1);
+            expect(priorVersion, 'prior version must survive a direct update').not.toBeNull();
+            expect(priorVersion!.name).toBe('Original');
+            expect(priorVersion!.attributes).toEqual({ v: 1 });
 
             // No "Updated entity" receipt was emitted for this change — the
             // bypass is detectable as drift.

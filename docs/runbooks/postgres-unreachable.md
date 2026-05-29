@@ -95,15 +95,21 @@ db-cluster doctor
 #    Postgres's idle_in_transaction_session_timeout).
 ```
 
-### Path 4 — SSL config
+### Path 4 — SSL / TLS
+
+> **db-cluster does not configure SSL/TLS for the Postgres connection in v1.0.0.**
+> There is no `DB_CLUSTER_POSTGRES_SSL` variable — earlier docs claimed one;
+> that claim is retracted. Enforce TLS at the connection-string level (the `pg`
+> driver honours `sslmode`), with a TLS-terminating proxy, or on a private
+> network. Driver-managed `ssl` config is planned for a future release.
 
 ```bash
-# Wave B1-Amend (STORES-B-006) honors DB_CLUSTER_POSTGRES_SSL.
-# If your cluster requires SSL:
-export DB_CLUSTER_POSTGRES_SSL=true
+# If your Postgres host requires (or you want) TLS, put it in the URL itself —
+# the pg driver honours sslmode without any db-cluster-specific knob:
+export DB_CLUSTER_POSTGRES_URL='postgres://user:pass@host:5432/db?sslmode=require'
 
-# OR for self-signed certs (NOT for production):
-export DB_CLUSTER_POSTGRES_SSL=allow-self-signed
+# Self-signed / dev certs (NOT for production):
+export DB_CLUSTER_POSTGRES_URL='postgres://user:pass@host:5432/db?sslmode=no-verify'
 
 # Re-test.
 db-cluster doctor
@@ -131,4 +137,4 @@ When escalating, attach:
 - `docs/handbook.md` §10.3 — Postgres canonical store setup.
 - `docs/operations.md` — doctor/verify on physical backends.
 - `CHANGELOG.md` Wave A3 — STORES-R2-002 importSnapshot ON CONFLICT.
-- `CHANGELOG.md` Wave B1-Amend — STORES-B-006 SSL + pool.on('error').
+- `CHANGELOG.md` Wave S2-A1 — EGRESS-001 SSL claim retraction + pool.on('error') at every Pool site.

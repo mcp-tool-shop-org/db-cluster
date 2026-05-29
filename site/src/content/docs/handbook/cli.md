@@ -130,8 +130,7 @@ When piped (`db-cluster doctor --json | jq`), or when `--no-color` is set, or wh
 | `DB_CLUSTER_PRINCIPAL` | JSON principal identity (schema-validated, fail-closed). |
 | `DB_CLUSTER_POLICIES_FILE` | Path to a policies JSON file (path-sandboxed against cwd). |
 | `DB_CLUSTER_OPERATOR` | Operator name for the actor field (used when `--actor` not passed). |
-| `DB_CLUSTER_POSTGRES_URL` | Postgres connection string for the canonical store backend. |
-| `DB_CLUSTER_POSTGRES_SSL` | `true` to require SSL on the Postgres connection. |
+| `DB_CLUSTER_POSTGRES_URL` | Postgres connection string for the canonical store backend. For TLS, include `sslmode=require` in the string (the `pg` driver honours it); db-cluster does not configure SSL/TLS itself in v1.0.0. |
 | `NO_COLOR` | Any non-empty value disables ANSI color (https://no-color.org). |
 | `DEBUG` | `1` enables raw stack traces on STDERR. |
 

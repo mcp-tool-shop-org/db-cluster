@@ -3,9 +3,32 @@
  * Never mutates canonical, artifact, or ledger stores.
  */
 
+import { createHash } from 'node:crypto';
 import type { ClusterStores } from '../contracts/index.js';
 import type { IndexRecord } from '../types/index-record.js';
 import { buildArtifactIndexText } from '../indexing/content-indexer.js';
+
+/**
+ * Structurally detect a content-read integrity failure thrown by the hardened
+ * `ArtifactStore.getContent` (PROV-001). Matched by `name` / `code` rather than
+ * `instanceof` so the ops layer does NOT take a hard import on the adapter
+ * package (no back-edge) and so it recognizes the error regardless of which
+ * concrete class the adapter throws (`ContentReadIntegrityError`, and the
+ * adjacent `InvalidContentHashError` path-traversal guard). Both mean "the
+ * stored content cannot be trusted — do not index it."
+ */
+function isContentIntegrityError(err: unknown): boolean {
+    if (!err || typeof err !== 'object') return false;
+    const name = (err as { name?: unknown }).name;
+    const code = (err as { code?: unknown }).code;
+    if (typeof name === 'string' && /ContentReadIntegrity|InvalidContentHash/i.test(name)) {
+        return true;
+    }
+    if (typeof code === 'string' && /CONTENT_READ_INTEGRITY|INVALID_CONTENT_HASH/i.test(code)) {
+        return true;
+    }
+    return false;
+}
 
 export interface RebuildResult {
     rebuilt: number;
@@ -119,9 +142,37 @@ export async function rebuildIndex(stores: ClusterStores, options?: RebuildOptio
     }
 
     // Artifacts (content-aware text extraction)
+    //
+    // PROV-001 (Wave S2-A1): content is obtained via the HARDENED
+    // `stores.artifact.getContent(id)`, which re-hashes the on-disk bytes
+    // against the metadata `contentHash` and THROWS a `ContentReadIntegrityError`
+    // when they no longer match (tampered blob). We catch the throw and surface
+    // it LOUDLY in `errors[]` — the artifact is NOT staged, so a rebuild can
+    // never index poisoned content. This is the load-bearing "skip + report,
+    // never silently index poison" behaviour the finding requires. A generic
+    // staging failure is reported with the same channel but a distinct prefix
+    // so operators can tell a tamper from a transient I/O blip.
     for (const artifact of artifacts) {
         try {
             const contentBuf = await stores.artifact.getContent(artifact.id);
+            // PROV-001 defense-in-depth: the hardened adapter throws on a
+            // hash mismatch, but the rebuild ALSO re-hashes the returned bytes
+            // against the recorded contentHash before indexing. This adjacent
+            // `createHash('sha256')` integrity check means a tampered blob is
+            // refused even on an adapter that has not yet adopted verify-on-read
+            // — poisoned content never reaches the index. Throwing here routes
+            // into the integrity-aware catch below.
+            if (contentBuf) {
+                const actualHash = createHash('sha256').update(contentBuf).digest('hex');
+                if (actualHash !== artifact.contentHash) {
+                    const integrityError: Error & { code?: string } = new Error(
+                        `sha256(on-disk bytes)=${actualHash} != recorded contentHash=${artifact.contentHash}`,
+                    );
+                    integrityError.name = 'ContentReadIntegrityError';
+                    integrityError.code = 'CONTENT_READ_INTEGRITY';
+                    throw integrityError;
+                }
+            }
             let indexText: string;
             if (
                 contentBuf &&
@@ -146,7 +197,15 @@ export async function rebuildIndex(stores: ClusterStores, options?: RebuildOptio
             });
             rebuilt++;
         } catch (err: any) {
-            errors.push(`Failed to stage artifact ${artifact.id}: ${err.message}`);
+            if (isContentIntegrityError(err)) {
+                errors.push(
+                    `Refusing to index artifact ${artifact.id} (${artifact.filename}): content integrity ` +
+                        `check failed — the on-disk bytes do not hash to the recorded contentHash ` +
+                        `(tampered blob). ${err.message ?? ''}`.trim(),
+                );
+            } else {
+                errors.push(`Failed to stage artifact ${artifact.id}: ${err.message}`);
+            }
         }
         current++;
         tick(`staging artifact ${artifact.id}`);

@@ -32,7 +32,7 @@ This handbook is the canonical operator + developer + AI-integrator guide. The C
 ```
   CLI / SDK / MCP                       ← surfaces (red, green, cyan colorized)
         │
-  PolicyEnforcedKernel                  ← policy + redaction (the only exported entry)
+  PolicyEnforcedKernel                  ← policy + redaction (the root's createSafeCluster handle)
         │
    ClusterKernel                        ← routing, retrieval, mutation lifecycle
         │
