@@ -42,6 +42,8 @@ import {
     checkArtifactContentIntegrity,
     checkLedgerIntegrityChain,
     checkCommandReceiptBijection,
+    checkProvenanceReferencesValid,
+    checkReceiptsProvenanceValid,
 } from './integrity-checks.js';
 
 export interface VerifyOptions {
@@ -212,78 +214,14 @@ export async function verify(stores: ClusterStores, options?: VerifyOptions): Pr
     }
 
     // --- Provenance events reference existing objects ---
-    // KERNEL-R2-002 alignment: only canonical/artifact-subject events are
-    // checked here. Events with subjectStore='ledger' or 'index' reference
-    // command/index IDs by design — their reachability is not verifiable
-    // via canonical/artifact.exists. The pre-fix code iterated all events
-    // and false-flagged every command_approved / command_rejected /
-    // mutation_orphaned / command_compensated event as an orphan because
-    // their subjectId is a command UUID never present in canonical or
-    // artifact. That made verify() report 'stale' for any cluster that
-    // had ever approved or rejected a command.
+    // SHARED with doctor() via checkProvenanceReferencesValid
+    // (src/ops/integrity-checks.ts) — single source of truth so the two ops
+    // surfaces cannot drift. See that helper's doc for the KERNEL-R2-002
+    // alignment (only canonical/artifact-subject events are checked) and its
+    // role, alongside receipts_provenance_valid, in catching a single-store
+    // ledger head-truncation that ledger_integrity_chain is blind to.
     tick('provenance_references_valid');
-    try {
-        const events = await stores.ledger.listEvents({ limit });
-        let orphanCount = 0;
-
-        for (const event of events) {
-            // Only canonical- and artifact-subject events are verifiable
-            // via store.exists(). Ledger- and index-subject events reference
-            // commandIds / indexIds whose reachability is not modelled by
-            // the canonical/artifact stores.
-            if (event.subjectStore !== 'canonical' && event.subjectStore !== 'artifact') {
-                continue;
-            }
-            if (event.subjectId) {
-                const inCanonical = await stores.canonical.exists(event.subjectId);
-                const inArtifact = await stores.artifact.exists(event.subjectId);
-                if (!inCanonical && !inArtifact) {
-                    orphanCount++;
-                }
-            }
-        }
-
-        if (orphanCount > 0) {
-            checks.push({
-                name: 'provenance_references_valid',
-                store: 'ledger',
-                status: 'stale',
-                severity: 'warning',
-                message: `${orphanCount} provenance event(s) reference objects not found in canonical/artifact stores.`,
-                repairAvailable: false,
-                // Wave C1-Amend fix-up (V1-C1-005): every HealthCheck
-                // producer that has actionable nextSteps SHOULD also
-                // populate `suggestedCommand` so the doctor footer's
-                // "Top fix" line can surface a concrete one-liner.
-                suggestedCommand: 'db-cluster verify --json',
-                nextSteps: [
-                    'Run `db-cluster trace <subjectId>` for the affected subjects to inspect lineage.',
-                    'Reconcile by either restoring the missing canonical/artifact records or removing the stale provenance events from the ledger.',
-                ],
-            });
-        } else {
-            checks.push({
-                name: 'provenance_references_valid',
-                store: 'ledger',
-                status: 'healthy',
-                severity: 'info',
-                message: 'All sampled provenance events reference existing objects.',
-                repairAvailable: false,
-            });
-        }
-    } catch (err: any) {
-        checks.push({
-            name: 'provenance_references_valid',
-            store: 'ledger',
-            status: 'unreachable',
-            severity: 'error',
-            message: `Provenance verification failed: ${err.message}`,
-            repairAvailable: false,
-            nextSteps: [
-                'Inspect the ledger events.json file for corruption.',
-            ],
-        });
-    }
+    checks.push(await checkProvenanceReferencesValid(stores, limit));
 
     // --- No orphaned mutations (STORES-R2-003) ---
     // Wave A2 added mutation_orphaned events on receipt failure (KERNEL-R009)
@@ -355,61 +293,14 @@ export async function verify(stores: ClusterStores, options?: VerifyOptions): Pr
         });
     }
 
-    // --- Receipts reference commands ---
+    // --- Receipts reference existing provenance events ---
+    // SHARED with doctor() via checkReceiptsProvenanceValid
+    // (src/ops/integrity-checks.ts). This is THE check that turns an
+    // events-only head-truncation into a visible `stale` signal — a surviving
+    // receipt's provenanceEventId no longer resolves — even though
+    // ledger_integrity_chain (relaxed-genesis) is blind to the truncated head.
     tick('receipts_provenance_valid');
-    try {
-        const receipts = await stores.ledger.listReceipts({ limit });
-        let missingEventCount = 0;
-
-        for (const receipt of receipts) {
-            if (receipt.provenanceEventId) {
-                const event = await stores.ledger.getEvent(receipt.provenanceEventId);
-                if (!event) {
-                    missingEventCount++;
-                }
-            }
-        }
-
-        if (missingEventCount > 0) {
-            checks.push({
-                name: 'receipts_provenance_valid',
-                store: 'ledger',
-                status: 'stale',
-                severity: 'warning',
-                message: `${missingEventCount} receipt(s) reference missing provenance events.`,
-                repairAvailable: false,
-                // Wave C1-Amend fix-up (V1-C1-005): suggestedCommand
-                // populated so doctor footer surfaces a concrete next
-                // command.
-                suggestedCommand: 'db-cluster receipts',
-                nextSteps: [
-                    'Run `db-cluster receipts` to inspect the affected receipts.',
-                    'Run `db-cluster trace <eventId>` for the missing provenance events to find the lineage gap.',
-                ],
-            });
-        } else {
-            checks.push({
-                name: 'receipts_provenance_valid',
-                store: 'ledger',
-                status: 'healthy',
-                severity: 'info',
-                message: 'All sampled receipts reference existing provenance events.',
-                repairAvailable: false,
-            });
-        }
-    } catch (err: any) {
-        checks.push({
-            name: 'receipts_provenance_valid',
-            store: 'ledger',
-            status: 'unreachable',
-            severity: 'error',
-            message: `Receipt verification failed: ${err.message}`,
-            repairAvailable: false,
-            nextSteps: [
-                'Inspect the ledger receipts.json file for corruption.',
-            ],
-        });
-    }
+    checks.push(await checkReceiptsProvenanceValid(stores, limit));
 
     // =====================================================================
     // Wave S2-A1 (PROV-003) — tamper-detecting checks. These prove the bytes

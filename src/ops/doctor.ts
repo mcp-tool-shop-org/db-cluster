@@ -12,6 +12,8 @@ import {
     checkArtifactContentIntegrity,
     checkLedgerIntegrityChain,
     checkCommandReceiptBijection,
+    checkProvenanceReferencesValid,
+    checkReceiptsProvenanceValid,
 } from './integrity-checks.js';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -66,11 +68,16 @@ export interface DoctorOptions {
  *   4. Policy defaults loadable.
  *   5. Orphaned mutations — surfaces `mutation_orphaned` ledger events.
  *   6. Orphan staging files — surfaces unreferenced pending-content/.
- *   7. Artifact content integrity — re-hash on-disk bytes vs contentHash
+ *   7. Provenance references valid — events' canonical/artifact subjects resolve
+ *      (shared with verify()). With (8), catches a single-store ledger
+ *      head-truncation that `ledger_integrity_chain`'s accepted blind spot misses.
+ *   8. Receipts provenance valid — every receipt's provenanceEventId resolves
+ *      (shared with verify()); the events-only head-truncation signal.
+ *   9. Artifact content integrity — re-hash on-disk bytes vs contentHash
  *      (Wave S2-A1 fix-up, Defect 2; shared with verify()).
- *   8. Ledger integrity + chain — recompute integrityHash + walk prevHash
+ *  10. Ledger integrity + chain — recompute integrityHash + walk prevHash
  *      (Wave S2-A1 fix-up, Defect 2; shared with verify()).
- *   9. Command↔receipt bijection — both directions, only when `commandQueue`
+ *  11. Command↔receipt bijection — both directions, only when `commandQueue`
  *      is supplied (shared with verify()).
  *
  * Every check produced with `repairAvailable: true` ALSO carries
@@ -110,8 +117,10 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
     // Conservative upper bound — actual count depends on postgresPool presence,
     // dataDir presence, and commandQueue presence; the CLI clamps display at
     // `current ≤ total` so a slight over-count is fine. Includes the Wave S2-A1
-    // fix-up integrity checks (artifact + ledger + optional bijection).
-    const totalSteps = 11;
+    // fix-up integrity checks (artifact + ledger + optional bijection) and the
+    // two shared cross-store reference checks (provenance + receipts) added in
+    // the doctor/verify divergence hardening.
+    const totalSteps = 14;
     let step = 0;
     const tick = (label: string) => {
         step++;
@@ -605,6 +614,27 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
     // keeps a large-cluster doctor run bounded — operators wanting an exhaustive
     // sweep run `db-cluster verify` with an explicit `--sample-limit`.
     const INTEGRITY_SAMPLE_LIMIT = 100;
+
+    // --- Cross-store ledger reference checks (doctor/verify divergence hardening) ---
+    // doctor() shared the integrity-hash checks with verify() (Defect 2) but NOT
+    // the two cross-store reference checks below — leaving a real gap. A
+    // SINGLE-STORE ledger head-truncation (e.g. the oldest events.json line
+    // deleted) does NOT trip `ledger_integrity_chain`: that check has a
+    // documented, accepted blind spot for head-truncation (the genesis-prevHash
+    // rule was relaxed so a legitimate `rotate()` does not false-positive — see
+    // checkIntegrityChain). And `command_receipt_bijection` passes on an
+    // events-only truncation (all receipts/commands survive). verify() still
+    // caught it via `receipts_provenance_valid` (a surviving receipt now dangles
+    // to the deleted event); doctor() ran neither cross-store check and so gave a
+    // clean bill on a truncated ledger. Running the SAME shared check bodies here
+    // closes the divergence. Bounded by the same implicit 100-record sample the
+    // other doctor multi-record checks use; operators wanting an exhaustive sweep
+    // run `db-cluster verify` with an explicit `--sample-limit`.
+    tick('provenance_references_valid');
+    checks.push(await checkProvenanceReferencesValid(stores, INTEGRITY_SAMPLE_LIMIT));
+    tick('receipts_provenance_valid');
+    checks.push(await checkReceiptsProvenanceValid(stores, INTEGRITY_SAMPLE_LIMIT));
+
     tick('artifact_content_integrity');
     checks.push(await checkArtifactContentIntegrity(stores, INTEGRITY_SAMPLE_LIMIT));
     tick('ledger_integrity_chain');
