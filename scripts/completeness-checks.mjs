@@ -83,6 +83,16 @@ const RULES = [
         file: 'R8-ledger-append-without-integrity-stamp.yml',
         label: 'ledger append/appendReceipt persisting without computeIntegrityHash stamp (PROV-004)',
     },
+    {
+        id: 'R9',
+        file: 'R9-sdk-artifact-without-sanitize.yml',
+        label: 'SDK method forwarding an Artifact (findSources/retrieveBundle) without sanitizeArtifactForOutput (REDACT-001)',
+    },
+    {
+        id: 'R10',
+        file: 'R10-path-scrub-regex-outside-redactor.yml',
+        label: 'hand-rolled path-scrub RegExp literal outside src/policy/redactor.ts (REDACT-002)',
+    },
 ];
 
 /**

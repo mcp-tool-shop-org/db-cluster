@@ -1,0 +1,29 @@
+id: path-scrub-regex-outside-redactor
+language: typescript
+severity: error
+message: |
+  A hand-rolled path-scrubbing `RegExp` literal is defined OUTSIDE
+  `src/policy/redactor.ts` (REDACT-002, Wave S2-A2). The canonical
+  absolute-path scrubber (`PATH_REGEX` + `redactErrorMessage`) lives in
+  `src/policy/redactor.ts` and is exported for re-use. A second, divergent
+  copy of the drive-letter / UNC / POSIX path regex (e.g. the former one
+  in `src/mcp/sanitize.ts`) is a single-source-of-truth violation: the two
+  copies drift, and a path-shape the redactor learns to strip keeps
+  leaking through the stale sibling. The MCP-side error scrubber MUST
+  import `PATH_REGEX` (or call `redactErrorMessage`) from the redactor
+  rather than re-declaring the pattern.
+
+  This rule fires on any `RegExp` literal whose source contains the
+  Windows drive-letter idiom `[A-Za-z]:` (the unambiguous hallmark of a
+  filesystem-path scrubber — ordinary regexes do not character-class the
+  full A–Z/a–z range immediately before a colon). `src/policy/redactor.ts`
+  is ignored because it is the sanctioned home. To clear the gate, delete
+  the local literal and import the canonical scrubber from the redactor.
+rule:
+  kind: regex
+  regex: '\[A-Za-z\]:|\[a-zA-Z\]:'
+files:
+  - "src/**/*.ts"
+ignores:
+  - "src/policy/redactor.ts"
+  - "test/**"

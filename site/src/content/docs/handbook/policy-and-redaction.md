@@ -127,13 +127,26 @@ Both surface the effective policy decision: matched policy ID + name, allow / de
 
 ## Default safety
 
-Out of the box (no policies file):
+The default posture depends on the **surface**:
+
+**In-process SDK / `createSafeCluster` (trusted callers).** Out of the box, with
+no policies file:
 
 - Default principal: `INTERNAL_TRUSTED_PRINCIPAL` (zone: `internal-trusted`).
 - Default policies: full allow within the internal-trusted zone.
 - Default redaction: empty.
 
-Production deployments **should** override the principal + add a policies file.
+This is appropriate because constructing the SDK or calling `createSafeCluster`
+in-process is itself a trusted act. Production deployments **should** still
+override the principal + add a policies file.
+
+**MCP server (`db-cluster-mcp`).** The MCP surface does **not** fall back to the
+trusted in-process default. It defaults to the **`ai-facing` trust zone with
+redaction ON** — artifact content and sensitive attributes are stripped at the
+boundary, and write tools refuse to commit until a command is `approved`. The
+privileged (`internal` / `cluster-admin`) posture is reachable only when an
+operator explicitly opts in via an environment flag (provisionally
+`DB_CLUSTER_MCP_ALLOW_PRIVILEGED`). See [MCP Integration](../mcp/).
 
 ## See also
 

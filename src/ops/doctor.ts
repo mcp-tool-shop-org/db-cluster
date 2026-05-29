@@ -17,6 +17,12 @@ import {
 } from './integrity-checks.js';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+// EGRESS-003 (Wave S2-A2): scrub absolute filesystem paths out of the
+// Postgres health-check error message before it surfaces. A failed
+// connection error can carry a unix-socket path
+// (`/var/run/postgresql/.s.PGSQL.5432`) verbatim. Scrub-only — the check
+// logic (RV-001 cross-store checks et al.) is untouched.
+import { redactErrorMessage } from '../policy/redactor.js';
 
 export interface DoctorOptions {
     /** Postgres pool for backend checks (optional) */
@@ -352,7 +358,9 @@ export async function doctor(stores: ClusterStores, options?: DoctorOptions): Pr
                 store: 'migration',
                 status: 'unreachable',
                 severity: 'error',
-                message: `Postgres health check failed: ${err.message}`,
+                // EGRESS-003: scrub absolute paths (e.g. unix-socket path) from
+                // the surfaced error message.
+                message: `Postgres health check failed: ${redactErrorMessage(err)}`,
                 repairAvailable: false,
                 nextSteps: [
                     'Verify DB_CLUSTER_POSTGRES_URL is set and the Postgres instance accepts connections.',

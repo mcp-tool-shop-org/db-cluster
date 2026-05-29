@@ -7,6 +7,25 @@ sidebar:
 
 db-cluster ships an MCP server (`db-cluster-mcp`) that exposes 16 typed tools to AI agents over stdio. Every tool carries safety annotations the model can branch on; every error response is a structured `AiErrorEnvelope`.
 
+## Default trust posture (ai-facing + redaction)
+
+**The MCP server defaults to the `ai-facing` trust zone with redaction ON.** With
+no policy environment variables set, it applies the default ai-facing policies +
+redaction rather than running as a fully-trusted in-process kernel:
+
+- Artifact content and sensitive entity attributes are **stripped at the boundary
+  by default** — no tool returns raw artifact bytes.
+- **Write tools enforce approval** — `cluster_commit_mutation` and
+  `cluster_compensate_mutation` refuse to write unless the command is in
+  `approved` status. The refusal is a structured `AiErrorEnvelope`, not a partial
+  write; the caller must run `cluster_approve_mutation` first.
+
+To run the server in a trusted operator context with the privileged (`internal` /
+`cluster-admin`) posture, **explicitly opt in** via an environment flag —
+provisionally `DB_CLUSTER_MCP_ALLOW_PRIVILEGED` (final name in the release notes).
+The default flip is MCP-surface only; the in-process [SDK](../sdk/) and the
+`@mcptoolshop/db-cluster/unsafe` paths for trusted callers are unchanged.
+
 ## Quick wire-up
 
 ```json

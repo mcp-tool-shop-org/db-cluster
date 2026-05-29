@@ -251,7 +251,7 @@ describe('Wave 5 — Redaction and Existence Leakage', () => {
 
     describe('Proof 1: Restricted artifact content is stripped or summarized', () => {
         it('restricted reader gets artifact with storagePath stripped', async () => {
-            const { stores } = makeStores();
+            const { stores, dir } = makeStores();
             const adminK = makeKernel(stores, admin);
             // Seed an artifact through the admin kernel (admin has full
             // access, same result as the previous raw-kernel bypass — and
@@ -263,12 +263,39 @@ describe('Wave 5 — Redaction and Existence Leakage', () => {
                 actorId: 'admin-1',
             });
 
-            // Admin sees full artifact
-            const adminResult = await adminK.findSources({ query: 'secret' });
-            const adminArtifact = adminResult.resolvedArtifacts.find((a) => a.id === ingested.artifact.id);
-            expect(adminArtifact?.storagePath).not.toBe(REDACTED);
+            // REDACT-001 (Wave S2-A2): flipped. Pre-fix this asserted the
+            // admin/internal principal SEES the raw `storagePath` through
+            // `findSources`. The SDK boundary is now the confidentiality
+            // perimeter: `sanitizeArtifactForOutput` runs UNCONDITIONALLY on
+            // SDK `findSources`, so even an admin (cluster-admin / internal
+            // empty-rules zone) gets the artifact with `storagePath` ABSENT —
+            // no absolute fs path escapes the SDK under any policy state. The
+            // bare kernel still returns the raw path to trusted in-process
+            // callers (committableStatuses / kernel doctrine unchanged); the
+            // SDK is what AI/automation consumes. Teeth preserved: the case
+            // stays, the other artifact fields remain present.
+            const adminSdk = new ClusterSDK({
+                clusterDir: dir,
+                policies,
+                trustZones,
+                visibilityRules,
+                principal: admin,
+            });
+            const adminResult = await adminSdk.findSources('secret');
+            const adminArtifact = adminResult.resolvedArtifacts.find((a) => a.id === ingested.artifact.id) as
+                | (typeof adminResult.resolvedArtifacts[number] & { storagePath?: string })
+                | undefined;
+            expect(adminArtifact).toBeDefined();
+            // storagePath (absolute fs path) MUST be absent through the SDK.
+            expect(adminArtifact).not.toHaveProperty('storagePath');
+            // Other artifact fields still present.
+            expect(adminArtifact?.id).toBe(ingested.artifact.id);
+            expect(adminArtifact?.filename).toBe('secret.pdf');
+            expect(typeof adminArtifact?.contentHash).toBe('string');
 
-            // Restricted reader gets redacted artifact
+            // Restricted reader gets redacted artifact (kernel-level proof —
+            // the ai-facing zone strips content; the kernel emits the REDACTED
+            // sentinel before the SDK sanitizer drops the key).
             const restrictedK = makeKernel(stores, restrictedReader);
             const restrictedResult = await restrictedK.findSources({ query: 'secret' });
             const restrictedArtifact = restrictedResult.resolvedArtifacts.find((a) => a.id === ingested.artifact.id);

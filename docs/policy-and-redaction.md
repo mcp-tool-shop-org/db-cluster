@@ -45,6 +45,15 @@ Trust zones define security boundaries:
 | `agent` | AI agents — read + propose, no commit |
 | `external` | Restricted consumers — limited read |
 
+**MCP-surface default.** The MCP server (`db-cluster-mcp`) defaults to the
+**`ai-facing` trust zone with redaction ON** — artifact content and sensitive
+attributes are stripped at the boundary, and write tools refuse to commit until a
+command is `approved`. The privileged (`internal` / `cluster-admin`) posture is
+reachable only when an operator explicitly opts in via an environment flag
+(provisionally `DB_CLUSTER_MCP_ALLOW_PRIVILEGED`; see [MCP Integration](mcp.md)).
+This default applies to the MCP surface only — in-process SDK callers supply their
+own `principal` + policies.
+
 ## Policies
 
 Policies are first-match, deny-wins:

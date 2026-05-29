@@ -24,7 +24,30 @@ const VALID_STORES: Set<string> = new Set([
     'receipt',
 ]);
 
-const URI_REGEX = /^cluster:\/\/([a-z]+)\/(.+)$/;
+/**
+ * URI grammar: `cluster://<store>/<id>`.
+ *
+ * INJECT-003 (Wave S2-A2) — the `id` group was previously `(.+)`, which
+ * accepted ASCII control characters (\x00–\x1F), the space (\x20), and DEL
+ * (\x7F). Those are inert today (the store is re-validated and the id is
+ * consumed opaquely as a Map key / a `$1` parameter bind), but a null byte or
+ * control char in an id is never legitimate and is a classic truncation /
+ * log-injection / smuggling primitive. We exclude that range at the grammar
+ * level so BOTH `parseClusterUri` (throws) and `isClusterUri` (returns false)
+ * reject them from one source of truth.
+ *
+ * The exclusion is `[^\x00-\x20\x7f]+`:
+ *  - C0 controls (\x00–\x1F) incl. NUL, BEL, TAB, LF, CR — rejected.
+ *  - SPACE (\x20) — rejected (a raw space in a URI path is always malformed).
+ *  - DEL (\x7F) — rejected.
+ *  - Everything else printable — UUIDs, hyphens, dots, underscores, `@`,
+ *    `+`, unicode letters, etc. — still valid.
+ *
+ * Note: `.` in the prior group already excluded LF/CR (JS regex without the
+ * `s` flag), so newline rejection is preserved; this change additionally
+ * closes NUL / other-control / TAB / space.
+ */
+const URI_REGEX = /^cluster:\/\/([a-z]+)\/([^\x00-\x20\x7f]+)$/;
 
 /**
  * Parse a cluster URI string into structured form.

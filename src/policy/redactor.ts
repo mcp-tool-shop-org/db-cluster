@@ -102,6 +102,13 @@ export const PRESERVED_FIELDS_ENTITY: ReadonlyArray<keyof Entity> = [
     'kind',
     'name',
     'attributes',
+    // Wave S2-A2 (A1 fold-in): `version` is the canonical version counter
+    // stamped by create()/update()/importSnapshot(). Not sensitive — it is
+    // a monotonic integer visible in every non-redacted read — but it was
+    // being over-redacted to a marker, corrupting the entity shape for any
+    // consumer that branches on the latest version. Declaration order in
+    // src/types/entity.ts places it between `attributes` and `createdAt`.
+    'version',
     'createdAt',
     'updatedAt',
     'owner',
@@ -136,6 +143,14 @@ export const PRESERVED_FIELDS_RECEIPT: ReadonlyArray<keyof Receipt> = [
     'resultSummary',
     'affectedIds',
     'provenanceEventId',
+    // Wave S2-A2 (A1 fold-in): the tamper-evidence hash-chain pair
+    // (PROV-004). `integrityHash` is derivable from this record's visible
+    // content via computeIntegrityHash; `prevHash` is the predecessor's
+    // already-public integrityHash. Neither is sensitive. Pre-fix both were
+    // collapsed to markers, which broke `verify()`'s chain walk over a
+    // redacted ledger surface. Order mirrors src/types/receipt.ts.
+    'integrityHash',
+    'prevHash',
 ] as const;
 
 export const PRESERVED_FIELDS_PROVENANCE_EVENT: ReadonlyArray<keyof ProvenanceEvent> = [
@@ -148,6 +163,12 @@ export const PRESERVED_FIELDS_PROVENANCE_EVENT: ReadonlyArray<keyof ProvenanceEv
     'detail',
     'parentEventId',
     'owner',
+    // Wave S2-A2 (A1 fold-in): same tamper-evidence chain pair as Receipt
+    // (PROV-004). `integrityHash` is derivable from visible content;
+    // `prevHash` is the predecessor's public hash. Not sensitive; required
+    // for verify()'s chain walk. Order mirrors src/types/provenance-event.ts.
+    'integrityHash',
+    'prevHash',
 ] as const;
 
 export const PRESERVED_FIELDS_INDEX_RECORD: ReadonlyArray<keyof IndexRecord> = [
@@ -595,16 +616,37 @@ export function redactIndexSourceUri(record: { sourceId: string; sourceStore: st
 // ─── Error message scrubber (KERNEL-B-005) ────────────────────────────────
 
 /**
- * Path-scrubbing regex. Matches Posix absolute paths (`/foo/bar`) and
- * Windows absolute paths (`C:\foo\bar` or `C:/foo/bar`, including UNC
- * `\\host\share\…`). Each match is replaced with the literal `<path>`.
+ * Path-scrubbing regex — the CANONICAL definition (REDACT-002, Wave S2-A2).
  *
- * Mirrors the regex in `src/mcp/sanitize.ts::PATH_REGEX`. The two MUST
- * stay aligned — Surface re-imports this helper in a future wave to
- * collapse the duplication. Until then the regexes are kept identical
- * by convention; if you edit one, edit the other.
+ * This is now the single source of truth. `src/mcp/sanitize.ts` imports this
+ * named export and the byte-identical duplicate that previously lived there
+ * is deleted (cross-agent contract: Agent 1 does
+ * `import { PATH_REGEX } from '../policy/redactor.js'`). Do NOT re-introduce a
+ * local copy in the MCP boundary.
+ *
+ * Matches, each replaced with the literal `<path>`:
+ *  - Posix absolute paths (`/foo/bar`).
+ *  - Windows absolute paths (`C:\foo\bar`, `C:/foo/bar`) and UNC
+ *    (`\\host\share\…`).
+ *  - Home-relative (`~/foo`) and dot-relative (`./foo`, `../foo`) paths.
+ *  - **Bare relative paths** (`Users\mikey\AppData\secret.dat`,
+ *    `foo/bar/baz`) — a run of path-segment characters joined by at least
+ *    one `/` or `\` separator. This is the REDACT-002 addition: pre-fix the
+ *    regex required a drive / UNC / leading-slash anchor, so a bare
+ *    Windows-relative path survived unscrubbed and reached the persisted
+ *    ledger via `redactErrorMessage`.
+ *
+ * Tradeoffs (documented, accepted — fail closed beats leaking a path):
+ *  - The bare-relative alternative requires ≥1 separator, so prose words
+ *    separated by spaces and dotted tokens with no slash (`1.2.3`,
+ *    `example.com`) are NOT matched. But a prose token that happens to
+ *    contain a slash (`and/or`) WILL be over-scrubbed. Over-scrubbing a
+ *    rare slash-token in an error string is preferred to leaking a
+ *    relative filesystem path into the immutable ledger.
+ *  - The segment class is `[\w.~-]` so it cannot run away across
+ *    whitespace/quotes into surrounding prose.
  */
-const PATH_REGEX = /(?:[A-Za-z]:[\\/]|\\\\[^\s"'`)]+[\\/]|\/)[^\s"'`)]+/g;
+export const PATH_REGEX = /(?:[A-Za-z]:[\\/]|\\\\[^\s"'`)]+[\\/]|~[\\/]|\.{1,2}[\\/]|\/)[^\s"'`)]+|[\w.~-]+(?:[\\/][\w.~-]+)+/g;
 
 /**
  * Strip absolute filesystem paths from an error message.

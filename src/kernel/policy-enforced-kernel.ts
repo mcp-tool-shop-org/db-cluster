@@ -203,6 +203,37 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
     }
 
     /**
+     * KERNEL-004 (Wave S2-A2) — validate a caller-supplied target store
+     * against the known owner-store union and return it narrowed. A value
+     * outside `{canonical, artifact, index, ledger}` (e.g. a forged store
+     * crossing the typed boundary from a JSON tool call) is rejected with a
+     * fail-closed {@link PolicyDeniedError} carrying a synthetic decision —
+     * the same `__*_deny` shape the per-resource oracle guards use. This
+     * replaces the prior `targetStore as any` cast that let an unknown store
+     * slip into the policy engine where a wildcard `allow` absorbed it.
+     */
+    private assertOwnerStore(
+        store: string,
+        capability: Capability,
+    ): 'canonical' | 'artifact' | 'index' | 'ledger' {
+        if (store === 'canonical' || store === 'artifact' || store === 'index' || store === 'ledger') {
+            return store;
+        }
+        throw new PolicyDeniedError({
+            decision: 'deny',
+            matchedPolicyId: '__invalid_store_deny',
+            matchedPolicyName: 'Invalid target store (fail closed)',
+            capability,
+            reason:
+                `Unknown target store '${store}'. Valid stores are: ` +
+                `canonical, artifact, index, ledger.`,
+            principalId: this.context.principal.id,
+            trustZone: this.context.trustZone ?? this.context.principal.trustZone,
+            requiresApproval: false,
+        });
+    }
+
+    /**
      * AGG-B1-1b — re-render every node's `label` through the policy view.
      *
      * The bare ClusterKernel produces a literal label
@@ -687,8 +718,20 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
     // ─── Command lifecycle verbs ─────────────────────────────────────
 
     async proposeMutation(input: ProposeMutationInput): Promise<Command> {
+        // KERNEL-004 (Wave S2-A2): validate `targetStore` against the known
+        // owner-store union BEFORE enforce, instead of casting it through
+        // `as any`. Pre-fix a forged store string (e.g. crossing the typed
+        // boundary from a JSON tool call) flowed straight into the policy
+        // engine, where a wildcard `allow` (no `stores` constraint) absorbed
+        // the unknown value — so a store-scoped propose policy could be
+        // dodged via an unrecognised store, and the cast hid the gap from the
+        // compiler. The base kernel's `validateCommand` would later reject the
+        // bad store (fail closed), but propose should reject up front and the
+        // gate must see a real store. We fail closed here with a typed
+        // PolicyDeniedError so the value never reaches the queue.
+        const ownerStore = this.assertOwnerStore(input.targetStore, 'propose_mutation');
         this.enforce('propose_mutation', {
-            ownerStore: input.targetStore as any,
+            ownerStore,
             commandVerb: input.verb,
         });
         return this.kernel.proposeMutation(input);
@@ -710,7 +753,49 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
     }
 
     async commitMutation(commandId: string, actorId: string): Promise<CommitMutationResult> {
-        this.enforce('commit_command', { commandVerb: undefined });
+        // KERNEL-003 (Wave S2-A2): the commit gate used to be store-blind AND
+        // verb-blind — `enforce('commit_command', { commandVerb: undefined })`
+        // passed no `ownerStore`, so a store-scoped commit policy (e.g. "this
+        // principal may commit only to canonical") could not be expressed: a
+        // store-constrained `allow` refuses to match an underspecified request
+        // and the principal fell through to default-deny on EVERY commit. That
+        // failed CLOSED (no bypass) but made store/verb-scoped commit policies
+        // inexpressible.
+        //
+        // Fix: re-derive the command's `targetStore` + `verb` (the command is
+        // already in the queue at this point) and run the gate with them, so
+        // store/verb-scoped commit policies become expressible.
+        //
+        // Ordering discipline (preserves the existing existence-oracle posture
+        // and the "principal who cannot commit at all is denied even for a
+        // nonexistent id" contract — see test/policy-kernel.test.ts Proof 6):
+        //   1. Fetch the command to learn its store/verb.
+        //   2a. If found → refined enforce with ownerStore + commandVerb, then
+        //       delegate (the delegated kernel still applies lifecycle
+        //       validation — policy never weakens it).
+        //   2b. If NOT found → a store-blind enforce so a principal with NO
+        //       commit grant still surfaces PolicyDeniedError (not a NotFound
+        //       existence oracle); if that gate allows (e.g. an allow-all
+        //       principal), delegate so the kernel raises the canonical
+        //       CommandNotFoundError.
+        let command: Command | undefined;
+        try {
+            command = await this.kernel.inspectCommand(commandId);
+        } catch (err) {
+            if (err instanceof NotFoundError) {
+                // Store-blind gate: deny principals (no commit_command allow)
+                // get PolicyDeniedError; allow-all principals pass and the
+                // delegated commit raises CommandNotFoundError.
+                this.enforce('commit_command');
+                return this.kernel.commitMutation(commandId, actorId);
+            }
+            throw err;
+        }
+
+        this.enforce('commit_command', {
+            ownerStore: command.targetStore,
+            commandVerb: command.verb,
+        });
         return this.kernel.commitMutation(commandId, actorId);
     }
 
@@ -720,7 +805,44 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
         reason: string,
         compensatingPayload?: Record<string, unknown>,
     ) {
-        this.enforce('compensate_command');
+        // KERNEL-003 (Wave S2-A2 fix-up): mirror commitMutation's store/verb
+        // re-derivation. Pre-fix this gate was store/verb-blind —
+        // `enforce('compensate_command')` passed no `ownerStore`, so a
+        // store-scoped compensate policy (e.g. "this principal may compensate
+        // only in canonical") was inexpressible: a store-constrained `allow`
+        // refused to match the underspecified request and the principal fell
+        // through to default-deny on EVERY compensate. That failed CLOSED (no
+        // bypass) but made store-scoped compensate policies impossible.
+        //
+        // Fix: re-derive the ORIGINAL command's `targetStore` (the compensating
+        // command the kernel creates inherits `original.targetStore`, so the
+        // gate's store axis must be the original's store) and run the gate with
+        // `commandVerb: 'compensate'`, mirroring commitMutation.
+        //
+        // Ordering discipline preserves the existing existence-oracle posture
+        // (same contract as commitMutation — see test/policy-kernel.test.ts):
+        //   2a. Found → refined enforce with ownerStore + commandVerb, then
+        //       delegate (the kernel still applies its committed-status guard;
+        //       policy never weakens it).
+        //   2b. NOT found → a store-blind enforce so a principal with NO
+        //       compensate grant still surfaces PolicyDeniedError (not a
+        //       NotFound existence oracle); if that gate allows (allow-all
+        //       principal) delegate so the kernel raises NotFoundError.
+        let original: Command | undefined;
+        try {
+            original = await this.kernel.inspectCommand(originalCommandId);
+        } catch (err) {
+            if (err instanceof NotFoundError) {
+                this.enforce('compensate_command', { commandVerb: 'compensate' });
+                return this.kernel.compensateMutation(originalCommandId, compensatedBy, reason, compensatingPayload);
+            }
+            throw err;
+        }
+
+        this.enforce('compensate_command', {
+            ownerStore: original.targetStore,
+            commandVerb: 'compensate',
+        });
         return this.kernel.compensateMutation(originalCommandId, compensatedBy, reason, compensatingPayload);
     }
 

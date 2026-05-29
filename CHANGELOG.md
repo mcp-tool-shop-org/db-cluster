@@ -8,6 +8,77 @@ The CHANGELOG audience is **external readers** — operators, developers, and AI
 
 Internal swarm-finding IDs (KERNEL-X-NNN, STORES-X-NNN, AGG-NNN) appear as **backlinks at the bottom** of each wave section so the audit trail is preserved, but the body text is written for the external reader.
 
+## [Unreleased] — next release: 2.0.0 (MAJOR)
+
+> **Why MAJOR.** The Protocol-v2 amend (Waves S2-A1 + S2-A2) changes contracts on
+> the public package root and the MCP surface. Per semver these are breaking, so
+> the next published version is **2.0.0**, not a 1.x patch. This section
+> aggregates the breaking + security changes since v1.0.0; the per-wave detail for
+> S2-A1 is retained in its section below.
+
+### Breaking changes
+
+- **The package root no longer exports the raw store factories** (`createCluster`,
+  `createClusterFromEnv`, `createLocalCluster`) — KERNEL-001, landed in Wave
+  S2-A1. The root now exports a single policy-enforced factory,
+  `createSafeCluster(config)`, returning a `SafeCluster` handle (a
+  `PolicyEnforcedKernel` plus the read-only ops, no raw store mutators). The raw
+  factories are unchanged in signature but reachable **only** via the explicit
+  `@mcptoolshop/db-cluster/unsafe` escape hatch. This root-surface change is what
+  makes the next release a MAJOR. See the Wave S2-A1 section below for the full
+  detail and migration path.
+- **The MCP server now defaults to the `ai-facing` trust zone with redaction ON**
+  (KERNEL-002). Previously an MCP server started with no policy env vars fell back
+  to a fully-trusted in-process kernel and returned un-redacted owner truth. It
+  now applies the default ai-facing policies + redaction, so artifact content and
+  sensitive attributes are stripped at the boundary by default. Operators who need
+  the privileged (`internal` / `cluster-admin`) posture must **explicitly opt in**
+  via an environment flag — provisionally `DB_CLUSTER_MCP_ALLOW_PRIVILEGED` (final
+  name confirmed in the release notes). The in-process SDK and `/unsafe` paths for
+  trusted callers are unchanged; this default flip is **MCP-surface only**.
+- **MCP write tools enforce approval under the default ai-facing zone**
+  (INJECT-001). `cluster_commit_mutation` and `cluster_compensate_mutation` now
+  refuse to write unless the target command is in `approved` status; the refusal
+  is a structured `AiErrorEnvelope` (no raw error, no partial write). An AI caller
+  must call `cluster_approve_mutation` first. Trusted in-process SDK callers are
+  unaffected — the gate is MCP-surface only.
+
+### Security
+
+- **`config.json`-sourced `clusterDir` is now contained to the working directory**
+  (EGRESS-002). A `clusterDir` read from a project `config.json` can no longer
+  point the cluster at an arbitrary location outside cwd. The `DB_CLUSTER_DIR`
+  environment variable remains the supported **explicit operator override** for
+  pointing at a cluster outside cwd — a value the operator sets deliberately, not
+  one an untrusted config file can smuggle in.
+- The Wave S2-A1 security disclosures carry forward unchanged: the SSL/TLS
+  "respected/honored" claim for `DB_CLUSTER_POSTGRES_SSL` stays **retracted** (the
+  variable was never implemented; transport is plaintext unless your connection
+  string enforces TLS), the ledger remains **tamper-evident, not tamper-proof**
+  (unkeyed hash chain — a keyed HMAC / external anchoring is the tracked upgrade),
+  and the content-addressing limits (metadata reads are not byte-integrity-checked;
+  a consistent re-content is undetectable at the content layer) stand as
+  documented in `SECURITY.md`.
+
+### Migration notes
+
+- **MCP integrators:** if you relied on the MCP server returning un-redacted owner
+  truth or committing without an approval step, that behavior is gone by default.
+  Either (a) drive the lifecycle through `cluster_approve_mutation` before
+  `cluster_commit_mutation` and consume the redacted read shape, or (b) if you
+  genuinely run the server in a trusted operator context, set the privileged
+  opt-in flag (provisionally `DB_CLUSTER_MCP_ALLOW_PRIVILEGED`). Branch on
+  `AiErrorEnvelope.code` for the approval refusal rather than parsing prose.
+- **SDK / package-root consumers:** see the Wave S2-A1 migration notes for the
+  `createSafeCluster` / `@mcptoolshop/db-cluster/unsafe` move.
+- **Operators using a `config.json` `clusterDir`** that pointed outside cwd: move
+  that path to the `DB_CLUSTER_DIR` environment variable — the config-file value
+  is now contained to the working directory.
+
+### Backlinks
+
+KERNEL-001 (root facade, S2-A1) · KERNEL-002 (MCP ai-facing default) · INJECT-001 (MCP write approval gate) · EGRESS-002 (config.json clusterDir containment).
+
 ## Wave S2-A1 — Protocol-v2 amend (security surface)
 
 ### Breaking changes

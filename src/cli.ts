@@ -27,8 +27,8 @@
  * docs/cli.md (CI/Docs agent maintains that file).
  */
 import { Command } from 'commander';
-import { dirname, resolve } from 'node:path';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { dirname, resolve, join, sep } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { userInfo } from 'node:os';
 import { createLocalCluster } from './adapters/local/index.js';
@@ -61,17 +61,59 @@ import type { Principal, Capability, Policy, TrustZone, VisibilityRule } from '.
 //   3. cwd/.db-cluster (the original default)
 //
 // We resolve once at module load; CLI commands read CLUSTER_DIR directly.
-function resolveClusterDir(): string {
-    const fromEnv = process.env.DB_CLUSTER_DIR;
+//
+// EGRESS-002 (Wave S2-A2 — Fix Agent 2): the `config.json`-sourced
+// `clusterDir` is a PLANT-ABLE input — an attacker can drop a malicious
+// `.db-cluster/config.json` in a directory a victim later runs from, and
+// (pre-fix) redirect the cluster root anywhere on disk (absolute path or
+// `../` traversal). This was asymmetric with the rigorously-sandboxed MCP
+// `DB_CLUSTER_POLICIES_FILE` path. We now contain the config.json-sourced
+// path to cwd via realpath + prefix check; an out-of-cwd value falls back
+// to the in-cwd default rather than silently redirecting the root.
+//
+// The explicit `DB_CLUSTER_DIR` ENV override is left unconstrained on
+// purpose: it is a documented operator escape hatch (an operator typing an
+// env var is stating intent), unlike a config file that travels with a
+// checked-out repo / unpacked archive.
+//
+// Injectable `cwd`/`env` params (defaulting to the live `process.*`) keep
+// the function unit-testable without a `dist` rebuild — the module-load
+// call below passes nothing and behaves exactly as before.
+export function resolveClusterDir(
+    cwd: string = process.cwd(),
+    env: NodeJS.ProcessEnv = process.env,
+): string {
+    const fromEnv = env.DB_CLUSTER_DIR;
     if (fromEnv && fromEnv.trim() !== '') {
+        // Operator-intentional override — not contained (documented escape hatch).
         return resolve(fromEnv);
     }
-    const configCandidate = resolve(process.cwd(), '.db-cluster', 'config.json');
+    const configCandidate = resolve(cwd, '.db-cluster', 'config.json');
     if (existsSync(configCandidate)) {
         try {
             const cfg = JSON.parse(readFileSync(configCandidate, 'utf-8')) as { clusterDir?: string };
             if (typeof cfg.clusterDir === 'string' && cfg.clusterDir.trim() !== '') {
-                return resolve(cfg.clusterDir);
+                const candidate = resolve(cwd, cfg.clusterDir);
+                if (isContainedInCwd(candidate, cwd)) {
+                    return candidate;
+                }
+                // EGRESS-002: a config.json that points the cluster root
+                // OUTSIDE cwd is rejected (treated as if absent). We fall
+                // through to the in-cwd default rather than honoring a
+                // plant-able redirect. Warn so an operator who set this
+                // intentionally sees why it was ignored (use DB_CLUSTER_DIR
+                // for an intentional out-of-cwd root).
+                //
+                // Direct stderr write — NOT the cliWarn helper: this runs at
+                // module-load time (the `const CLUSTER_DIR = resolveClusterDir()`
+                // initializer), which is BEFORE cliWarn's LOG_LEVEL_RANK /
+                // cliLogLevel module bindings are initialized. Routing through
+                // cliWarn here would hit the temporal-dead-zone ReferenceError.
+                process.stderr.write(
+                    'Warning: ignoring .db-cluster/config.json `clusterDir` — it resolves ' +
+                        'outside the current directory. Use the DB_CLUSTER_DIR environment ' +
+                        'variable for an intentional out-of-tree cluster root.\n',
+                );
             }
         } catch {
             // Malformed config → fall through to default. We don't fail
@@ -80,7 +122,49 @@ function resolveClusterDir(): string {
             // (loadPolicyConfig) for the fail-closed shape.
         }
     }
-    return resolve(process.cwd(), '.db-cluster');
+    return resolve(cwd, '.db-cluster');
+}
+
+/**
+ * EGRESS-002 containment check: is `candidate` inside (or equal to) `cwd`?
+ *
+ * Uses `realpathSync` on the longest existing ancestor of each path so a
+ * symlinked cwd / symlinked candidate cannot smuggle the resolved root
+ * outside the real cwd (the classic `realpath` containment bypass). The
+ * candidate dir often does not exist yet (first run), so we realpath the
+ * nearest existing ancestor and re-append the unresolved tail.
+ */
+function isContainedInCwd(candidate: string, cwd: string): boolean {
+    const realCwd = realpathExisting(cwd);
+    const realCandidate = realpathExisting(candidate);
+    if (realCandidate === realCwd) return true;
+    // Append a separator so `/a/b` is not treated as containing `/a/bc`.
+    const prefix = realCwd.endsWith(sep) ? realCwd : realCwd + sep;
+    return realCandidate.startsWith(prefix);
+}
+
+/**
+ * `realpathSync` the longest existing prefix of `p`, then re-append the
+ * non-existent tail. Pure path normalization fallback when nothing on the
+ * path exists yet.
+ */
+function realpathExisting(p: string): string {
+    let cur = resolve(p);
+    const tail: string[] = [];
+    // Walk up until we hit an existing directory (or the filesystem root).
+    while (!existsSync(cur)) {
+        const parent = dirname(cur);
+        if (parent === cur) break; // reached root; nothing existed
+        tail.unshift(cur.slice(parent.length + 1));
+        cur = parent;
+    }
+    let real: string;
+    try {
+        real = realpathSync(cur);
+    } catch {
+        real = cur;
+    }
+    return tail.length > 0 ? join(real, ...tail) : real;
 }
 const CLUSTER_DIR = resolveClusterDir();
 const POLICIES_FILE = resolve(CLUSTER_DIR, 'policies.json');
@@ -470,6 +554,48 @@ function redactErrorForCli(err: unknown): string {
 }
 
 /**
+ * REDACT-003 (Wave S2-A2 — Fix Agent 2): render a {@link ClusterError} to
+ * the canonical CLI two-line prose, with the HEADLINE path-scrubbed.
+ *
+ * `formatForUser(err)` produces `${err.message}\n  → try: ${remediationHint}`
+ * but does NOT scrub `err.message`. For the path-bearing subclasses
+ * (StagedContentTamperedError, CommandQueueCorruptError,
+ * CommandQueuePersistenceLostError) that message embeds an absolute
+ * `stagingPath` / `filePath` / `markerPath` (see src/kernel/errors.ts) —
+ * which then leaked verbatim to stderr.
+ *
+ * We scrub the headline through the SAME boundary scrubber the sibling
+ * adapter-error arm uses ({@link redactErrorForCli} → `redactErrorMessage`),
+ * then re-attach the remediation hint UNCHANGED. The hint is a static
+ * subclass literal (no dynamic path; verified across every subclass), so
+ * it needs no scrub and stays fully actionable — preserving both halves of
+ * the contract: the error still renders usefully AND the path is gone.
+ *
+ * The output shape (`<scrubbed headline>\n  → try: <hint>`) is byte-for-byte
+ * what {@link colorizeFormattedError} expects, so the caller composes them
+ * exactly as before. We keep {@link formatForUser} as the single source of
+ * the two-line structure (the C1-Amend contract) and scrub ONLY the headline
+ * segment — the `→ try:` hint is left verbatim.
+ *
+ * Exported so the regression suite can assert the scrub behavior directly
+ * (the `cliCommand` catch arm itself calls `process.exit`, so it is not
+ * unit-callable).
+ */
+export function renderClusterErrorForCli(err: ClusterError): string {
+    const formatted = formatForUser(err);
+    const sep = '\n  → try: ';
+    const idx = formatted.indexOf(sep);
+    if (idx === -1) {
+        // No hint segment (shouldn't happen for a ClusterError, which always
+        // carries a remediationHint) — scrub the whole thing defensively.
+        return redactErrorForCli(formatted);
+    }
+    const headline = redactErrorForCli(formatted.slice(0, idx));
+    const hintSegment = formatted.slice(idx); // includes the leading separator
+    return `${headline}${hintSegment}`;
+}
+
+/**
  * Higher-order function that wraps a CLI `.action(...)` body with uniform
  * error handling. Every subcommand action MUST be wrapped (the structural
  * test in test/wave-b1-surface-regression.test.ts asserts ≥15 sites).
@@ -500,12 +626,27 @@ export function cliCommand<T extends unknown[]>(
                 // reads err.message + err.remediationHint directly from
                 // the subclass — no parallel `remediationForCode` table.
                 // Phase 10 §3b: colorize the headline red, the → try hint dim italic.
-                process.stderr.write(colorizeFormattedError(formatForUser(err)) + '\n');
+                //
+                // REDACT-003 (Wave S2-A2): the headline is path-scrubbed via
+                // renderClusterErrorForCli — path-bearing subclasses
+                // (StagedContentTamperedError, CommandQueueCorruptError,
+                // CommandQueuePersistenceLostError) embed an absolute
+                // stagingPath/filePath/markerPath in err.message. This uses
+                // the SAME scrubber the sibling adapter-error arm below
+                // applies (redactErrorForCli), so both Cluster catch arms
+                // sanitize consistently.
+                process.stderr.write(colorizeFormattedError(renderClusterErrorForCli(err)) + '\n');
                 process.exit(typedErrorToExitCode(err.code));
                 return;
             }
             if (err instanceof PolicyConfigError) {
-                process.stderr.write(cliColor.error(err.message) + '\n');
+                // REDACT-003 sibling (Wave S2-A2 fix-up): PolicyConfigError's
+                // message embeds the `POLICIES_FILE` ABSOLUTE path (e.g.
+                // "...policies file <abs path>: ..."). The adjacent ClusterError
+                // and adapter-error arms scrub via renderClusterErrorForCli /
+                // redactErrorForCli; this arm printed raw. Route it through the
+                // SAME scrubber for parity so no absolute path leaks to stderr.
+                process.stderr.write(cliColor.error(redactErrorForCli(err)) + '\n');
                 const hint = remediationForCode(err.code);
                 if (hint) {
                     process.stderr.write(`  ${cliColor.hint(`→ try: ${hint}`)}\n`);
@@ -1916,7 +2057,10 @@ stores
                 }
                 await pool.end();
             } catch (err: any) {
-                console.error(`  ✗ Postgres connection failed: ${err.message}`);
+                // EGRESS-003 (Wave S2-A2): scrub absolute paths (e.g. a
+                // unix-socket path `/var/run/postgresql/.s.PGSQL.5432`) out of
+                // the surfaced connection error before printing.
+                console.error(`  ✗ Postgres connection failed: ${redactErrorMessage(err)}`);
                 process.exit(1);
             }
         } else {
@@ -2437,7 +2581,30 @@ function generateCompletionScript(shell: string, names: string[]): string {
     process.exit(1);
 }
 
-program.parse();
+// Entry-point guard (Wave S2-A2 — Fix Agent 2): only drive the CLI when
+// this module is executed as the program entry point (the `db-cluster` bin
+// or `node dist/cli.js …`). When the module is *imported* — e.g. a unit
+// test importing `resolveClusterDir` / `renderClusterErrorForCli` for direct
+// assertion — `program.parse()` must NOT fire, or commander would parse the
+// test runner's argv and `process.exit`. This is a pure additive guard:
+// under every existing invocation path (the bin shebang, spawnSync against
+// dist/cli.js) the module IS the entry point, so parse() still runs exactly
+// as before. Tests gain an import seam without a dist rebuild.
+function isCliEntryPoint(): boolean {
+    const argvEntry = process.argv[1];
+    if (!argvEntry) return false;
+    try {
+        return realpathSync(argvEntry) === realpathSync(fileURLToPath(import.meta.url));
+    } catch {
+        // realpath can throw if argv[1] was unlinked mid-run; fall back to a
+        // best-effort string compare so the real bin still launches.
+        return argvEntry === fileURLToPath(import.meta.url);
+    }
+}
+
+if (isCliEntryPoint()) {
+    program.parse();
+}
 
 function guessMime(filename: string): string {
     const ext = filename.split('.').pop()?.toLowerCase();

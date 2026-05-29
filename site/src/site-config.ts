@@ -44,7 +44,7 @@ export const config: SiteConfig = {
         },
         {
           title: 'MCP-native, AI-safe',
-          desc: '16 MCP tools with safety annotations (readOnlyHint / destructiveHint / requiresApprovalHint). Structured AiErrorEnvelope responses, never raw stacks. PolicyEnforcedKernel is the only exported entry; ClusterKernel is intentionally not on the public surface.',
+          desc: 'The MCP server defaults to the ai-facing trust zone with redaction ON; write tools refuse to commit until the command is approved. 16 tools with safety annotations (readOnlyHint / destructiveHint / requiresApprovalHint). Structured AiErrorEnvelope responses, never raw stacks. The package root factory createSafeCluster() returns a policy-enforced handle; raw, unpoliced stores are reachable only via the explicit @mcptoolshop/db-cluster/unsafe escape hatch.',
         },
       ],
     },

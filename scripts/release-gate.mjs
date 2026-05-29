@@ -182,7 +182,10 @@ if (offenders.length > 0) {
 
 // 6. Package exports exist in dist
 console.log('\n[6/9] Export paths exist in dist');
-const exportPaths = ['dist/index.js', 'dist/sdk/index.js', 'dist/mcp/index.js', 'dist/policy/index.js', 'dist/types/index.js'];
+// S2-A2: `dist/unsafe.js` was added to the export map in A1 (KERNEL-001 —
+// the `/unsafe` subpath). It was missing from this verification list, so
+// the gate never confirmed the unsafe subpath's dist artifact is emitted.
+const exportPaths = ['dist/index.js', 'dist/sdk/index.js', 'dist/mcp/index.js', 'dist/policy/index.js', 'dist/types/index.js', 'dist/unsafe.js'];
 const exportResults = [];
 let exportFailed = false;
 for (const exp of exportPaths) {

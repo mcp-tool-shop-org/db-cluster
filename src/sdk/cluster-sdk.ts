@@ -291,7 +291,26 @@ export class ClusterSDK {
      * }
      */
     async findSources(query: string, limit?: number): Promise<FindSourcesResult> {
-        return this.kernel.findSources({ query, limit });
+        const result = await this.kernel.findSources({ query, limit });
+        // REDACT-001 (Wave S2-A2): pre-fix this was a raw pass-through, so the
+        // resolved owner-truth artifacts escaped the SDK boundary WITH
+        // `storagePath` (an absolute fs path) under BOTH the no-policy raw
+        // kernel AND the default `internal` empty-rules zone (whose redaction
+        // rules are empty, so the kernel returns the raw artifact). Route the
+        // resolved artifacts through the SAME unconditional
+        // `sanitizeArtifactForOutput` that `resolve()` already uses (AGG-002):
+        // no `storagePath` escapes the SDK under ANY policy state. The other
+        // result fields (indexRecords / resolvedEntities / any `_meta`
+        // empty-reason the PolicyEnforcedKernel set) are preserved untouched.
+        // The cast widens `SanitizedArtifact` (Omit<Artifact,'storagePath'>)
+        // back to the declared `Artifact[]` element type — the same widening
+        // discipline `retrieveBundle()` uses for its sanitized fields.
+        return {
+            ...result,
+            resolvedArtifacts: result.resolvedArtifacts.map(
+                (a) => sanitizeArtifactForOutput(a) ?? a,
+            ) as unknown as FindSourcesResult['resolvedArtifacts'],
+        };
     }
 
     /**
@@ -324,10 +343,22 @@ export class ClusterSDK {
         // shapes; the cast widens to accept the sanitized superset. A future
         // wave that updates `src/types/evidence-bundle.ts` to express the
         // sanitization-aware shape would let us drop the cast.
+        //
+        // REDACT-001 (Wave S2-A2): pre-fix this method sanitized indexRecords
+        // and provenanceEvents but left `resolvedArtifacts[].object` raw —
+        // every resolved owner-truth artifact escaped the SDK boundary WITH
+        // `storagePath` (an absolute fs path) under both the raw kernel and the
+        // default `internal` empty-rules zone. Route each artifact's `object`
+        // through the same unconditional `sanitizeArtifactForOutput` the rest
+        // of the SDK boundary uses, so no `storagePath` leaves the SDK.
         return {
             ...bundle,
             indexRecords: bundle.indexRecords.map((r) => sanitizeIndexRecordForOutput(r) ?? r) as unknown as EvidenceBundle['indexRecords'],
             provenanceEvents: bundle.provenanceEvents.map((ev) => sanitizeProvenanceEventForOutput(ev) ?? ev) as unknown as EvidenceBundle['provenanceEvents'],
+            resolvedArtifacts: bundle.resolvedArtifacts.map((ra) => ({
+                ...ra,
+                object: (sanitizeArtifactForOutput(ra.object) ?? ra.object) as unknown as Artifact,
+            })),
         };
     }
 

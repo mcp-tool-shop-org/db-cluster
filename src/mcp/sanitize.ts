@@ -30,6 +30,13 @@ import type { AiErrorEnvelope as CanonicalAiErrorEnvelope } from '../types/ai-en
 // the policy/error-formatter the single source of truth — the MCP
 // boundary stops re-implementing the per-subclass context extraction.
 import { errorToAiEnvelope } from '../policy/error-formatter.js';
+// REDACT-002 (Wave S2-A2): the path-scrubbing regex is owned by the policy
+// domain (`src/policy/redactor.ts` is its canonical home). Pre-fix this file
+// hand-duplicated the regex; the two drifted (the redactor side gained a
+// Windows-relative-path alternative). Importing the canonical `PATH_REGEX`
+// collapses the duplication and gets the redactor's fix for free. The
+// `mcp/` → `policy/` direction is a downward import (no cycle).
+import { PATH_REGEX } from '../policy/redactor.js';
 
 /** Shape returned to MCP hosts in place of a raw Artifact. */
 export type SanitizedArtifact = Omit<Artifact, 'storagePath'> & {
@@ -133,22 +140,12 @@ export type AiErrorEnvelope = CanonicalAiErrorEnvelope;
  */
 export type RedactedError = AiErrorEnvelope;
 
-/**
- * Path-scrubbing regex.
- *
- * Matches Posix absolute paths (`/foo/bar`) and Windows absolute paths
- * (`C:\foo\bar` or `C:/foo/bar`, including UNC `\\host\share\…`). Each
- * match is replaced with the literal `<path>` placeholder.
- *
- * Notes on tradeoffs:
- *  - Posix root `/` is included; this can over-match (e.g. URLs, regex
- *    literals). The boundary is "fail closed" — over-scrubbing is preferred
- *    to leaking absolute filesystem paths.
- *  - The match terminates at the next whitespace or quote, so structured
- *    error messages like `open /etc/passwd: not found` are scrubbed but
- *    the `not found` suffix is preserved.
- */
-const PATH_REGEX = /(?:[A-Za-z]:[\\/]|\\\\[^\s"'`)]+[\\/]|\/)[^\s"'`)]+/g;
+// REDACT-002 (Wave S2-A2): the path-scrubbing regex previously declared here
+// was deleted and replaced with the canonical `PATH_REGEX` imported from
+// `../policy/redactor.js` (see import at the top of this file). The local copy
+// had drifted from the redactor's — importing the single source of truth
+// keeps the two surfaces aligned (and picks up the redactor's
+// Windows-relative-path alternative). `scrubMessage` below uses the import.
 
 /**
  * Stable code map for common JS-builtin error constructors AND the adapter /
@@ -378,48 +375,15 @@ const TYPED_ERROR_ENRICHMENT: Record<string, ErrorEnrichment> = {
     },
 };
 
-/**
- * Extract context fields from a typed ClusterError subclass.
- *
- * Each subclass that exposes `public readonly` fields carries useful
- * context for AI consumers — claimedHash, actualHash, filePath, etc.
- * This function preserves those fields after scrubbing any absolute
- * paths via `scrubMessage`. Unknown subclasses produce an empty context.
- *
- * Wave C1-Amend §2a: pre-fix this context was destroyed at the boundary.
- * Post-fix AI consumers can branch on `context.claimedHash` /
- * `context.actualHash` for hash-mismatch errors, `context.filePath`
- * for command-queue corruption, etc.
- */
-function extractTypedErrorContext(err: ClusterError): Record<string, unknown> {
-    const ctx: Record<string, unknown> = {};
-    // The base class always carries `code` and `name`; surface the name so
-    // AI consumers can pattern-match on the class even when the code is
-    // shared (e.g. RECEIPT_FAILED across two subclass scenarios).
-    if (err.name && err.name !== 'ClusterError') {
-        ctx.errorClass = err.name;
-    }
-    // Discover own enumerable fields beyond the standard Error properties.
-    // The typed subclasses use `public readonly` which becomes own props.
-    const STANDARD_PROPS = new Set(['name', 'message', 'stack', 'code', 'cause']);
-    for (const key of Object.keys(err)) {
-        if (STANDARD_PROPS.has(key)) continue;
-        const val = (err as unknown as Record<string, unknown>)[key];
-        if (val === undefined || val === null) continue;
-        // Path-like strings get scrubbed; primitives pass through; nested
-        // Error objects collapse to {name, code}.
-        if (typeof val === 'string') {
-            ctx[key] = scrubMessage(val);
-        } else if (typeof val === 'number' || typeof val === 'boolean') {
-            ctx[key] = val;
-        } else if (val instanceof Error) {
-            ctx[key] = { name: val.name, message: scrubMessage(val.message) };
-        }
-        // Objects (e.g. innerCause: unknown) are not forwarded — that path
-        // routinely carries adapter internals the boundary refuses to leak.
-    }
-    return ctx;
-}
+// REDACT-004 (Wave S2-A2): the never-called `extractTypedErrorContext` helper
+// (and its stale "pre-fix context was destroyed at the boundary" comment) was
+// deleted. Since the Cluster A wiring (V1-C1-007 / V3-C1-001),
+// `errorToAiEnvelope` (src/policy/error-formatter.ts) is the SINGLE source of
+// truth for ClusterError → envelope context extraction; `redactError` below
+// delegates to it. The dead duplicate was a maintenance hazard (two places to
+// update when a subclass gains a context field). Confirmed via grep: no live
+// code referenced it (only comments in error-formatter.ts + the MCP envelope
+// test).
 
 /**
  * Sanitize an error for MCP-boundary surfacing.

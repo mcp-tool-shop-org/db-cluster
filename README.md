@@ -27,7 +27,7 @@
 - **Typed errors with `remediationHint`** — every `ClusterError` subclass answers WHAT TO DO, not just WHAT failed (CLI exit codes 65/70/77/78 mapped to typed-error codes).
 - **AI error envelopes** — `{code, message, retryable, remediation_hint, context, next_valid_actions}` schema; AI agents can branch on `code` and `retryable` instead of parsing prose.
 - **Receipts on every mutation** — content-addressable; provenance graph; rebuild-from-truth contract on the index store.
-- **MCP server with safety annotations** — read-only / staged / approval / write tools each carry machine-readable `readOnlyHint` / `destructiveHint` flags.
+- **MCP server with safety annotations** — read-only / staged / approval / write tools each carry machine-readable `readOnlyHint` / `destructiveHint` flags. The server defaults to the `ai-facing` trust zone (redaction ON, no raw content), and MCP write tools refuse to commit until the command is `approved`.
 - **Policy-enforced by default** — the package root factory `createSafeCluster()` hands back a policed handle (a `PolicyEnforcedKernel` + read-only ops, no raw store mutators). Raw, unpoliced stores are reachable only via the explicit `@mcptoolshop/db-cluster/unsafe` escape hatch.
 
 ## Quickstart (3 steps)
@@ -150,7 +150,17 @@ planned for a future release.
 
 The MCP server tools read + write the local stores only — they never reach the
 network, and structured `AiErrorEnvelope` responses never leak stack traces or
-filesystem paths. Destructive CLI commands (`restore`, `rebuild index`,
+filesystem paths. **The MCP server defaults to the `ai-facing` trust zone with
+redaction ON:** artifact content and sensitive entity attributes are stripped at
+the boundary by default, and no MCP tool returns raw artifact bytes. An operator
+who needs the privileged (`internal` / `cluster-admin`) posture must explicitly
+opt in via an environment flag (provisionally `DB_CLUSTER_MCP_ALLOW_PRIVILEGED`;
+see [`docs/mcp.md`](docs/mcp.md)). **MCP write tools enforce approval:**
+`cluster_commit_mutation` and `cluster_compensate_mutation` refuse to write
+unless the command is in `approved` status — the caller must first call
+`cluster_approve_mutation`, and the refusal is a structured `AiErrorEnvelope`,
+not a partial write. (Trusted in-process SDK callers are unaffected — this gate
+is MCP-surface only.) Destructive CLI commands (`restore`, `rebuild index`,
 `compensate`, `backup --force-overwrite`) require an explicit `--yes` flag plus
 an interactive confirmation on TTY.
 

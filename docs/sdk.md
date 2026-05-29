@@ -18,7 +18,14 @@ boundary keeps adapter construction inside the SDK.
 
 When `policies` is set, the SDK routes reads and writes through a
 `PolicyEnforcedKernel` configured for the supplied `principal`. When `policies`
-is omitted the SDK uses a raw `ClusterKernel`.
+is omitted the SDK uses a raw `ClusterKernel` — appropriate because constructing
+the SDK in-process is itself a trusted act.
+
+> **Note (MCP surface).** This trusted in-process default does **not** apply to
+> the MCP server. `db-cluster-mcp` defaults to the `ai-facing` trust zone with
+> redaction ON and an enforced approval gate on writes; the privileged posture is
+> opt-in only. See [`docs/mcp.md`](mcp.md). The statement above is about the
+> in-process SDK constructor.
 
 ```typescript
 import { ClusterSDK } from '@mcptoolshop/db-cluster/sdk';

@@ -8,6 +8,12 @@
  */
 
 import { CANONICAL_TABLE, getRequiredTables } from '../adapters/postgres/schema.js';
+// EGRESS-003 (Wave S2-A2): scrub absolute filesystem paths out of Postgres
+// error messages before they surface in MigrationStatus.message / issues[].
+// A failed connection can carry a unix-socket path
+// (`/var/run/postgresql/.s.PGSQL.5432`) verbatim. Scrub-only — the schema /
+// status logic is untouched.
+import { redactErrorMessage } from '../policy/redactor.js';
 
 export interface MigrationStatus {
     backend: string;
@@ -66,7 +72,8 @@ export async function checkMigrationStatus(pool: MigrationPool): Promise<Migrati
             backend: 'postgres',
             migrated: false,
             tables: [],
-            message: `Failed to check migration status: ${err.message}`,
+            // EGRESS-003: scrub absolute paths (e.g. unix-socket path).
+            message: `Failed to check migration status: ${redactErrorMessage(err)}`,
         };
     }
 }
@@ -104,7 +111,8 @@ export async function verifySchema(pool: MigrationPool): Promise<{ valid: boolea
             }
         }
     } catch (err: any) {
-        issues.push(`Schema verification failed: ${err.message}`);
+        // EGRESS-003: scrub absolute paths (e.g. unix-socket path).
+        issues.push(`Schema verification failed: ${redactErrorMessage(err)}`);
     }
 
     return { valid: issues.length === 0, issues };

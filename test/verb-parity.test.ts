@@ -90,6 +90,15 @@ const POLICY_KERNEL_EXTRAS = new Set<string>([
     // mirror it because ClusterKernel emits the literal label (the
     // policy boundary is THIS class's responsibility).
     'rerenderLabelsWithPolicy',
+    // KERNEL-004 fix-up (Wave S2-A2) — `assertOwnerStore` is a private
+    // propose-time validator: it checks `input.targetStore` against the
+    // {canonical,artifact,index,ledger} set BEFORE `enforce`, replacing the
+    // prior `targetStore as any` cast that let an unknown store slip into the
+    // policy engine where a wildcard `allow` could absorb it. TS `private` is
+    // compile-time only, so the method is mechanically on the prototype.
+    // ClusterKernel has no policy gate to validate against, so it isn't
+    // mirrored there.
+    'assertOwnerStore',
 ]);
 
 /**

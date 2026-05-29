@@ -1,0 +1,41 @@
+id: sdk-artifact-without-sanitize
+language: typescript
+severity: error
+message: |
+  An SDK method forwards an artifact-bearing kernel result
+  (`this.kernel.findSources(...)` or `this.kernel.retrieveBundle(...)`)
+  WITHOUT routing it through `sanitizeArtifactForOutput` (REDACT-001,
+  Wave S2-A2). Both `FindSourcesResult.resolvedArtifacts` and
+  `EvidenceBundle.resolvedArtifacts` carry raw `Artifact[]` — including
+  `storagePath` and any unallowlisted sidecar fields — straight from
+  owner-store truth. The SDK boundary doctrine (documented on
+  `ClusterSDK.resolve`) is that EVERY object leaving the SDK is sanitized
+  inline; a pass-through on `findSources` / `retrieveBundle` violates it
+  and leaks the artifact internals to every SDK consumer.
+
+  This guards REDACT-001 from regressing on a sibling: if a new SDK read
+  method surfaces `resolvedArtifacts` (or any `Artifact`) it MUST call
+  `sanitizeArtifactForOutput` somewhere in its body — directly, or inside
+  a `.map(...)` over the artifact array. Inline that call to clear the
+  gate; NEVER return raw artifacts from the SDK.
+
+  Note: `resolve()` already sanitizes (it uses the resolver, not these two
+  kernel calls) so it does not match this rule. Methods that fetch
+  artifacts through some OTHER kernel call are out of scope here — extend
+  the `has` arm if such a path is added.
+rule:
+  kind: method_definition
+  all:
+    - has:
+        any:
+          - pattern: this.kernel.findSources($$$)
+          - pattern: this.kernel.retrieveBundle($$$)
+        stopBy: end
+  not:
+    has:
+      pattern: sanitizeArtifactForOutput($$$)
+      stopBy: end
+files:
+  - "src/sdk/**/*.ts"
+ignores:
+  - "test/**"

@@ -26,9 +26,109 @@ import {
 // in `src/mcp/config-validator.ts` so the CLI surface can import them too.
 // Pre-fix the validator was inline in this file; the CLI had no
 // validation at all.
-import { validatePrincipal } from './config-validator.js';
+// INJECT-002 (Wave S2-A2): `validatePolicyConfig` brings the policies-file
+// JSON to parity with the CLI's structural check (cli.ts uses the same
+// validator). PolicyConfigError surfaces a stable INVALID_POLICY_CONFIG code.
+import { validatePrincipal, validatePolicyConfig, PolicyConfigError } from './config-validator.js';
+// KERNEL-002 (Wave S2-A2): the MCP boundary now defaults to a redacting
+// posture. Pre-fix, no env → bare `{clusterDir}` → SDK built a RAW kernel
+// (no policy, no redaction). These canonical defaults are READ-ONLY here
+// (owned by the policy domain); we only consume them.
+import { DEFAULT_POLICIES, DEFAULT_TRUST_ZONES, DEFAULT_VISIBILITY_RULES } from '../policy/default-policies.js';
+import type { AiErrorEnvelope } from '../types/ai-envelope.js';
 
 const CLUSTER_DIR = resolve(process.env.DB_CLUSTER_DIR ?? process.cwd(), '.db-cluster');
+
+// ─── KERNEL-002 (Wave S2-A2): AI-surface trust-zone posture ─────────────────
+//
+// The MCP server is an AI-FACING surface by design. The default boundary
+// trust zone is `ai-facing` (strips `artifact_content`, requires approval
+// for writes). Privileged zones (`internal` = full read + auto-approval,
+// `cluster-admin`) are REFUSED on this surface unless the operator sets an
+// explicit opt-in. This prevents a self-asserted `DB_CLUSTER_PRINCIPAL`
+// (which the MCP host, not a human, may control) from escalating to the
+// trusted zone and reading raw owner truth / auto-committing.
+//
+// Opt-in: set `DB_CLUSTER_MCP_ALLOW_PRIVILEGED=1` (operator-controlled env)
+// to honor a privileged principal / zone on the MCP surface. An operator
+// running the server in a trusted, non-AI context (e.g. a CLI-bridge) uses
+// this; the default AI deployment never sets it.
+//
+// Optional explicit zone override: `DB_CLUSTER_MCP_TRUST_ZONE=<zoneId>` lets
+// an operator pin the boundary zone without supplying a full principal.
+const MCP_PRIVILEGED_ZONES = new Set<string>(['internal', 'cluster-admin']);
+const MCP_DEFAULT_TRUST_ZONE = 'ai-facing';
+
+/** True when the operator has explicitly opted into privileged MCP access. */
+function mcpAllowPrivileged(): boolean {
+    const v = process.env.DB_CLUSTER_MCP_ALLOW_PRIVILEGED;
+    return v !== undefined && v.trim() !== '' && v.trim() !== '0' && v.trim().toLowerCase() !== 'false';
+}
+
+/**
+ * INJECT-001 (Wave S2-A2): whether the MCP write-approval gate is active.
+ *
+ * The gate fires when the boundary is the redacting `ai-facing` default —
+ * i.e. the operator has NOT opted into a privileged/trusted context. When
+ * active, a `cluster_commit_mutation` call against a command that is not yet
+ * in `approved` status is REFUSED at the MCP boundary (the AI must call
+ * `cluster_approve_mutation` first). The explicit operator opt-in
+ * (DB_CLUSTER_MCP_ALLOW_PRIVILEGED, or a pinned privileged
+ * DB_CLUSTER_MCP_TRUST_ZONE) relaxes the gate so a trusted non-AI caller
+ * keeps the kernel's `validated`→commit path.
+ *
+ * The kernel's `committableStatuses` (['validated','approved']) is UNCHANGED;
+ * this gate is MCP-surface-only. Trusted in-process SDK callers (no MCP
+ * boundary) are unaffected.
+ */
+function mcpCommitGateActive(): boolean {
+    if (mcpAllowPrivileged()) return false;
+    const zoneOverride = process.env.DB_CLUSTER_MCP_TRUST_ZONE?.trim();
+    if (zoneOverride && MCP_PRIVILEGED_ZONES.has(zoneOverride)) return false;
+    return true;
+}
+
+/**
+ * The default AI-facing principal used when no `DB_CLUSTER_PRINCIPAL` is
+ * supplied. It sits in the `ai-facing` trust zone (so the kernel applies the
+ * ai-facing redaction rules — artifact_content strip) and carries the
+ * read-only `observer` role, which `DEFAULT_POLICIES` grants the read
+ * capabilities (`discover_existence`, `read_owner_truth`, `read_derivative`,
+ * `trace_provenance`, `read_receipts`, `read_command`, `explain_retrieval`).
+ *
+ * The net posture: the AI surface CAN read cluster structure but receives
+ * REDACTED owner truth (no raw artifact content / storagePath) and CANNOT
+ * write without going through approve (the ai-facing zone's
+ * `require_approval_for_writes` + the INJECT-001 MCP commit gate). `observer`
+ * is read-only (no propose/approve/commit), so the principal cannot
+ * self-escalate writes either.
+ */
+const AI_FACING_DEFAULT_PRINCIPAL: Principal = {
+    id: 'mcp-ai-facing',
+    name: 'MCP AI-Facing (default)',
+    roles: ['observer'],
+    trustZone: MCP_DEFAULT_TRUST_ZONE,
+};
+
+/**
+ * Refuse a privileged self-asserted principal on the AI surface unless the
+ * operator opted in. Returns the principal's effective trust zone (honoring
+ * a `DB_CLUSTER_MCP_TRUST_ZONE` override when present).
+ */
+function enforceMcpTrustZone(principal: Principal): Principal {
+    const zoneOverride = process.env.DB_CLUSTER_MCP_TRUST_ZONE?.trim();
+    const effectiveZone = zoneOverride && zoneOverride !== '' ? zoneOverride : principal.trustZone;
+    if (MCP_PRIVILEGED_ZONES.has(effectiveZone) && !mcpAllowPrivileged()) {
+        throw new Error(
+            `[db-cluster MCP] Refusing to honor a privileged trust zone ('${effectiveZone}') on the ` +
+            'AI-facing MCP surface. The MCP server defaults to the redacting `ai-facing` zone; a ' +
+            'self-asserted internal/cluster-admin principal could escalate to raw owner truth and ' +
+            'auto-commit. To intentionally run privileged (trusted non-AI context only), set ' +
+            'DB_CLUSTER_MCP_ALLOW_PRIVILEGED=1.',
+        );
+    }
+    return zoneOverride && zoneOverride !== '' ? { ...principal, trustZone: effectiveZone } : principal;
+}
 
 // SURFACE-B-013 (Wave B1-Amend): version read from package.json at module
 // load. Pre-fix the value was a hardcoded literal `'0.1.0'` that silently
@@ -48,15 +148,26 @@ const PACKAGE_VERSION: string = (() => {
 /**
  * Build SDK options from environment.
  *
- * Recognized env vars (all optional — when absent the SDK runs without policies):
+ * Recognized env vars (all optional):
  * - `DB_CLUSTER_PRINCIPAL` — JSON-encoded Principal object. Used as the
- *   acting principal for all kernel calls when policies are configured.
+ *   acting principal for all kernel calls. A principal claiming a privileged
+ *   trust zone (`internal` / `cluster-admin`) is REFUSED unless
+ *   `DB_CLUSTER_MCP_ALLOW_PRIVILEGED` is set (KERNEL-002).
  * - `DB_CLUSTER_POLICIES_FILE` — path to a JSON file containing `{ policies,
- *   trustZones?, visibilityRules?, principal? }`. The file's `principal` is
- *   only used as a fallback when `DB_CLUSTER_PRINCIPAL` is unset.
+ *   trustZones?, visibilityRules?, principal? }`. Structurally validated
+ *   (INJECT-002). The file's `principal` is only used as a fallback when
+ *   `DB_CLUSTER_PRINCIPAL` is unset.
+ * - `DB_CLUSTER_MCP_ALLOW_PRIVILEGED` — operator opt-in to honor a privileged
+ *   trust zone on the AI surface (trusted non-AI context only).
+ * - `DB_CLUSTER_MCP_TRUST_ZONE` — explicit boundary trust-zone override.
  *
- * If neither env var is set, the SDK falls back to raw `ClusterKernel`
- * (preserves existing MCP behavior for the ~614 baseline tests).
+ * KERNEL-002 (Wave S2-A2): the MCP server is an AI-FACING surface and now
+ * DEFAULTS to a redacting posture. Pre-fix, with no env, this returned a bare
+ * `{clusterDir}` → the SDK built a RAW kernel (no policy, no redaction). The
+ * no-env default is now DEFAULT_POLICIES + DEFAULT_TRUST_ZONES +
+ * DEFAULT_VISIBILITY_RULES with the `ai-facing` zone forced (artifact_content
+ * stripped) and a read-only `observer` principal — so the AI surface reads
+ * REDACTED owner truth and cannot self-escalate to raw content or writes.
  */
 // SURFACE-R005 / SURFACE-B-006 (Wave B1-Amend): `validatePrincipal` was
 // inline here pre-fix. It now lives in `./config-validator.ts` so the CLI
@@ -96,7 +207,12 @@ export function buildSDKOptions(): SDKOptions {
                 'DB_CLUSTER_PRINCIPAL',
             );
         }
-        principal = parsedPrincipal as Principal;
+        // KERNEL-002 (Wave S2-A2): a self-asserted principal claiming a
+        // privileged trust zone (internal / cluster-admin) is REFUSED on the
+        // AI surface unless the operator opted in. This throws when the zone
+        // is privileged + no opt-in. Otherwise it returns the principal
+        // (honoring any DB_CLUSTER_MCP_TRUST_ZONE override).
+        principal = enforceMcpTrustZone(parsedPrincipal as Principal);
     }
 
     const policiesFile = process.env.DB_CLUSTER_POLICIES_FILE;
@@ -134,19 +250,38 @@ export function buildSDKOptions(): SDKOptions {
                 `DB_CLUSTER_POLICIES_FILE resolves outside the working directory via symlink: ${policiesFile} -> ${realResolved}`,
             );
         }
-        let parsed: {
-            policies?: Policy[];
-            trustZones?: TrustZone[];
-            visibilityRules?: VisibilityRule[];
-            principal?: Principal;
-        };
+        let rawParsed: unknown;
         try {
-            parsed = JSON.parse(readFileSync(resolvedPath, 'utf-8'));
+            rawParsed = JSON.parse(readFileSync(resolvedPath, 'utf-8'));
         } catch (err: any) {
             throw new Error(`Failed to read ${resolvedPath}: ${err.message}`);
         }
+        // INJECT-002 (Wave S2-A2): defense-in-depth — reject a policies file
+        // that carries a dangerous prototype-pollution own-key. `JSON.parse`
+        // itself does not assign `__proto__` to the prototype chain (it lands
+        // as an own enumerable key), but a downstream spread / merge could
+        // surface it; refuse loudly rather than silently carry it.
+        if (rawParsed && typeof rawParsed === 'object') {
+            for (const danger of ['__proto__', 'constructor', 'prototype']) {
+                if (Object.prototype.hasOwnProperty.call(rawParsed, danger)) {
+                    throw new PolicyConfigError(
+                        'root',
+                        `policies file contains a forbidden own-key '${danger}' (prototype-pollution guard)`,
+                    );
+                }
+            }
+        }
+        // INJECT-002 (Wave S2-A2): structurally validate the policies file for
+        // parity with the CLI surface (cli.ts uses the same validatePolicyConfig).
+        // Pre-fix the MCP boundary JSON.parsed + destructured with no check, so
+        // a malformed `policies.json` could slip a trust-zone-not-found bypass
+        // into PolicyEnforcedKernel. Throws PolicyConfigError on any defect.
+        const parsed = validatePolicyConfig(rawParsed);
         // Same fail-closed validation applies to the file's principal field if
         // we end up using it (only when DB_CLUSTER_PRINCIPAL wasn't supplied).
+        // validatePolicyConfig already asserts the principal shape; the explicit
+        // re-check below preserves the targeted failClosed message + applies the
+        // KERNEL-002 privileged-zone enforcement to a file-supplied principal.
         let resolvedPrincipal: Principal | undefined = principal;
         if (!resolvedPrincipal && parsed.principal !== undefined) {
             if (!validatePrincipal(parsed.principal)) {
@@ -155,24 +290,41 @@ export function buildSDKOptions(): SDKOptions {
                     `DB_CLUSTER_POLICIES_FILE principal (${resolvedPath})`,
                 );
             }
-            resolvedPrincipal = parsed.principal;
+            // KERNEL-002: a file-supplied principal is still subject to the
+            // privileged-zone refusal on the AI surface.
+            resolvedPrincipal = enforceMcpTrustZone(parsed.principal);
         }
+        // KERNEL-002: even an operator-supplied policies file gets the
+        // AI-facing default posture for any dimension it leaves unset — if the
+        // file omits a principal, fall back to the AI-facing default so the
+        // boundary still redacts. If it omits trust zones, fall back to the
+        // canonical defaults so the ai-facing zone (with its strip rule) exists.
+        const fileTrustZones = parsed.trustZones ?? DEFAULT_TRUST_ZONES;
         return {
             ...base,
-            policies: parsed.policies ?? [],
-            trustZones: parsed.trustZones,
-            visibilityRules: parsed.visibilityRules,
-            principal: resolvedPrincipal,
+            policies: parsed.policies ?? DEFAULT_POLICIES,
+            trustZones: fileTrustZones,
+            visibilityRules: parsed.visibilityRules ?? DEFAULT_VISIBILITY_RULES,
+            principal: resolvedPrincipal ?? AI_FACING_DEFAULT_PRINCIPAL,
         };
     }
 
-    if (principal) {
-        // Principal supplied but no policies → still pass through; SDK only
-        // wraps with PolicyEnforcedKernel when policies/zones/rules are set.
-        return { ...base, principal };
-    }
-
-    return base;
+    // KERNEL-002 (Wave S2-A2): the no-policies-file path. Pre-fix this returned
+    // a bare `{clusterDir}` (raw kernel, NO redaction) when no env was set, and
+    // `{clusterDir, principal}` when only a principal was set (still raw — the
+    // SDK only wraps with PolicyEnforcedKernel when policies/zones/rules are
+    // present). Both are now upgraded to the redacting AI-facing default:
+    // DEFAULT_POLICIES + DEFAULT_TRUST_ZONES + DEFAULT_VISIBILITY_RULES, with
+    // the ai-facing zone forced unless an explicit operator override is set.
+    return {
+        ...base,
+        policies: DEFAULT_POLICIES,
+        trustZones: DEFAULT_TRUST_ZONES,
+        visibilityRules: DEFAULT_VISIBILITY_RULES,
+        // A supplied (non-privileged, already zone-enforced) principal is
+        // honored; otherwise the AI-facing default principal applies.
+        principal: principal ?? AI_FACING_DEFAULT_PRINCIPAL,
+    };
 }
 
 let _sdk: ClusterSDK | undefined;
@@ -493,7 +645,34 @@ export const TOOLS: AnnotatedTool[] = [
 
 // ─── Tool handlers (exported for parity testing) ───────────────────────────
 
-export async function handleTool(name: string, args: Record<string, unknown>, sdkOverride?: ClusterSDK): Promise<unknown> {
+/**
+ * INJECT-001 (Wave S2-A2): the MCP-boundary descriptor passed into
+ * {@link handleTool}. Captures whether the call crosses the redacting
+ * ai-facing default boundary (where the write-approval gate fires).
+ *
+ * Design note (coordinator-relevant): tests that pass their OWN `sdkOverride`
+ * are exercising the SDK as a TRUSTED in-process caller, so the gate defaults
+ * OFF when this descriptor is omitted. Only the production
+ * `CallToolRequestSchema` handler (and tests explicitly probing the gate)
+ * set `aiFacingGate`. This keeps existing MCP tests that do
+ * propose→validate→commit through a raw `sdkOverride` green, while the real
+ * AI surface enforces approve-before-commit.
+ */
+export interface McpBoundary {
+    /**
+     * When true, the boundary is the redacting ai-facing default and the
+     * write-approval gate is enforced (commit refused unless the command is
+     * already `approved`). Defaults to false (trusted in-process caller).
+     */
+    aiFacingGate?: boolean;
+}
+
+export async function handleTool(
+    name: string,
+    args: Record<string, unknown>,
+    sdkOverride?: ClusterSDK,
+    boundary?: McpBoundary,
+): Promise<unknown> {
     const sdk = sdkOverride ?? getSDK();
     const tool = TOOLS.find((t) => t.name === name);
     if (!tool) throw new Error(`Unknown tool: ${name}`);
@@ -790,6 +969,54 @@ export async function handleTool(name: string, args: Record<string, unknown>, sd
         }
 
         case 'cluster_commit_mutation': {
+            // INJECT-001 (Wave S2-A2): MCP-boundary write-approval gate. Under
+            // the ai-facing default boundary, a commit of a command that is not
+            // yet in `approved` status is REFUSED here — the AI consumer must
+            // call `cluster_approve_mutation` first. This enforces
+            // separation-of-duties AT THE AI SURFACE: the kernel's
+            // `committableStatuses` (['validated','approved']) is unchanged, so
+            // trusted in-process SDK callers retain `validated`→commit, but the
+            // self-approving AI surface cannot bypass the approval step. An
+            // explicit operator-privileged override (DB_CLUSTER_MCP_ALLOW_PRIVILEGED)
+            // relaxes the gate by clearing `boundary.aiFacingGate` upstream.
+            if (boundary?.aiFacingGate) {
+                let currentStatus: string | undefined;
+                try {
+                    const existing = await sdk.inspectCommand(args.commandId as string);
+                    currentStatus = existing.status;
+                } catch {
+                    // If inspect fails (e.g. unknown command), fall through to
+                    // commitMutation so the normal typed error (NOT_FOUND) is
+                    // produced by the catch arm rather than masked by the gate.
+                    currentStatus = undefined;
+                }
+                if (currentStatus !== undefined && currentStatus !== 'approved') {
+                    // Structured refusal mirroring the on-wire AiErrorEnvelope
+                    // body the CallToolRequest catch arm produces (so AI
+                    // consumers branch on one shape across all error paths).
+                    const refusal: AiErrorEnvelope & { error: string; next_valid_actions: string[] } = {
+                        code: 'POLICY_DENIED',
+                        message:
+                            'Commit refused on the AI-facing MCP surface: the command is in ' +
+                            `'${currentStatus}' status, not 'approved'. The AI surface enforces ` +
+                            'approve-before-commit (separation of duties).',
+                        error:
+                            'Commit refused on the AI-facing MCP surface: the command is in ' +
+                            `'${currentStatus}' status, not 'approved'. The AI surface enforces ` +
+                            'approve-before-commit (separation of duties).',
+                        retryable: false,
+                        remediation_hint:
+                            'Call cluster_approve_mutation on this command first, then retry ' +
+                            'cluster_commit_mutation.',
+                        context: { commandId: args.commandId, currentStatus, requiredStatus: 'approved' },
+                        next_valid_actions: ['cluster_approve_mutation'],
+                    };
+                    return {
+                        ...refusal,
+                        _meta: { operation: 'error' as const, approvalSensitive: true, writesCluster: false },
+                    };
+                }
+            }
             const result = await sdk.commitMutation(args.commandId as string, args.actorId as string);
             // AGG-006 fix (Wave A3 fix-up): cluster_list_receipts wraps every
             // returned receipt with sanitizeReceiptForOutput, but the
@@ -813,6 +1040,46 @@ export async function handleTool(name: string, args: Record<string, unknown>, sd
         }
 
         case 'cluster_compensate_mutation': {
+            // INJECT-001 (Wave S2-A2 fix-up): MCP-boundary corrective-write gate.
+            // `cluster_compensate_mutation` is a DESTRUCTIVE sibling of commit —
+            // it fast-tracks (validate + commit) a fresh *compensating* command
+            // with NO `approved` lifecycle of its own, so there is no `approved`
+            // state to gate on the way the commit arm does. Instead it is gated
+            // on the SAME privileged opt-in that drives the commit gate
+            // (`mcpCommitGateActive()` → `boundary.aiFacingGate`): under the
+            // redacting ai-facing default, compensation is an operator-level
+            // corrective action and is REFUSED on the AI-facing surface
+            // entirely. The explicit operator opt-in
+            // (DB_CLUSTER_MCP_ALLOW_PRIVILEGED — the same KERNEL-002 opt-in)
+            // clears `aiFacingGate` upstream and compensate proceeds as before.
+            // The kernel's compensate behavior and `committableStatuses` are
+            // UNCHANGED; this is an MCP-surface-only refusal.
+            if (boundary?.aiFacingGate) {
+                const refusal: AiErrorEnvelope & { error: string; next_valid_actions: string[] } = {
+                    code: 'POLICY_DENIED',
+                    message:
+                        'Compensation refused on the AI-facing MCP surface: compensating a ' +
+                        'committed mutation is an operator-level corrective action that writes ' +
+                        'cluster truth (a fresh compensating command is auto-committed). It is ' +
+                        'not available on the redacting ai-facing surface.',
+                    error:
+                        'Compensation refused on the AI-facing MCP surface: compensating a ' +
+                        'committed mutation is an operator-level corrective action that writes ' +
+                        'cluster truth (a fresh compensating command is auto-committed). It is ' +
+                        'not available on the redacting ai-facing surface.',
+                    retryable: false,
+                    remediation_hint:
+                        'Run compensation from a trusted, operator-controlled context: start the ' +
+                        'MCP server with DB_CLUSTER_MCP_ALLOW_PRIVILEGED=1, or perform the ' +
+                        'correction via the CLI/SDK where an operator authorizes the write.',
+                    context: { commandId: args.commandId, surface: 'ai-facing', requiresPrivileged: true },
+                    next_valid_actions: ['cluster_inspect_command'],
+                };
+                return {
+                    ...refusal,
+                    _meta: { operation: 'error' as const, approvalSensitive: true, writesCluster: false },
+                };
+            }
             const result = await sdk.compensateMutation(args.commandId as string, args.compensatedBy as string, args.reason as string);
             // AGG-006 fix (Wave A3 fix-up): see cluster_commit_mutation —
             // same rationale, the receipt is wrapped before crossing
@@ -953,11 +1220,23 @@ export { sanitizeArtifactForOutput } from './sanitize.js';
 
 // ─── Server setup ──────────────────────────────────────────────────────────
 
-const server = new Server(
+/**
+ * INJECT-001 (Wave S2-A2 fix-up): the configured MCP `Server` is exported so
+ * the production wiring — the registered `CallToolRequestSchema` handler that
+ * feeds `{ aiFacingGate: mcpCommitGateActive() }` into {@link handleTool} — can
+ * be driven end-to-end over an in-memory transport in tests (not just via a
+ * hand-passed boundary descriptor). This closes the V3-001 gap where the
+ * gate's internal logic was tested but its production activation was not.
+ * Exported alongside {@link mcpCommitGateActive} so a refactor that drops the
+ * boundary wiring or flips the default is caught by a real CallTool round-trip.
+ */
+export const server = new Server(
     // SURFACE-B-013 (Wave B1-Amend): version sourced from package.json.
     { name: 'db-cluster', version: PACKAGE_VERSION },
     { capabilities: { tools: {} } },
 );
+
+export { mcpCommitGateActive };
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: TOOLS.map((t) => ({
@@ -1063,7 +1342,13 @@ function lifecycleNextValidActions(code: string, context?: Record<string, unknow
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     try {
-        const result = await handleTool(name, args ?? {});
+        // INJECT-001 (Wave S2-A2): the production MCP surface is AI-facing.
+        // Pass the boundary descriptor so the write-approval gate fires under
+        // the redacting ai-facing default (relaxed only when the operator
+        // opted into a privileged/trusted context).
+        const result = await handleTool(name, args ?? {}, undefined, {
+            aiFacingGate: mcpCommitGateActive(),
+        });
         return {
             content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         };
