@@ -375,6 +375,7 @@ export const TOOLS: AnnotatedTool[] = [
             properties: {
                 query: { type: 'string', description: 'Search query text' },
                 limit: { type: 'number', description: 'Max results (default: 20)' },
+                offset: { type: 'number', description: 'Skip N results before limit (pagination; default: 0)' },
             },
             required: ['query'],
         },
@@ -388,6 +389,7 @@ export const TOOLS: AnnotatedTool[] = [
             properties: {
                 query: { type: 'string', description: 'Retrieval query' },
                 limit: { type: 'number', description: 'Max index candidates (default: 20)' },
+                offset: { type: 'number', description: 'Skip N ranked results before limit (pagination; default: 0)' },
             },
             required: ['query'],
         },
@@ -679,7 +681,7 @@ export async function handleTool(
 
     switch (name) {
         case 'cluster_find_sources': {
-            const result = await sdk.findSources(args.query as string, args.limit as number | undefined);
+            const result = await sdk.findSources(args.query as string, args.limit as number | undefined, args.offset as number | undefined);
             // SURFACE-C-003 §2a (Wave C1-Amend): when find_sources returns
             // empty, attach `_meta.empty_reason` so AI consumers can branch
             // on:
@@ -748,7 +750,7 @@ export async function handleTool(
         }
 
         case 'cluster_retrieve_bundle': {
-            const bundle = await sdk.retrieveBundle(args.query as string, { limit: args.limit as number | undefined });
+            const bundle = await sdk.retrieveBundle(args.query as string, { limit: args.limit as number | undefined, offset: args.offset as number | undefined });
             return {
                 _meta: {
                     operation: 'read',

@@ -39,8 +39,12 @@ export function extractHeadings(markdown: string): string[] {
 
 /**
  * Extract key terms from text — words that appear meaningful (not stop words).
+ *
+ * Exported so the BM25 ranker (RETR-001, `bm25.ts`) can reuse the same
+ * stop-word machinery — keeping query-term filtering consistent with the
+ * indexing-time key-term extraction and avoiding a second hard-coded list.
  */
-const STOP_WORDS = new Set([
+export const STOP_WORDS = new Set([
     'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
     'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
     'should', 'may', 'might', 'shall', 'can', 'need', 'dare', 'ought',

@@ -106,6 +106,13 @@ export interface LinkEvidenceInput {
 export interface FindSourcesInput {
     query: string;
     limit?: number;
+    /**
+     * Number of leading candidates to skip before applying `limit` (RETR-005).
+     * Threads to IndexStore.search()'s offset so CLI/MCP `find` can paginate.
+     * Absent ≡ no skip — existing callers (and the existence-probe `{limit:1}`)
+     * are unaffected.
+     */
+    offset?: number;
 }
 
 export interface FindSourcesResult {
@@ -722,6 +729,7 @@ export class ClusterKernel implements ClusterKernelInterface {
         const indexRecords = await this.stores.index.search({
             text: input.query,
             limit: input.limit,
+            offset: input.offset,
         });
 
         const resolvedEntities: Entity[] = [];
@@ -1868,7 +1876,7 @@ export class ClusterKernel implements ClusterKernelInterface {
      *   const bundle = await kernel.retrieveBundle('foo', { limit: 20 });
      *   if (!bundle.freshness.allFresh) console.warn('stale evidence');
      */
-    async retrieveBundle(query: string, options?: { limit?: number }): Promise<EvidenceBundle> {
+    async retrieveBundle(query: string, options?: { limit?: number; offset?: number }): Promise<EvidenceBundle> {
         const planner = new RetrievalPlanner(this.stores);
         return planner.plan(query, options);
     }

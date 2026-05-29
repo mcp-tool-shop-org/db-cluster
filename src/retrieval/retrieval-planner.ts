@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import type { ClusterStores } from '../contracts/index.js';
 import type { Entity } from '../types/entity.js';
 import type { Artifact } from '../types/artifact.js';
@@ -12,10 +12,48 @@ import type {
     ConfidenceBoundary,
 } from '../types/evidence-bundle.js';
 import { formatClusterUri } from '../uri/cluster-uri.js';
+import { rankByBM25 } from '../indexing/bm25.js';
+import { tokenize } from '../indexing/tokenizer.js';
+
+const SNIPPET_RADIUS = 120;
 
 export interface RetrievalPlannerOptions {
-    /** Maximum index records to consider */
+    /** Maximum resolved candidates to return, after ranking. */
     limit?: number;
+    /**
+     * Number of RANKED candidates to skip before applying `limit` (RETR-005).
+     * Pagination happens AFTER ranking, so this offsets by relevance order, not
+     * insertion order. Absent / 0 / negative ≡ no skip.
+     */
+    offset?: number;
+}
+
+/**
+ * Extract a ~240-char window of `content` centered on the first query-term
+ * match (RETR-004). Falls back to a leading excerpt when no query term occurs
+ * in the raw content. Pure string work — no I/O; the caller has already passed
+ * the bytes through the integrity-checked getContent path.
+ */
+function extractSnippet(content: string, query: string): string | undefined {
+    const normalized = content.replace(/\s+/g, ' ').trim();
+    if (!normalized) return undefined;
+    const lower = normalized.toLowerCase();
+    let pos = -1;
+    for (const term of tokenize(query ?? '')) {
+        const i = lower.indexOf(term);
+        if (i !== -1 && (pos === -1 || i < pos)) pos = i;
+    }
+    if (pos === -1) {
+        return normalized.length > SNIPPET_RADIUS * 2
+            ? normalized.slice(0, SNIPPET_RADIUS * 2) + '…'
+            : normalized;
+    }
+    const start = Math.max(0, pos - SNIPPET_RADIUS);
+    const end = Math.min(normalized.length, pos + SNIPPET_RADIUS);
+    let snippet = normalized.slice(start, end);
+    if (start > 0) snippet = '…' + snippet;
+    if (end < normalized.length) snippet = snippet + '…';
+    return snippet;
 }
 
 /**
@@ -35,17 +73,32 @@ export class RetrievalPlanner {
 
     async plan(query: string, options?: RetrievalPlannerOptions): Promise<EvidenceBundle> {
         const limit = options?.limit ?? 20;
+        const offset = Math.max(0, options?.offset ?? 0);
 
-        // 1. Query index for candidates
-        const indexRecords = await this.stores.index.search({ text: query, limit });
+        // 1. Get candidates from search() — UNCHANGED candidate-match semantics
+        //    (substring over text/metadata). We do NOT pass limit/offset here:
+        //    those paginate the RANKED result below, not the candidate set, so
+        //    ranking sees every matching candidate. This is the literal
+        //    `search -> rank -> paginate` contract; recall is identical to
+        //    pre-wave (no records gained or lost) — only the ORDER changes.
+        const candidates = await this.stores.index.search({ text: query });
 
-        // 2. Resolve each candidate to owner store
+        // 2. Rank candidates by BM25 relevance (RETR-001). Candidates that match
+        //    only via metadata (BM25 text score 0) are RETAINED, ranked last:
+        //    ranking is an overlay on search()'s recall, never a filter on it.
+        const ranked = rankByBM25(query, candidates);
+
+        // 3. Paginate the RANKED list (RETR-005). indexRecords is this page.
+        const page = ranked.slice(offset, offset + limit);
+        const indexRecords: IndexRecord[] = page.map((r) => r.record);
+
+        // 4. Resolve each candidate to owner store
         const resolvedEntities: ResolvedEvidence<Entity>[] = [];
         const resolvedArtifacts: ResolvedEvidence<Artifact>[] = [];
         const missingContext: MissingContext[] = [];
         const allProvenanceEvents: ProvenanceEvent[] = [];
 
-        for (const record of indexRecords) {
+        for (const { record, score } of page) {
             if (record.sourceStore === 'canonical') {
                 const entity = await this.stores.canonical.get(record.sourceId);
                 if (entity) {
@@ -63,6 +116,7 @@ export class RetrievalPlanner {
                         ownerStore: 'canonical',
                         indexStale,
                         provenanceEventIds: events.map((e) => e.id),
+                        score,
                     });
                 } else {
                     missingContext.push({
@@ -77,6 +131,7 @@ export class RetrievalPlanner {
                 if (artifact) {
                     const events = await this.getProvenanceForSubject(record.sourceId);
                     allProvenanceEvents.push(...events);
+                    const snippet = await this.buildSnippet(artifact, query);
 
                     resolvedArtifacts.push({
                         object: artifact,
@@ -84,6 +139,8 @@ export class RetrievalPlanner {
                         ownerStore: 'artifact',
                         indexStale: false, // artifacts are immutable — index cannot be stale for content
                         provenanceEventIds: events.map((e) => e.id),
+                        score,
+                        snippet,
                     });
                 } else {
                     missingContext.push({
@@ -93,6 +150,16 @@ export class RetrievalPlanner {
                         impact: 'high',
                     });
                 }
+            } else {
+                // RETR-006: any sourceStore the planner does not resolve to owner
+                // truth (today 'ledger'; tomorrow a new store) must surface as
+                // MissingContext rather than silently vanishing from the bundle.
+                missingContext.push({
+                    description: `Index record references ${record.sourceStore} source ${record.sourceId}, which the retrieval planner does not resolve to owner truth`,
+                    store: record.sourceStore,
+                    expectedId: record.sourceId,
+                    impact: 'medium',
+                });
             }
         }
 
@@ -122,6 +189,41 @@ export class RetrievalPlanner {
             missingContext,
             confidenceBoundaries,
         };
+    }
+
+    /**
+     * Build a short content snippet for an artifact (RETR-004).
+     *
+     * Reads bytes ONLY through the integrity-checked `getContent` (PROV-001):
+     * the hardened adapter re-hashes on read and THROWS on mismatch. As defense
+     * in depth (mirroring content-indexer.ts) we re-hash the returned bytes
+     * against the recorded `contentHash` and refuse to snippet on mismatch.
+     * Either failure → `undefined`: tampered or unreadable content is NEVER
+     * surfaced as a snippet, and no raw artifact read bypasses the integrity
+     * gate. Non-text artifacts also yield `undefined`.
+     */
+    private async buildSnippet(artifact: Artifact, query: string): Promise<string | undefined> {
+        let buf: Buffer | null;
+        try {
+            buf = await this.stores.artifact.getContent(artifact.id);
+        } catch {
+            return undefined; // integrity throw (ContentReadIntegrityError) — never surface
+        }
+        if (!buf) return undefined;
+        // Defense in depth: refuse content whose bytes don't hash to the record.
+        const actualHash = createHash('sha256').update(buf).digest('hex');
+        if (actualHash !== artifact.contentHash) return undefined;
+        if (!this.isTextArtifact(artifact)) return undefined;
+        return extractSnippet(buf.toString('utf-8'), query);
+    }
+
+    private isTextArtifact(artifact: Artifact): boolean {
+        // Null-safe: some artifacts are ingested with an undefined mimeType
+        // (e.g. command payloads carrying `mediaType` rather than `mimeType`),
+        // so never assume these fields are present at runtime.
+        const mime = artifact.mimeType ?? '';
+        const name = artifact.filename ?? '';
+        return mime.startsWith('text/') || name.endsWith('.md') || name.endsWith('.txt');
     }
 
     private async getProvenanceForSubject(subjectId: string): Promise<ProvenanceEvent[]> {

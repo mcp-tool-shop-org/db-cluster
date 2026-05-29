@@ -290,8 +290,8 @@ export class ClusterSDK {
      *   console.log(r.kind, r.name);
      * }
      */
-    async findSources(query: string, limit?: number): Promise<FindSourcesResult> {
-        const result = await this.kernel.findSources({ query, limit });
+    async findSources(query: string, limit?: number, offset?: number): Promise<FindSourcesResult> {
+        const result = await this.kernel.findSources({ query, limit, offset });
         // REDACT-001 (Wave S2-A2): pre-fix this was a raw pass-through, so the
         // resolved owner-truth artifacts escaped the SDK boundary WITH
         // `storagePath` (an absolute fs path) under BOTH the no-policy raw
@@ -334,7 +334,7 @@ export class ClusterSDK {
      * redaction is structurally avoided because the sanitizers operate
      * on flat field shape, not on already-redacted markers.
      */
-    async retrieveBundle(query: string, options?: { limit?: number }): Promise<EvidenceBundle> {
+    async retrieveBundle(query: string, options?: { limit?: number; offset?: number }): Promise<EvidenceBundle> {
         const bundle = await this.kernel.retrieveBundle(query, options);
         // SURFACE-B-008: sanitize indexRecords + provenanceEvents inline.
         // The sanitizers return enriched objects (adding `_sourceType`,

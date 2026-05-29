@@ -1,0 +1,31 @@
+id: snippet-without-integrity-read
+language: typescript
+severity: error
+message: |
+  A retrieval snippet builder (`buildSnippet`-shaped method) constructs an
+  artifact content excerpt WITHOUT routing the read through the integrity-
+  checked `getContent` path (RETR-004 / PROV-001). The snippet MUST come from
+  `stores.artifact.getContent(...)` — which re-hashes on read and throws on a
+  contentHash mismatch — never from a raw file/blob read. Reading raw bytes for
+  a snippet reopens the poisoned-content vector that PROV-001 closed for the
+  content indexer. Inline a `getContent(...)` call (and keep the adjacent
+  contentHash re-hash) to clear this gate.
+rule:
+  kind: method_definition
+  all:
+    - has:
+        field: name
+        regex: "^buildSnippet$"
+    - has:
+        field: body
+        pattern: $BODY
+  not:
+    has:
+      any:
+        - pattern: getContent($$$)
+        - pattern: $A.getContent($$$)
+      stopBy: end
+files:
+  - "src/retrieval/**/*.ts"
+ignores:
+  - "test/**"

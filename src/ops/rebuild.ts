@@ -281,6 +281,26 @@ export async function checkStale(stores: ClusterStores): Promise<StaleRecord[]> 
                     suggestedCommand: FIX,
                 });
             }
+        } else if (record.sourceStore === 'ledger') {
+            // RETR-006: ledger-sourced index records were silently skipped. A
+            // ledger record pointing at a deleted event is an orphan, mirroring
+            // the canonical/artifact arms. getEvent throws on tamper (PROV-004)
+            // — an integrity concern, not an orphan — so treat a throw as present.
+            let present = true;
+            try {
+                present = (await stores.ledger.getEvent(record.sourceId)) !== null;
+            } catch {
+                present = true;
+            }
+            if (!present) {
+                stale.push({
+                    type: 'orphan_index_record',
+                    sourceId: record.sourceId,
+                    sourceStore: 'ledger',
+                    message: `Index record references non-existent ledger event ${record.sourceId}`,
+                    suggestedCommand: FIX,
+                });
+            }
         }
     }
 

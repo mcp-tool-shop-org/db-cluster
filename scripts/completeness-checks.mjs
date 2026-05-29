@@ -93,6 +93,16 @@ const RULES = [
         file: 'R10-path-scrub-regex-outside-redactor.yml',
         label: 'hand-rolled path-scrub RegExp literal outside src/policy/redactor.ts (REDACT-002)',
     },
+    {
+        id: 'R11',
+        file: 'R11-snippet-without-integrity-read.yml',
+        label: 'retrieval buildSnippet building a content excerpt without the integrity-checked getContent path (RETR-004/PROV-001)',
+    },
+    {
+        id: 'R12',
+        file: 'R12-retrieval-without-ranking.yml',
+        label: 'RetrievalPlanner.plan assembling a bundle without consuming rankByBM25 (RETR-001)',
+    },
 ];
 
 /**

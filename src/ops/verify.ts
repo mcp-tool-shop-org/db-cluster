@@ -145,6 +145,22 @@ export async function verify(stores: ClusterStores, options?: VerifyOptions): Pr
                 if (!exists) {
                     missingCount++;
                 }
+            } else if (record.sourceStore === 'ledger') {
+                // RETR-006: ledger-sourced index records were silently skipped.
+                // A ledger record pointing at a deleted event is a missing
+                // reference, mirroring the canonical/artifact arms. getEvent
+                // throws on tamper (PROV-004) — an integrity concern handled by
+                // the ledger-chain walk, not an orphan — so treat a throw as
+                // "present".
+                let present = true;
+                try {
+                    present = (await stores.ledger.getEvent(record.sourceId)) !== null;
+                } catch {
+                    present = true;
+                }
+                if (!present) {
+                    missingCount++;
+                }
             }
         }
 

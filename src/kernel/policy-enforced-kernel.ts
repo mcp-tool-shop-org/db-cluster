@@ -545,7 +545,7 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
         };
     }
 
-    async retrieveBundle(query: string, options?: { limit?: number }): Promise<EvidenceBundle> {
+    async retrieveBundle(query: string, options?: { limit?: number; offset?: number }): Promise<EvidenceBundle> {
         // Bundle-level capability — caller must be allowed to do a retrieval
         // at all. Per-object filtering (read_owner_truth) is applied below.
         const bundleDecision = this.enforce('read_derivative', { ownerStore: 'index' });

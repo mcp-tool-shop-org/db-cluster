@@ -1,0 +1,28 @@
+id: retrieval-without-ranking
+language: typescript
+severity: error
+message: |
+  The RetrievalPlanner `plan` method assembles an EvidenceBundle WITHOUT
+  consuming the BM25 ranker (RETR-001). The retrieval/find path must rank the
+  candidates `search()` returns via `rankByBM25(...)` before paginating — that
+  ranking layer is the headline of this store and lives ABOVE the candidate
+  matcher. A `plan` that returns candidates in raw insertion order has regressed
+  ranking back to the pre-wave substring behaviour. Inline `rankByBM25(...)` to
+  clear this gate.
+rule:
+  kind: method_definition
+  all:
+    - has:
+        field: name
+        regex: "^plan$"
+    - has:
+        field: body
+        pattern: $BODY
+  not:
+    has:
+      pattern: rankByBM25($$$)
+      stopBy: end
+files:
+  - "src/retrieval/**/*.ts"
+ignores:
+  - "test/**"

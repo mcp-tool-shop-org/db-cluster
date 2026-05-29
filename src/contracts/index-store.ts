@@ -2,7 +2,12 @@ import type { IndexRecord } from '../types/index-record.js';
 
 /**
  * IndexStore contract.
- * Owns: discoverability, full-text/vector lookup, metadata search.
+ * Owns: discoverability, full-text candidate lookup, metadata search.
+ *
+ * search() returns CANDIDATES, not ranked results. Relevance ranking (BM25,
+ * RETR-001) is a separate layer applied ABOVE search() in the retrieval/find
+ * path — never inside an adapter. (There is no vector/embedding lookup; the
+ * `IndexRecord.embedding` field is an intentional, unused anti-pattern marker.)
  * DERIVATIVE — can always be rebuilt from canonical + artifact + ledger stores.
  */
 export interface IndexStore {
@@ -11,13 +16,17 @@ export interface IndexStore {
      * fields narrow the candidate set before/after text matching depending
      * on adapter implementation.
      *
-     * Returns derivative records — never owner truth. A caller that needs
-     * the canonical/artifact record after a hit should follow `sourceId`
-     * + `sourceStore` to the owning store via `get(sourceId)`.
+     * Returns CANDIDATES, not ranked results — relevance ordering (BM25,
+     * RETR-001) is applied by a higher layer in the retrieval/find path. The
+     * local adapter returns candidates in insertion order. Returns derivative
+     * records — never owner truth. A caller that needs the canonical/artifact
+     * record after a hit should follow `sourceId` + `sourceStore` to the owning
+     * store via `get(sourceId)`.
      *
      * @param query  Optional. `text` narrows by content; `sourceStore`
      *               narrows by owning store; `metadata` does shallow-equal
-     *               attribute matching; `limit` caps results.
+     *               attribute matching; `limit` caps results; `offset` skips
+     *               leading candidates before `limit` (RETR-005).
      * @returns      Array of matching IndexRecord. Empty array on no
      *               match; never returns `null`.
      */
@@ -93,4 +102,15 @@ export interface IndexQuery {
     sourceStore?: 'canonical' | 'artifact' | 'ledger';
     metadata?: Record<string, unknown>;
     limit?: number;
+    /**
+     * Number of leading candidates to skip before applying `limit` (RETR-005).
+     * Absent / 0 / negative ≡ no skip, so existence probes (`{limit:1}`) and
+     * fetch-alls (`{limit:100000}`) behave identically to pre-offset callers.
+     * Applied to the post-filter candidate set in adapter order.
+     *
+     * This is the single pagination idiom at the store layer: a numeric offset.
+     * V2's SDK opaque cursor (SDK-002) WRAPS this offset — it does not replace
+     * it — so callers never see two competing pagination shapes.
+     */
+    offset?: number;
 }

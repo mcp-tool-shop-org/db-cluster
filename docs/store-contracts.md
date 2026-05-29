@@ -49,7 +49,7 @@ interface ArtifactFilter {
 
 ## Index Store
 
-**Owns:** Discoverability — full-text search and metadata lookup. **This is the only derivative store.**
+**Owns:** Discoverability — full-text (ranked) search and metadata lookup. Ranking (BM25) is a layer above `search()`, which returns candidates. **This is the only derivative store.**
 
 ```typescript
 interface IndexStore {

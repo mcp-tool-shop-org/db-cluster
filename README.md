@@ -59,7 +59,7 @@ A federated database cluster where:
 
 - **Canonical store** — entities, IDs, stable state records
 - **Artifact store** — raw files, documents, source text, generated outputs
-- **Index store** — discoverability, full-text/vector lookup, metadata search
+- **Index store** — discoverability, full-text (ranked) lookup, metadata search
 - **Event/provenance ledger** — actions, links, mutations, receipts, lineage
 
 The kernel routes. The index discovers. The cluster owns truth.

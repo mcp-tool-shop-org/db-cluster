@@ -46,8 +46,17 @@ export class LocalIndexStore implements IndexStore {
                 results = results.filter((r) => r.metadata[key] === value);
             }
         }
+        // RETR-005: offset skips leading candidates before limit. offset absent
+        // / 0 / negative ≡ no skip, so the existence-probe ({limit:1}) and
+        // fetch-all ({limit:100000}) call-sites are byte-for-byte unchanged.
+        // NOTE: this slices CANDIDATES in insertion order — it does NOT rank.
+        // Relevance ranking (BM25) is a layer above search() in the retrieval
+        // planner, which paginates AFTER ranking.
+        const offset = Math.max(0, query.offset ?? 0);
         if (query.limit) {
-            results = results.slice(0, query.limit);
+            results = results.slice(offset, offset + query.limit);
+        } else if (offset > 0) {
+            results = results.slice(offset);
         }
         return results;
     }

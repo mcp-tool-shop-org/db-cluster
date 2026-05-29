@@ -1252,10 +1252,11 @@ program
     .command('find <query>')
     .description('Find sources through the cluster index')
     .option('--limit <n>', 'Max results', '10')
-    .action(cliCommand(async (query: string, opts: { limit: string }) => {
+    .option('--offset <n>', 'Skip N results before limit (pagination)', '0')
+    .action(cliCommand(async (query: string, opts: { limit: string; offset: string }) => {
         const kernel = getKernel();
 
-        const result = await kernel.findSources({ query, limit: parseInt(opts.limit) });
+        const result = await kernel.findSources({ query, limit: parseInt(opts.limit), offset: parseInt(opts.offset) });
 
         console.log(`Found ${result.indexRecords.length} index record(s) for "${query}":`);
         for (const r of result.indexRecords) {
@@ -1699,9 +1700,10 @@ program
     .command('retrieve <query>')
     .description('Retrieve an evidence bundle (structured cluster retrieval)')
     .option('--limit <n>', 'Max index candidates', '20')
-    .action(cliCommand(async (query: string, opts: { limit: string }) => {
+    .option('--offset <n>', 'Skip N ranked results before limit (pagination)', '0')
+    .action(cliCommand(async (query: string, opts: { limit: string; offset: string }) => {
         const kernel = getKernel();
-        const bundle = await kernel.retrieveBundle(query, { limit: parseInt(opts.limit) });
+        const bundle = await kernel.retrieveBundle(query, { limit: parseInt(opts.limit), offset: parseInt(opts.offset) });
 
         console.log(`Evidence Bundle: ${bundle.id}`);
         console.log(`  query:     "${bundle.query}"`);

@@ -53,6 +53,20 @@ export interface ResolvedEvidence<T> {
     indexStale: boolean;
     /** Provenance event IDs that touch this object */
     provenanceEventIds: string[];
+    /**
+     * BM25 relevance score for this object against the query (RETR-001/004).
+     * Higher = more relevant; always ≥ 0. `resolvedEntities` and
+     * `resolvedArtifacts` are each ordered by this score, descending.
+     */
+    score: number;
+    /**
+     * Short content excerpt around the first query-term match (RETR-004).
+     * Populated ONLY for artifacts and ONLY via the integrity-checked
+     * `getContent` path (PROV-001): content that fails the hash check is never
+     * surfaced. `undefined` for entities, non-text artifacts, and any content
+     * that fails the integrity gate.
+     */
+    snippet?: string;
 }
 
 /**
