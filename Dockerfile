@@ -10,6 +10,14 @@ WORKDIR /app
 # we actually need at build time (`tsc`, `vitest`) doesn't rely on postinstall
 # side effects, and `@ast-grep/cli` itself is pruned by the `npm prune` below
 # before anything reaches the runtime stage.
+#
+# NOTE (sqlite backend): `better-sqlite3` is an OPTIONAL dependency with a
+# native binding, and `--ignore-scripts` skips its prebuilt-binary install — so
+# the sqlite backend is NOT available in this image by design. The default
+# local (JSON) and postgres backends need no native build and work as-is. To
+# build an image WITH the sqlite backend, install build-base/python3 and run
+# `npm rebuild better-sqlite3` (musl prebuilts permitting) in the build stage;
+# the lazy driver load means this image otherwise runs fine without it.
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 

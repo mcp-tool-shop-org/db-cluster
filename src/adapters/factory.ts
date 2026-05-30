@@ -18,9 +18,15 @@ import { Pool } from 'pg';
 import type { ClusterStores } from '../contracts/index.js';
 import { createLocalCluster } from './local/index.js';
 import { PostgresCanonicalStore } from './postgres/index.js';
+import { LocalCanonicalStore } from './local/local-canonical-store.js';
 import { LocalArtifactStore } from './local/local-artifact-store.js';
 import { LocalIndexStore } from './local/local-index-store.js';
 import { LocalLedgerStore } from './local/local-ledger-store.js';
+import { SqliteDb } from './sqlite/sqlite-db.js';
+import { SqliteCanonicalStore } from './sqlite/sqlite-canonical-store.js';
+import { SqliteArtifactStore } from './sqlite/sqlite-artifact-store.js';
+import { SqliteIndexStore } from './sqlite/sqlite-index-store.js';
+import { SqliteLedgerStore } from './sqlite/sqlite-ledger-store.js';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { PolicyEnforcedKernel } from '../kernel/policy-enforced-kernel.js';
@@ -70,10 +76,10 @@ export interface ClusterConfig {
     rootDir: string;
     /** Backend selection per store. Defaults to 'local' for all. */
     backends?: {
-        canonical?: 'local' | 'postgres';
-        artifact?: 'local';
-        index?: 'local';
-        ledger?: 'local';
+        canonical?: 'local' | 'postgres' | 'sqlite';
+        artifact?: 'local' | 'sqlite';
+        index?: 'local' | 'sqlite';
+        ledger?: 'local' | 'sqlite';
     };
     /** Postgres connection URL. Required when canonical backend is 'postgres'. */
     postgresUrl?: string;
@@ -83,6 +89,12 @@ export interface ClusterWithPool {
     stores: ClusterStores;
     /** Postgres pool — present when Postgres backend is used. Call pool.end() on shutdown. */
     pool?: Pool;
+    /**
+     * SQLite connection — present when ANY store uses the 'sqlite' backend. A
+     * single shared WAL connection backs every sqlite-selected store. Call
+     * `sqliteDb.close()` on shutdown (releases the file lock + checkpoints WAL).
+     */
+    sqliteDb?: SqliteDb;
 }
 
 /**
@@ -92,7 +104,37 @@ export interface ClusterWithPool {
  */
 export function createCluster(config: ClusterConfig): ClusterWithPool {
     const canonicalBackend = config.backends?.canonical ?? 'local';
+    const artifactBackend = config.backends?.artifact ?? 'local';
+    const indexBackend = config.backends?.index ?? 'local';
+    const ledgerBackend = config.backends?.ledger ?? 'local';
 
+    const anySqlite =
+        canonicalBackend === 'sqlite' ||
+        artifactBackend === 'sqlite' ||
+        indexBackend === 'sqlite' ||
+        ledgerBackend === 'sqlite';
+
+    // Unchanged default: every store local. Byte-for-byte the prior behavior —
+    // no sqlite connection, no postgres pool. Preserves the existing tests.
+    if (!anySqlite && canonicalBackend !== 'postgres') {
+        return { stores: createLocalCluster(config.rootDir) };
+    }
+
+    mkdirSync(config.rootDir, { recursive: true });
+
+    // A single shared SQLite connection (WAL) backs every sqlite-selected store.
+    // Opened once under <rootDir>/sqlite/cluster.db; lazily loads better-sqlite3
+    // and throws a typed SqliteDriverUnavailableError if the optional driver is
+    // absent. Local stays the default; sqlite is strictly opt-in. Never silently
+    // falls back.
+    const sqliteDb = anySqlite
+        ? SqliteDb.open(join(config.rootDir, 'sqlite', 'cluster.db'))
+        : undefined;
+
+    let pool: Pool | undefined;
+
+    // Canonical: postgres | sqlite | local. Never silently falls back to local.
+    let canonical: ClusterStores['canonical'];
     if (canonicalBackend === 'postgres') {
         if (!config.postgresUrl) {
             throw new Error(
@@ -100,28 +142,35 @@ export function createCluster(config: ClusterConfig): ClusterWithPool {
                 'Set postgresUrl in config or DB_CLUSTER_POSTGRES_URL environment variable.',
             );
         }
-
-        const pool = new Pool({ connectionString: config.postgresUrl });
+        pool = new Pool({ connectionString: config.postgresUrl });
         // EGRESS-001 / STORES-B-006: without an 'error' listener an idle-client
         // TCP drop crashes the process. Attach before any query can run.
         attachPoolErrorHandler(pool);
-        const canonical = new PostgresCanonicalStore(pool);
-
-        mkdirSync(config.rootDir, { recursive: true });
-
-        return {
-            stores: {
-                canonical,
-                artifact: new LocalArtifactStore(join(config.rootDir, 'artifact')),
-                index: new LocalIndexStore(join(config.rootDir, 'index')),
-                ledger: new LocalLedgerStore(join(config.rootDir, 'ledger')),
-            },
-            pool,
-        };
+        canonical = new PostgresCanonicalStore(pool);
+    } else if (canonicalBackend === 'sqlite') {
+        canonical = new SqliteCanonicalStore(sqliteDb!);
+    } else {
+        canonical = new LocalCanonicalStore(join(config.rootDir, 'canonical'));
     }
 
-    // Default: all local
-    return { stores: createLocalCluster(config.rootDir) };
+    const artifact =
+        artifactBackend === 'sqlite'
+            ? new SqliteArtifactStore(sqliteDb!)
+            : new LocalArtifactStore(join(config.rootDir, 'artifact'));
+    const index =
+        indexBackend === 'sqlite'
+            ? new SqliteIndexStore(sqliteDb!)
+            : new LocalIndexStore(join(config.rootDir, 'index'));
+    const ledger =
+        ledgerBackend === 'sqlite'
+            ? new SqliteLedgerStore(sqliteDb!)
+            : new LocalLedgerStore(join(config.rootDir, 'ledger'));
+
+    return {
+        stores: { canonical, artifact, index, ledger },
+        ...(pool ? { pool } : {}),
+        ...(sqliteDb ? { sqliteDb } : {}),
+    };
 }
 
 /**
@@ -139,7 +188,7 @@ export function createClusterFromEnv(rootDir: string): ClusterWithPool {
 
     return createCluster({
         rootDir,
-        backends: { canonical: canonicalBackend as 'local' | 'postgres' },
+        backends: { canonical: canonicalBackend as 'local' | 'postgres' | 'sqlite' },
         postgresUrl,
     });
 }
@@ -177,6 +226,13 @@ export interface SafeCluster {
      * NOT a truth-store handle.
      */
     pool?: Pool;
+    /**
+     * SQLite connection — present only when a SQLite backend is configured. Call
+     * `sqliteDb.close()` on shutdown. Exposed for lifecycle management only; it
+     * is NOT a truth-store handle (every read/write still flows through the
+     * kernel).
+     */
+    sqliteDb?: SqliteDb;
 }
 
 /**
@@ -240,7 +296,7 @@ const DEFAULT_SAFE_PRINCIPAL: Principal = {
  *   const health = await cluster.doctor();
  */
 export function createSafeCluster(config: SafeClusterConfig): SafeCluster {
-    const { stores, pool } = createCluster(config);
+    const { stores, pool, sqliteDb } = createCluster(config);
 
     const principal = config.principal ?? DEFAULT_SAFE_PRINCIPAL;
     const kernel = new PolicyEnforcedKernel(
@@ -283,5 +339,6 @@ export function createSafeCluster(config: SafeClusterConfig): SafeCluster {
         restore: (data: ClusterBackup, options?: RestoreOptions) =>
             restore(stores, data, { dataDir: config.rootDir, ...options }),
         ...(pool ? { pool } : {}),
+        ...(sqliteDb ? { sqliteDb } : {}),
     };
 }

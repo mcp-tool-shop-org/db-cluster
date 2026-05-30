@@ -79,6 +79,72 @@ Internal swarm-finding IDs (KERNEL-X-NNN, STORES-X-NNN, AGG-NNN) appear as **bac
 
 KERNEL-001 (root facade, S2-A1) · KERNEL-002 (MCP ai-facing default) · INJECT-001 (MCP write approval gate) · EGRESS-002 (config.json clusterDir containment).
 
+## Wave V3 — Opt-in SQLite storage backend (STORE-006/SQLite)
+
+A new **optional SQLite storage backend** for operators who want a single
+embedded database file with real concurrency and durability — without the
+operational weight of a Postgres server. It is **purely additive**: local
+remains the default backend, and nothing changes for callers who do not opt in.
+
+### User-visible changes
+
+- **A SQLite backend implementing ALL FOUR store contracts.** Unlike the
+  Postgres backend (canonical store only), SQLite backs canonical, artifact,
+  index, AND ledger — so a cluster can run entirely on one embedded file.
+  Behaviorally **identical to the local adapter**: same versioning on canonical
+  (`create()` stamps v1, `update()` appends v N+1, prior versions retained),
+  same content-addressed artifact store with the `getContent` byte-integrity
+  re-hash (PROV-001), same candidate `search()` on the index, and the same
+  append-only ledger carrying the `integrityHash` + `prevHash` tamper-evidence
+  chain. The kernel, SDK, MCP, and CLI cannot tell the backends apart.
+- **Cross-adapter verifiable integrity.** A ledger record this backend writes
+  hashes **identically** to one the local adapter writes for the same logical
+  record, because both route through the single source of truth
+  `computeIntegrityHash` (`src/types/integrity.ts`) over the same domain object.
+  A backup taken on one backend verifies on the other.
+- **WAL mode + transactions** for the concurrency and scale this backend
+  targets: a single shared WAL connection backs every SQLite-selected store
+  (one file, `<rootDir>/sqlite/cluster.db`), concurrent readers do not block the
+  single writer, and every atomic multi-row write (versioned `update`, atomic
+  index `replaceAll`, ledger `rotate`) runs inside one transaction.
+- **Decoupled retrieval, same as local.** `search()` returns candidates in
+  insertion order; BM25 relevance ranking is a layer **above** the store (the
+  retrieval planner, RETR-001) — there is deliberately no FTS5 ranking inside
+  the adapter, so the candidate set stays byte-identical to local.
+- **Opt-in via the `backends` config.** Set `backends.canonical` /
+  `backends.artifact` / `backends.index` / `backends.ledger` to `'sqlite'`
+  (per store, independently). When no store selects SQLite, the native driver is
+  never touched.
+
+### Breaking changes
+
+- **None.** Wave V3 is purely additive. `better-sqlite3` is declared in
+  `optionalDependencies` and **lazy-loaded** — the package root still imports
+  cleanly when the driver is absent (the fresh-install smoke test is unaffected).
+  Selecting the SQLite backend is the only thing that loads the driver; if it is
+  missing or its native binary fails to load, the cluster throws a clear typed
+  `SqliteDriverUnavailableError` (stable `code: 'SQLITE_DRIVER_UNAVAILABLE'`,
+  non-retryable, with an install/rebuild remediation hint) instead of failing
+  obscurely. Local remains the default backend.
+
+### Migration notes
+
+- **No caller-side migration required.** Existing clusters keep using local (or
+  Postgres for canonical) with no change. To adopt SQLite, install the optional
+  driver (`npm install better-sqlite3`) and set the relevant `backends.*` entries
+  to `'sqlite'`; a fresh `cluster.db` is created and migrated on first open.
+
+### Backlinks
+
+STORE-006/SQLite (opt-in SQLite backend — all four store contracts, WAL +
+transactions, lazy `optionalDependencies` driver, cross-adapter integrity via
+`computeIntegrityHash`). Completeness gate: the SQLite stores' integrity
+invariants are statically enforced by the existing R6 (getContent re-hash) and
+R8 (ledger integrity stamp) ast-grep rules (whose glob already covers
+`src/adapters/sqlite/**`); a new `scripts/checks/sqlite-sql-safety.mjs` scanner
+adds SQL-injection-safety enforcement (every SQL string parameterized) and is
+folded into `npm run completeness`.
+
 ## Wave S2-A1 — Protocol-v2 amend (security surface)
 
 ### Breaking changes

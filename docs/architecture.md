@@ -75,6 +75,7 @@ Stores have **logical contracts** and **physical backends**:
 Currently supported:
 - **Local** (JSON files) — all four stores
 - **Postgres** — canonical store only
+- **SQLite** (optional, via `better-sqlite3`) — all four stores. A single WAL-mode database file (`<rootDir>/sqlite/cluster.db`) backs every store through one shared connection. The driver is lazy-loaded — local stays the default and SQLite is strictly opt-in. Like every backend, it implements store law without becoming the product center: the choice is invisible to the kernel, SDK, MCP, and CLI.
 
 ## Layers
 
@@ -91,6 +92,8 @@ Canonical  Artifact  Index  Ledger
 (Postgres   (local)  (local) (local)
  or local)
 ```
+
+The per-store backend in parentheses is one example configuration. Each store's physical backend is chosen independently via the `backends` config — canonical can be Postgres while the rest are local, or all four can be SQLite. The lane the kernel talks to never changes; only what sits behind it does.
 
 ## Further reading
 

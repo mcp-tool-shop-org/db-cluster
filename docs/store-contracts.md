@@ -164,5 +164,6 @@ interface ClusterStores {
 |---------|-----------------|-------|
 | Local (JSON files) | All four | Default. No external dependencies. |
 | Postgres | Canonical only | Requires `DB_CLUSTER_POSTGRES_URL`. Stronger durability. |
+| SQLite (better-sqlite3) | All four | Optional. `better-sqlite3` is an [`optionalDependency`](https://docs.npmjs.com/cli/v10/configuring-npm/package-json#optionaldependencies), lazy-loaded — local stays the default; selecting this backend is the only thing that loads the native driver, and a missing driver yields a typed `SqliteDriverUnavailableError`. A single embedded WAL-mode database file under `<rootDir>/sqlite/cluster.db` (one shared connection, transactions for atomic multi-row writes). Opt in via the `backends` config. Like local, retrieval is decoupled: `search()` returns candidates and BM25 ranking rides above it (no FTS5 ranking inside the store). |
 
 The store contract is identical regardless of backend. The kernel, SDK, MCP, and CLI never know which backend is active unless explicitly queried via `stores list`.

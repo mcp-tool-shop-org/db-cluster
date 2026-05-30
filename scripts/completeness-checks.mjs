@@ -2,18 +2,34 @@
 /**
  * completeness-checks.mjs — mechanical completeness gates.
  *
- * Runs the 5 ast-grep rules in `scripts/checks/` against the source tree
- * and prints a summary table. Exit 0 iff every rule reports zero matches.
+ * Runs the ast-grep rules in `scripts/checks/` against the source tree, PLUS the
+ * standalone SQL-injection-safety scanner for the SQLite adapter, and prints one
+ * combined summary table. Exit 0 iff every ast-grep rule reports zero effective
+ * matches AND the sql-safety scanner finds zero unsafe interpolations.
  *
- * Rule index:
- *   R1 — kernel-underscore-access       (SURFACE-R001 regression net)
- *   R2 — index-clear-then-loop          (KERNEL-R2-003 regression net)
- *   R3 — raw-cluster-resolver-instantiation
- *   R4 — switch-on-resolved-store-incomplete   (case-completeness gate)
- *   R5 — optional-import-contract-method       (STORES-R2-002 regression net)
- *   R6 — content-read-without-hash-check       (PROV-001 regression net)
- *   R7 — update-mutation-without-previous      (PROV-002 lineage regression net)
- *   R8 — ledger-append-without-integrity-stamp (PROV-004 regression net)
+ * Rule index (ast-grep):
+ *   R1  — kernel-underscore-access        (SURFACE-R001 regression net)
+ *   R2  — index-clear-then-loop           (KERNEL-R2-003 regression net)
+ *   R3  — raw-cluster-resolver-instantiation
+ *   R4  — switch-on-resolved-store-incomplete   (case-completeness gate)
+ *   R5  — optional-import-contract-method        (STORES-R2-002 regression net)
+ *   R6  — content-read-without-hash-check        (PROV-001 regression net)
+ *   R7  — update-mutation-without-previous       (PROV-002 lineage regression net)
+ *   R8  — ledger-append-without-integrity-stamp  (PROV-004 regression net)
+ *   R9  — sdk-artifact-without-sanitize          (REDACT-001 regression net)
+ *   R10 — path-scrub-regex-outside-redactor      (REDACT-002 regression net)
+ *   R11 — snippet-without-integrity-read         (RETR-004/PROV-001 regression net)
+ *   R12 — retrieval-without-ranking              (RETR-001 regression net)
+ *   R13 — version-read-without-per-element-redaction (VERSIONS-001 regression net)
+ *
+ * Plus the additional non-ast-grep check, folded into the same verdict:
+ *   SQL — sqlite-sql-safety.mjs: every SQL string in `src/adapters/sqlite/**` is
+ *         parameterized; no value is interpolated/concatenated into SQL
+ *         (SQL-injection safety, Wave V3 / STORE-006). NOTE: the two ledger/
+ *         content INTEGRITY invariants for the sqlite stores are ALREADY gated
+ *         by R6 (getContent re-hash) and R8 (ledger integrity stamp), whose
+ *         `files:` glob covers `src/adapters/sqlite/**`. The SQL-safety scanner
+ *         is the non-redundant addition.
  *
  * R4 has a post-process step: ast-grep reports every switch on `*.store`,
  * then this script asserts that the matched text contains all 5 case
@@ -25,15 +41,18 @@
  *   node scripts/completeness-checks.mjs --json
  *
  * Exit codes:
- *   0 — every rule passes (0 effective matches)
- *   1 — at least one rule has effective matches
- *   2 — ast-grep itself errored (bad rule file, missing CLI, etc.)
+ *   0 — every ast-grep rule passes (0 effective matches) AND sql-safety clean
+ *   1 — at least one ast-grep rule has effective matches, OR sql-safety found
+ *       an unsafe interpolation
+ *   2 — a tool itself errored (bad ast-grep rule file, missing CLI, the
+ *       sql-safety scanner could not read the sqlite source / schema, etc.)
  */
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runSqlSafetyScan } from './checks/sqlite-sql-safety.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -109,6 +128,14 @@ const RULES = [
         label: 'policed listEntityVersions/listArtifactVersions without per-element evaluatePolicy redaction (VERSIONS-001)',
     },
 ];
+
+/**
+ * Table/verdict label for the non-ast-grep SQL-injection-safety scanner. Kept
+ * concise for the summary table; the full rationale (and why it is non-redundant
+ * with R6/R8) lives in `scripts/checks/sqlite-sql-safety.mjs`.
+ */
+const SQL_SAFETY_LABEL =
+    'sqlite SQL strings fully parameterized — no value interpolated/concatenated (SQL-injection safety; R6+R8 gate integrity)';
 
 /**
  * Drop matches whose body contains every required case label.
@@ -229,6 +256,17 @@ function main() {
         });
     }
 
+    // --- SQL-injection-safety scanner (non-ast-grep, folded into the verdict) ---
+    // A scan tool-error counts like an ast-grep tool failure (exit 2); a clean
+    // scan with violations counts like effective matches (exit 1). The integrity
+    // invariants for the sqlite stores are already gated by R6/R8 above — this
+    // adds the orthogonal SQL-injection-safety property.
+    const sql = runSqlSafetyScan();
+    const sqlToolError = !sql.ok;
+    const sqlViolationCount = sql.violations.length;
+    if (sqlToolError) toolFailure = true;
+    totalEffectiveMatches += sqlViolationCount;
+
     if (wantJson) {
         console.log(
             JSON.stringify(
@@ -247,6 +285,20 @@ function main() {
                             missingCases: m.missingCases,
                         })),
                     })),
+                    sqlSafety: {
+                        id: 'SQL',
+                        label: SQL_SAFETY_LABEL,
+                        toolError: sqlToolError,
+                        error: sql.error,
+                        statementsScanned: sql.statements,
+                        filesScanned: sql.filesScanned,
+                        violationCount: sqlViolationCount,
+                        violations: sql.violations.map((v) => ({
+                            location: `${v.file}:${v.line}:${v.column}`,
+                            snippet: v.snippet,
+                            reason: v.reason,
+                        })),
+                    },
                 },
                 null,
                 2,
@@ -266,6 +318,14 @@ function main() {
                   : 'FAIL  ';
             console.log(` ${r.id}  | ${raw} | ${eff} | ${status} | ${r.label}`);
         }
+        // SQL-safety row: "Raw" = statements scanned, "Eff" = violations, so the
+        // row reads consistently with the ast-grep rows (Eff is the fail count).
+        {
+            const raw = String(sql.statements).padStart(3);
+            const eff = String(sqlViolationCount).padStart(3);
+            const status = sqlToolError ? 'ERROR ' : sqlViolationCount === 0 ? 'PASS  ' : 'FAIL  ';
+            console.log(` SQL | ${raw} | ${eff} | ${status} | ${SQL_SAFETY_LABEL}`);
+        }
         console.log('');
         for (const r of results) {
             if (r.error) {
@@ -283,13 +343,34 @@ function main() {
                 }
             }
         }
+        // SQL-safety detail.
+        if (sqlToolError) {
+            console.error(`  [SQL] ERROR: ${sql.error}`);
+        } else if (sqlViolationCount > 0) {
+            console.log(
+                `  [SQL] ${sqlViolationCount} unsafe SQL interpolation(s) ` +
+                    `(bind the value with a \`?\` placeholder instead):`,
+            );
+            for (const v of sql.violations) {
+                console.log(`    - ${v.file}:${v.line}:${v.column}  \`${v.snippet}\``);
+            }
+        }
         console.log('');
+        const sqlSummary = sqlToolError
+            ? '(SQL-safety scan errored)'
+            : `+ SQL-safety clean (${sql.statements} statements scanned)`;
         if (toolFailure) {
-            console.log('VERDICT: ERROR — ast-grep tool failure (see above)');
+            console.log('VERDICT: ERROR — tool failure (see above)');
         } else if (totalEffectiveMatches === 0) {
-            console.log(`VERDICT: PASS — all ${RULES.length} rules report 0 effective matches`);
+            console.log(
+                `VERDICT: PASS — all ${RULES.length} ast-grep rules report 0 effective matches ` +
+                    sqlSummary,
+            );
         } else {
-            console.log(`VERDICT: FAIL — ${totalEffectiveMatches} effective match(es) across rules`);
+            console.log(
+                `VERDICT: FAIL — ${totalEffectiveMatches} effective issue(s) across ` +
+                    `${RULES.length} ast-grep rules + SQL-safety`,
+            );
         }
         console.log('');
     }
