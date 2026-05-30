@@ -148,6 +148,7 @@ Reference / Development phase history). Highlights:
 - [Quickstart](docs/quickstart.md) — 5-minute golden path
 - [Handbook](docs/handbook.md) — canonical operator + developer guide
 - [Architecture](docs/architecture.md) — federated truth model + the seven architecture laws
+- [Store contracts](docs/store-contracts.md) — what each of the four stores owns and guarantees
 - [Mutation law](docs/mutation-law.md) / [Provenance graphs](docs/provenance-graphs.md) — safe-write lifecycle and lineage tracing
 - [SDK](docs/sdk.md) / [CLI](docs/cli.md) / [MCP](docs/mcp.md) — surface references
 - [Policy and Redaction](docs/policy-and-redaction.md) — Principal, Capability, Policy, TrustZone
