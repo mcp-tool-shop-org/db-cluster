@@ -11,26 +11,29 @@
   <a href="https://www.npmjs.com/package/@mcptoolshop/db-cluster"><img src="https://img.shields.io/npm/v/@mcptoolshop%2Fdb-cluster.svg" alt="npm version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License: MIT" /></a>
   <a href="https://mcp-tool-shop-org.github.io/db-cluster/handbook/"><img src="https://img.shields.io/badge/handbook-online-blue.svg" alt="Handbook" /></a>
+  <a href="https://github.com/mcp-tool-shop-org/db-cluster/pkgs/container/db-cluster"><img src="https://img.shields.io/badge/ghcr.io-db--cluster-2496ED?logo=docker" alt="Docker image on GHCR" /></a>
 </p>
 
-**基于人工智能的联邦数据库集群。** 专门的、作为统一底层服务的存储系统，提供类型化的错误信息、结构化的退出码、变更记录，以及 MCP、SDK 和 CLI 接口。
+**原生 AI 联邦数据库集群。** 专门的“真相存储”，作为一个统一的底层系统协同工作——类型化的错误、结构化的退出代码、变更记录、MCP + SDK + CLI 接口。
 
-## 适用对象
+“联邦”意味着专门的“真相存储”，它们可以在不同的后端上运行；Postgres 后端目前仅适用于“规范存储”——工件、索引和账本存储运行在本地/SQLite 后端上。
 
-- **人工智能代理 (AI agents)**：需要可靠的数据检索、结构化的错误信息，以及不会导致其静默损坏状态的变更生命周期。
-- **运维人员 (Operators)**：运行图数据库和溯源存储，希望获得类型化的退出码、诊断信息、操作手册，以及安全的数据备份/恢复功能。
-- **开发人员 (Developers)**：构建集群支持的应用，希望拥有明确的公共 API、安装后的测试，以及每个方法的 JSDoc 文档和示例。
-- **仪表盘用户 (Dashboard viewers)**：审计集群中的数据，包括数据所有权、溯源信息、命令预览和数据脱敏视图。
+## 这适用于谁？
 
-## 为什么使用 db-cluster
+- **AI 代理**，它们需要可靠的检索、结构化的错误信息，以及一种不会让它们悄悄破坏状态的变更生命周期。
+- **操作员**，他们运行图 + 溯源存储，并希望使用类型化的退出代码、诊断/验证工具、操作手册以及安全的备份/恢复功能。
+- **开发人员**，他们构建基于集群的应用程序，并希望使用明确的公共 API、全新安装的测试、以及每个方法的 JSDoc + 示例。
+- **仪表板查看者**，他们审计集群的“真相”——存储所有权、溯源血统、命令预览、内容屏蔽视图。
 
-- **带有 `remediationHint` 的类型化错误信息**：每个 `ClusterError` 子类都提供“应该做什么”，而不仅仅是“发生了什么”（CLI 退出码 65/70/77/78 映射到类型化的错误码）。
-- **人工智能错误信息包 (AI error envelopes)**：包含 `{code, message, retryable, remediation_hint, context, next_valid_actions}` 模式；人工智能代理可以根据 `code` 和 `retryable` 进行分支处理，而无需解析文本。
-- **每个变更都有记录**：内容寻址；溯源图；索引存储可以从原始数据重建。
-- **带有安全注解的 MCP 服务器**：只读/分阶段/审批/写入工具，每个工具都带有可供机器读取的 `readOnlyHint` / `destructiveHint` 标志。
-- **带有策略执行的 SDK**：`PolicyEnforcedKernel` 是唯一的访问路径；`ClusterKernel` 故意不公开。
+## 为什么使用 db-cluster？
 
-## 快速入门（3 步）
+- **带有 `remediationHint` 的类型化错误**——每个 `ClusterError` 子类都会回答“应该怎么做”，而不仅仅是“哪里出错”（CLI 退出代码 65/70/77/78 映射到类型化错误代码）。
+- **AI 错误信息**——`{code, message, retryable, remediation_hint, context, next_valid_actions}` 模式；AI 代理可以根据 `code` 和 `retryable` 进行分支，而无需解析文本。
+- **每次变更都有记录**——内容寻址；溯源图；从索引存储重建的契约。
+- **带有安全注释的 MCP 服务器**——只读 / 暂存 / 审批 / 写入工具，每个工具都带有机器可读的 `readOnlyHint` / `destructiveHint` 标志。服务器默认设置为“面向 AI”的信任区域（内容屏蔽开启，不显示原始内容），并且 MCP 写入工具在命令获得“批准”之前拒绝提交。
+- **默认强制执行策略**——包根工厂 `createSafeCluster()` 返回一个受策略控制的句柄（一个 `PolicyEnforcedKernel` + 只读操作，没有原始存储修改器）。只有通过显式的 `@mcptoolshop/db-cluster/unsafe` 逃生通道才能访问原始的、不受策略控制的存储。
+
+## 快速入门（3 个步骤）
 
 ```bash
 npx @mcptoolshop/db-cluster init                # 1. initialize .db-cluster/
@@ -38,51 +41,51 @@ npx @mcptoolshop/db-cluster ingest ./file.md    # 2. ingest an artifact
 npx @mcptoolshop/db-cluster retrieve "query"    # 3. retrieve an evidence bundle
 ```
 
-或者，全局安装并直接使用 `db-cluster` 和 `db-cluster-mcp` 命令：
+或者全局安装 + 直接使用 `db-cluster` 和 `db-cluster-mcp` 二进制文件：
 
 ```bash
 npm install -g @mcptoolshop/db-cluster
 db-cluster init
 ```
 
-或者，通过 Docker 运行（无需安装 Node）：
+或者通过 Docker 运行（无需安装 Node）：
 
 ```bash
 docker run --rm -v "$PWD:/workspace" ghcr.io/mcp-tool-shop-org/db-cluster:latest init
 ```
 
-完整流程：[docs/quickstart.md](docs/quickstart.md) (5 分钟)。
+完整的完整路径：[`docs/quickstart.md`](docs/quickstart.md)（5 分钟）。
 
-## 这是什么
+## 这是什么？
 
-这是一个联邦数据库集群，包含：
+一个联邦数据库集群，其中：
 
-- **主存储 (Canonical store)**：实体、ID、稳定状态记录。
-- **文件存储 (Artifact store)**：原始文件、文档、源代码、生成输出。
-- **索引存储 (Index store)**：可发现性、全文/向量搜索、元数据搜索。
-- **事件/溯源记录 (Event/provenance ledger)**：操作、链接、变更、记录、溯源信息。
+- **规范存储**——实体、ID、稳定状态记录
+- **工件存储**——原始文件、文档、源代码、生成的输出
+- **索引存储**——可发现性、全文（排序）查找、元数据搜索
+- **事件/溯源账本**——操作、链接、变更、记录、血统
 
-核心路由；索引发现；集群拥有数据真值。
+内核进行路由。索引进行发现。集群拥有真相。
 
-## 这不是什么
+## 这不是什么？
 
-- 人工智能数据库助手
-- 多个存储的索引
+- AI 数据库助手
+- 跨多个存储的索引
 - 治理中间件
-- 带插件的向量数据库
+- 带有插件的向量数据库
 - 代理内存层
 
-## 架构原则
+## 架构规则
 
-1. 每个数据都有其所有者存储。
-2. 索引是衍生数据，可以被删除并从所有者存储中重建。
-3. 人工智能不会直接修改原始数据。
-4. 每个答案都可追溯到原始数据来源。
-5. 每个变更都经过类型化的命令边界。
-6. 文件数据的真值默认是不可变的，修改会创建版本，而不是覆盖。
-7. 核心路由；集群拥有。
+1. 每个事实都有一个所有者存储
+2. 索引是派生的——可以删除并从所有者存储重建
+3. AI 绝不会直接修改原始状态
+4. 每个答案都可追溯到原始真相
+5. 每个变更都跨越一个类型化的命令边界
+6. 工件真相默认是不可变的——更正会创建版本，而不是覆盖
+7. 内核进行路由；集群拥有
 
-## 命令行工具 (CLI)
+## CLI
 
 ```bash
 db-cluster init
@@ -100,65 +103,36 @@ db-cluster commit ...
 db-cluster receipts
 ```
 
-请参阅 [docs/cli.md](docs/cli.md)，了解完整的 CLI 参考（包括类型化的错误退出码表）。
-
-## 状态
-
-**v1.0.0 — 已发布。** db-cluster 经过审计加固，适用于整个内部测试环境。
-协议：A 阶段（正确性，A1–A4 阶段），B 阶段（主动健康，B1-Amend 阶段），C 阶段（人性化，C1-Amend 阶段）。
-**1247+ 个测试通过**，所有 83 个文件均通过，发布门禁 9/9 通过，代码风格检查通过。
-
-### v1.0.0 版本包含的内容
-
-- **联邦真值模型** — 规范、数据制品、索引、账本存储；核心组件负责路由，集群负责管理；索引是衍生数据。
-- **带有 `remediationHint` 的类型错误** — `ClusterError` 作为基础类，并为每个子类提供特定的错误处理；CLI 命令映射到 `sysexits.h` (65/70/77/78)；`AiErrorEnvelope` 出现在每个 AI 边界。
-- **变更生命周期** — 提案 → 验证 → 批准 → 提交 → (补偿)。 每次提交都会生成一个内容寻址的凭证。
-- **MCP 服务器** — 16 个工具，带有安全注解 (`readOnlyHint` / `destructiveHint` / `requiresApprovalHint`)；结构化的错误结果，不包含原始堆栈信息。
-- **策略与数据脱敏** — `PolicyEnforcedKernel` 是唯一导出的内核入口；`Principal`、`Capability`、`Policy`、`TrustZone`、`VisibilityRule` 等类型；在所有读取路径上进行数据脱敏。
-- **操作界面** — `doctor`、`verify`、`rebuild index`（重建索引）、`backup`（备份）、`restore`（恢复）、`compensate`（补偿）、`migration-status`（迁移状态）。 具有破坏性的命令需要 `--yes` 参数，并进行交互式 TTY 确认。
-- **仪表盘演示** — 仅供查看的 React 仪表盘，用于显示集群的真值数据 (`dashboard/`)，使用 `ComponentState<T>` 和 `StateBoundary` HOC 来处理加载、空状态和错误状态。
-- **发布流程** — 由 `scripts/release-gate.mjs` 脚本强制执行 9 个阶段：构建、测试、打包、快速安装、文档检查、包导出、完整性检查、文档一致性检查、JSDoc 完整性检查。
-
-### v1.x 版本的跟踪残留问题
-
-- `V2-C1-009` — 目前，长时间运行的 MCP 操作（doctor/verify/rebuild/backup/restore）以单次操作工具的形式呈现；细粒度的进度流式传输已记录，但未包含在 v1.0.0 版本中。 详情请参阅 [`docs/release-readiness.md`](docs/release-readiness.md)。
-- `KERNEL-C-012` — OperatorSignal 跨域通道是 v1.1+ 版本的架构扩展。
-- Stryker 变异测试已集成 (`npm run test:mutation`)，但处于实验阶段，不包含在 v2 的正式发布流程中，具体请参考 v2 dogfood-swarm verifier-3 的相关文档。
-
-### Dogfood-swarm 的历史
-
-阶段 A (正确性，Waves A1–A4) → 阶段 B (主动健康检查，Wave B1-Amend) → 阶段 C (人性化，Wave C1-Amend) → **阶段 D 融入到阶段 10 的全面改进** (包括 logo、着陆页、手册、以及 CLI 命令的颜色优化)。 没有发布过阶段 D 的 swarm wave。 完整的变更记录请参阅 [`CHANGELOG.md`](CHANGELOG.md) 以及仓库根目录下的 `swarm-stage-*-*.md` 报告。
+有关完整的 CLI 参考（包括类型化错误退出代码表），请参见 [`docs/cli.md`](docs/cli.md)。
 
 ## 先决条件
 
-- Node.js 20+ (通过 `package.json` 中的 `engines.node` 强制)
+- Node.js 20+（通过 `package.json` 中的 `engines.node` 强制执行）
 - npm
 
 ## 信任模型
 
-`db-cluster` 运行在 **本地**。 它会在您指定的
-工作目录下的 `.db-cluster/` 目录中读取和写入数据，并读取传递给 `ingest` 命令的数据制品。
-默认情况下，**没有网络出站连接**，**也没有任何遥测数据**。 唯一的
-可选出站连接是连接到 PostgreSQL 服务器，前提是您设置了
-`DB_CLUSTER_POSTGRES_URL` (同时需要设置 `DB_CLUSTER_POSTGRES_SSL` 以启用 SSL)。
+db-cluster 在**本地**运行。它读取 + 写入您指向的目录中的 `.db-cluster/` 目录，并读取您传递给 `ingest` 的工件。默认情况下，**没有网络出口**，并且**没有遥测数据**。唯一的可选外部连接是到 Postgres 主机，如果您设置了 `DB_CLUSTER_POSTGRES_URL`。**db-cluster 在 v1.0.0 中不会为该连接配置 SSL/TLS**——除非您的连接字符串强制执行（例如 `sslmode=require`，`pg` 驱动程序会遵守），或者使用 TLS 终止代理，或者使用专用网络，否则传输是纯文本。驱动程序管理的 TLS 配置计划用于未来的版本。
 
-MCP 服务器工具只读取和写入本地存储，它们不会访问网络，并且结构化的 `AiErrorEnvelope` 响应不会泄露堆栈跟踪或文件系统路径。 具有破坏性的 CLI 命令（`restore`、`rebuild index`、`compensate`、`backup --force-overwrite`）需要显式的 `--yes` 参数，并且需要在 TTY 上进行交互式确认。
+MCP 服务器工具仅读取 + 写入本地存储——它们永远不会到达网络，并且结构化的 `AiErrorEnvelope` 响应绝不会泄露堆栈跟踪或文件系统路径。**MCP 服务器默认设置为“面向 AI”的信任区域，内容屏蔽已开启：**工件内容和敏感实体属性默认在边界处被删除，并且没有 MCP 工具会返回原始工件字节。需要特权（“内部”/“集群管理员”）权限的操作员必须通过环境变量显式选择加入（暂定为 `DB_CLUSTER_MCP_ALLOW_PRIVILEGED`；参见 [`docs/mcp.md`](docs/mcp.md)）。**MCP 写入工具强制执行批准：**`cluster_commit_mutation` 和 `cluster_compensate_mutation` 除非命令处于“已批准”状态，否则拒绝写入——调用者必须首先调用 `cluster_approve_mutation`，并且拒绝将是一个结构化的 `AiErrorEnvelope`，而不是部分写入。（受信任的进程内 SDK 调用不受影响——此网关仅适用于 MCP 表面。）破坏性 CLI 命令（`restore`、`rebuild index`、`compensate`、`backup --force-overwrite`）需要显式的 `--yes` 标志，以及在 TTY 上的交互式确认。
 
-完整的威胁模型，包括涉及的数据、未涉及的数据、所需的权限、各个方面的安全态势以及跟踪的残留问题，都记录在
-[`SECURITY.md`](SECURITY.md) 中。
+完整的威胁模型——涉及的数据、未涉及的数据、所需的权限、每个表面的姿态以及跟踪的残留物——位于 [`SECURITY.md`](SECURITY.md)。
 
 ## 文档
 
-请参阅 [`docs/README.md`](docs/README.md)，以获取完整的文档目录（从这里开始 / 参考 / 开发历史）。 重点包括：
+请参阅 [`docs/README.md`](docs/README.md) 以获取完整的文档地图（从这里开始/参考/开发阶段历史）。重点内容：
 
-- [快速入门](docs/quickstart.md) — 5分钟快速上手指南
-- [手册](docs/handbook.md) — 官方操作指南 + 开发者指南
-- [SDK](docs/sdk.md) / [命令行工具](docs/cli.md) / [MCP](docs/mcp.md) — 接口参考
-- [策略与编辑](docs/policy-and-redaction.md) — 核心概念，能力，策略，安全区域
-- [操作](docs/operations.md) — 诊断，验证，重新构建，备份，恢复
-- [操作手册](docs/runbooks/README.md) — 每个错误类型对应一个操作手册
-- [发布准备](docs/release-readiness.md) — 发布流程 + 已知问题和常见错误
+- [快速入门](docs/quickstart.md) — 5 分钟快速上手指南
+- [手册](docs/handbook.md) — 标准操作指南 + 开发者指南
+- [架构](docs/architecture.md) — 联邦式真值模型 + 七大架构原则
+- [存储合约](docs/store-contracts.md) — 每个存储单元所拥有的内容和保证
+- [变更法则](docs/mutation-law.md) / [溯源图](docs/provenance-graphs.md) — 安全写入生命周期和溯源跟踪
+- [SDK](docs/sdk.md) / [CLI](docs/cli.md) / [MCP](docs/mcp.md) — 表面参考
+- [策略和审查](docs/policy-and-redaction.md) — 主体、能力、策略、TrustZone
+- [操作](docs/operations.md) — 诊断、验证、重建、备份、恢复
+- [操作手册](docs/runbooks/README.md) — 每种类型的错误都有一个操作手册
+- [发布准备](docs/release-readiness.md) — 发布流程 + 已知的潜在问题
 
-## 许可证
+## 许可
 
 MIT

@@ -11,26 +11,29 @@
   <a href="https://www.npmjs.com/package/@mcptoolshop/db-cluster"><img src="https://img.shields.io/npm/v/@mcptoolshop%2Fdb-cluster.svg" alt="npm version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License: MIT" /></a>
   <a href="https://mcp-tool-shop-org.github.io/db-cluster/handbook/"><img src="https://img.shields.io/badge/handbook-online-blue.svg" alt="Handbook" /></a>
+  <a href="https://github.com/mcp-tool-shop-org/db-cluster/pkgs/container/db-cluster"><img src="https://img.shields.io/badge/ghcr.io-db--cluster-2496ED?logo=docker" alt="Docker image on GHCR" /></a>
 </p>
 
-**Clúster de base de datos federado nativo de IA.** Almacenes de datos especializados que funcionan como una única plataforma gestionada, con errores tipados, códigos de salida estructurados, recibos de mutaciones, API, SDK y CLI.
+**Clúster de base de datos federada nativo de IA.** Almacenes de datos especializados que funcionan como un sustrato gobernado único: errores tipados, códigos de salida estructurados, recibos de mutación, MCP + SDK + interfaces CLI.
+
+"Federada" significa almacenes de datos especializados que pueden ejecutarse en diferentes entornos; el entorno de Postgres se aplica actualmente solo al **almacén canónico**: los almacenes de artefactos, índices y registros se ejecutan en los entornos locales/SQLite.
 
 ## ¿Para quién es esto?
 
-- **Agentes de IA** que necesitan una recuperación confiable, envoltorios de errores estructurados y un ciclo de vida de mutación que no permita la corrupción silenciosa del estado.
-- **Administradores** que utilizan almacenes de grafos y de trazabilidad y que desean códigos de salida tipados, diagnósticos de verificación, libros de procedimientos y copias de seguridad/restauraciones seguras.
-- **Desarrolladores** que crean aplicaciones basadas en clústeres y que desean una API pública bien definida, pruebas de inicio rápidas y documentación JSDoc con ejemplos para cada método.
-- **Usuarios de paneles de control** que auditan la integridad del clúster: propiedad del almacén, trazabilidad, vista previa de comandos y vista de enmascaramiento.
+- **Agentes de IA** que necesitan una recuperación fiable, envolventes de errores estructurados y un ciclo de vida de mutación que no les permita corromper el estado de forma silenciosa.
+- **Operadores** que ejecutan almacenes de gráficos y procedencia y que desean códigos de salida tipados, diagnósticos de verificación, manuales de procedimientos y copias de seguridad/restauraciones seguras.
+- **Desarrolladores** que crean aplicaciones basadas en clústeres y que desean una API pública deliberada, pruebas de instalación inicial y JSDoc + ejemplos por método.
+- **Usuarios de paneles de control** que auditan la información del clúster: propiedad del almacén, linaje de procedencia, vista previa de comandos, vista de ocultación.
 
 ## ¿Por qué usar db-cluster?
 
-- **Errores tipados con `remediationHint`** — cada subclase de `ClusterError` indica QUÉ HACER, no solo QUÉ falló (códigos de salida de la CLI 65/70/77/78 mapeados a códigos de error tipados).
-- **Envoltorios de errores de IA** — esquema `{code, message, retryable, remediation_hint, context, next_valid_actions}`; los agentes de IA pueden bifurcarse según `code` y `retryable` en lugar de analizar texto.
-- **Recibos para cada mutación** — direccionables por contenido; grafo de trazabilidad; contrato de reconstrucción a partir de la verdad en el almacén de índices.
-- **Servidor MCP con anotaciones de seguridad** — las herramientas de solo lectura / en fases / aprobación / escritura incluyen las banderas de máquina legibles `readOnlyHint` / `destructiveHint`.
-- **SDK con aplicación de políticas** — `PolicyEnforcedKernel` es la única vía; `ClusterKernel` no se exporta intencionalmente.
+- **Errores tipados con `remediationHint`** (sugerencia de remediación): cada subclase de `ClusterError` responde a QUÉ HACER, no solo a QUÉ falló (códigos de salida de la CLI 65/70/77/78 asignados a códigos de error tipados).
+- **Envolventes de errores de IA**: esquema `{code, message, retryable, remediation_hint, context, next_valid_actions}`; los agentes de IA pueden ramificarse en función de `code` y `retryable` en lugar de analizar texto.
+- **Recibos en cada mutación**: direccionables por contenido; grafo de procedencia; contrato de reconstrucción a partir de la información del almacén de índices.
+- **Servidor MCP con anotaciones de seguridad**: las herramientas de solo lectura / por etapas / aprobación / escritura tienen cada una indicadores `readOnlyHint` / `destructiveHint` legibles por máquina. El servidor tiene como valor predeterminado la zona de confianza `ai-facing` (ocultación ACTIVADA), y las herramientas de escritura de MCP se niegan a confirmar hasta que el comando esté `aprobado`.
+- **Política aplicada por defecto**: la fábrica de raíz del paquete `createSafeCluster()` devuelve un controlador con políticas aplicadas (un `PolicyEnforcedKernel` + operaciones de solo lectura, sin modificadores de almacén sin procesar). Los almacenes sin procesar y sin políticas son accesibles solo a través de la vía de escape explícita `@mcptoolshop/db-cluster/unsafe`.
 
-## Comienzo rápido (3 pasos)
+## Guía de inicio rápido (3 pasos)
 
 ```bash
 npx @mcptoolshop/db-cluster init                # 1. initialize .db-cluster/
@@ -38,49 +41,49 @@ npx @mcptoolshop/db-cluster ingest ./file.md    # 2. ingest an artifact
 npx @mcptoolshop/db-cluster retrieve "query"    # 3. retrieve an evidence bundle
 ```
 
-O instale globalmente y use directamente los binarios `db-cluster` y `db-cluster-mcp`:
+O instale globalmente y use los archivos binarios `db-cluster` y `db-cluster-mcp` directamente:
 
 ```bash
 npm install -g @mcptoolshop/db-cluster
 db-cluster init
 ```
 
-O ejecute a través de Docker (no se requiere instalación de Node):
+O ejecute a través de Docker (no se requiere la instalación de Node):
 
 ```bash
 docker run --rm -v "$PWD:/workspace" ghcr.io/mcp-tool-shop-org/db-cluster:latest init
 ```
 
-Ruta completa: [`docs/quickstart.md`](docs/quickstart.md) (5 minutos).
+Ruta completa óptima: [`docs/quickstart.md`](docs/quickstart.md) (5 minutos).
 
 ## ¿Qué es esto?
 
-Un clúster de base de datos federado donde:
+Un clúster de base de datos federada donde:
 
-- **Almacén canónico** — entidades, ID, registros de estado estable.
-- **Almacén de artefactos** — archivos sin procesar, documentos, texto fuente, resultados generados.
-- **Almacén de índices** — capacidad de descubrimiento, búsqueda de texto completo/vectorial, búsqueda de metadatos.
-- **Registro de eventos/trazabilidad** — acciones, enlaces, mutaciones, recibos, trazabilidad.
+- **Almacén canónico**: entidades, ID, registros de estado estables
+- **Almacén de artefactos**: archivos sin procesar, documentos, texto fuente, salidas generadas
+- **Almacén de índices**: capacidad de descubrimiento, búsqueda de texto completo (clasificada), búsqueda de metadatos
+- **Registro de eventos/procedencia**: acciones, enlaces, mutaciones, recibos, linaje
 
-El kernel enruta. El índice descubre. El clúster posee la verdad.
+El núcleo enruta. El índice descubre. El clúster posee la información.
 
 ## ¿Qué no es esto?
 
-- Un asistente de base de datos de IA.
-- Un índice sobre muchos almacenes.
-- Middleware de gobernanza.
-- Una base de datos vectorial con complementos.
-- Una capa de memoria para agentes.
+- Un asistente de base de datos de IA
+- Un índice sobre muchos almacenes
+- Middleware de gobernanza
+- Una base de datos vectorial con complementos
+- Una capa de memoria de agente
 
 ## Leyes de la arquitectura
 
 1. Cada hecho tiene un almacén propietario.
-2. Los índices son derivados; se pueden eliminar y reconstruir a partir de los almacenes propietarios.
-3. La IA nunca muta el estado sin procesar directamente.
-4. Cada respuesta se remonta a la fuente de la verdad.
-5. Cada mutación cruza un límite de comando tipado.
-6. La verdad de los artefactos es inmutable de forma predeterminada; las correcciones crean versiones, no sobrescrituras.
-7. El kernel enruta; el clúster es el propietario.
+2. Los índices son derivados: se pueden eliminar y reconstruir a partir de los almacenes propietarios.
+3. La IA nunca modifica directamente el estado sin procesar.
+4. Cada respuesta se remonta a la fuente de información.
+5. Cada mutación cruza una frontera de comando tipada.
+6. La información de los artefactos es inmutable por defecto: las correcciones crean versiones, no sobrescriben.
+7. El núcleo enruta; el clúster posee.
 
 ## CLI
 
@@ -100,72 +103,57 @@ db-cluster commit ...
 db-cluster receipts
 ```
 
-Consulte [`docs/cli.md`](docs/cli.md) para obtener la referencia completa de la CLI (incluida la tabla de códigos de salida de errores tipados).
-
-## Estado
-
-**v1.0.0 — disponible.** db-cluster está endurecido contra auditorías en todo el entorno de pruebas internas.
-Protocolo — Etapa A (corrección, Olas A1–A4), Etapa B (salud proactiva,
-Ola B1-Amend) y Etapa C (humanización, Ola C1-Amend).
-**1247+ pruebas que pasan** de forma determinista en 83 archivos, puerta de lanzamiento 9/9
-PASADA, limpieza de lint.
-
-### ¿Qué hay en v1.0.0?
-
-- **Modelo de verdad federado** — almacenes canónicos, artefactos, índices y registros; el kernel gestiona las rutas, el clúster es el propietario; el índice es derivado.
-- **Errores con información de corrección (`remediationHint`) en todas partes** — clase base `ClusterError` y subclases específicas para cada clase; la CLI se mapea a sysexits.h (65/70/77/78); `AiErrorEnvelope` en cada límite de la IA.
-- **Ciclo de vida de la mutación** — proponer → validar → aprobar → confirmar → (compensar). Cada confirmación genera un recibo con una dirección de contenido.
-- **Servidor MCP** — 16 herramientas con anotaciones de seguridad (`readOnlyHint` / `destructiveHint` / `requiresApprovalHint`); resultados de errores estructurados, nunca trazas de pila sin formato.
-- **Políticas y enmascaramiento** — `PolicyEnforcedKernel` es la única entrada de kernel exportada; tipos `Principal`, `Capability`, `Policy`, `TrustZone` y `VisibilityRule`; enmascaramiento en cada ruta de lectura.
-- **Interfaz del operador** — `doctor`, `verify`, `reconstruir índice`, `copia de seguridad`, `restaurar`, `compensar`, `estado de migración`. Los comandos destructivos requieren la opción `--yes` y una confirmación interactiva en la terminal.
-- **Demostración del panel de control** — panel de control de React solo para visualización del estado del clúster (`dashboard/`), con `ComponentState<T>` y `StateBoundary` HOC para los estados de carga, vacío y error.
-- **Puerta de lanzamiento** — 9 etapas impuestas por `scripts/release-gate.mjs`: compilación, pruebas, empaquetado, instalación de prueba, detección de cambios en la documentación, exportación de paquetes, integridad, detección de cambios en la documentación y integridad de la documentación JSDoc.
-
-### Residuos rastreados para v1.x
-
-- `V2-C1-009` — Las operaciones MCP de larga duración (doctor/verify/rebuild/backup/restore) actualmente se presentan como herramientas de ejecución única; el streaming granular de progreso está documentado pero no está disponible en v1.0.0. Consulte [`docs/release-readiness.md`](docs/release-readiness.md).
-- `KERNEL-C-012` — El canal `OperatorSignal` entre dominios es una extensión arquitectónica de v1.1+.
-- Las pruebas de mutación de Stryker se incluyen (`npm run test:mutation`), pero son experimentales y no están incluidas en la puerta de lanzamiento estándar, según la doctrina del verificador-3 de la colmena de pruebas de v2.
-
-### Historial de la colmena de pruebas
-
-Etapa A (corrección, Olas A1–A4) → Etapa B (salud proactiva, Ola B1-Amend) → Etapa C (humanización, Ola C1-Amend) → **La Etapa D se integra en la Fase 10 de Tratamiento Completo** (logotipo, página de inicio, manual, pulido de la CLI en línea). No se ha enviado ninguna ola de la colmena de la Etapa D. El registro completo está disponible en [`CHANGELOG.md`](CHANGELOG.md) y en los informes `swarm-stage-*-*.md` en la raíz del repositorio.
+Consulte [`docs/cli.md`](docs/cli.md) para obtener la referencia completa de la CLI (incluida la tabla de códigos de salida tipados).
 
 ## Requisitos previos
 
-- Node.js 20+ (obligatorio mediante `engines.node` en `package.json`)
+- Node.js 20+ (aplicado a través de `engines.node` en `package.json`)
 - npm
 
 ## Modelo de confianza
 
-`db-cluster` se ejecuta **localmente**. Lee y escribe en un directorio `.db-cluster/` en el
-directorio de trabajo al que lo dirija y lee los artefactos que pasa a `ingest`.
-**No hay conexiones de red salientes** de forma predeterminada y **no hay telemetría**. La única
-conexión de salida opcional es a un host de Postgres si establece
-`DB_CLUSTER_POSTGRES_URL` (y se respeta `DB_CLUSTER_POSTGRES_SSL`).
+db-cluster se ejecuta **localmente**. Lee y escribe un directorio `.db-cluster/` en el
+directorio de trabajo al que lo apunte y lee los artefactos que le pase a `ingest`.
+Por defecto, **no hay salida de red** y **no hay telemetría**. La única
+conexión saliente opcional es a un host de Postgres si establece
+`DB_CLUSTER_POSTGRES_URL`. **db-cluster no configura SSL/TLS para esa
+conexión en v1.0.0**: el transporte es texto sin formato a menos que su cadena de conexión lo imponga (por ejemplo, `sslmode=require`, que el controlador `pg` respeta), un proxy de terminación TLS o una red privada. La configuración de TLS administrada por el controlador se
+planifica para una versión futura.
 
-Las herramientas del servidor MCP solo leen y escriben en los almacenes locales; nunca acceden a la
-red, y las respuestas estructuradas `AiErrorEnvelope` nunca filtran trazas de pila ni
-rutas del sistema de archivos. Los comandos de la CLI destructivos (`restaurar`, `reconstruir índice`,
-`compensar`, `copia de seguridad --force-overwrite`) requieren una opción `--yes` explícita y
-una confirmación interactiva en la terminal.
+Las herramientas del servidor MCP leen y escriben solo en los almacenes locales; nunca llegan a la
+red, y las respuestas estructuradas `AiErrorEnvelope` nunca filtran rastreos de pila ni
+rutas de archivos. **El servidor MCP tiene como valor predeterminado la zona de confianza `ai-facing` con
+ocultación ACTIVADA**: el contenido de los artefactos y los atributos de entidad confidenciales se eliminan
+en la frontera por defecto, y ninguna herramienta de MCP devuelve bytes de artefacto sin procesar. Un operador
+que necesita la postura privilegiada (`internal` / `cluster-admin`) debe optar explícitamente
+a través de una marca de entorno (provisionalmente `DB_CLUSTER_MCP_ALLOW_PRIVILEGED`;
+consulte [`docs/mcp.md`](docs/mcp.md)). **Las herramientas de escritura de MCP aplican la aprobación**:
+`cluster_commit_mutation` y `cluster_compensate_mutation` se niegan a escribir
+a menos que el comando esté en estado `aprobado`; el llamador primero debe llamar
+a `cluster_approve_mutation`, y el rechazo es un `AiErrorEnvelope` estructurado,
+no una escritura parcial. (Los llamadores de SDK en proceso de confianza no se ven afectados; esta puerta de enlace
+es solo para la superficie de MCP). Los comandos de CLI destructivos (`restore`, `rebuild index`,
+`compensate`, `backup --force-overwrite`) requieren una marca `--yes` explícita más
+una confirmación interactiva en TTY.
 
-El modelo de amenazas completo, que incluye los datos que se tocan, los datos que NO se tocan, los permisos requeridos,
-la postura de cada componente y los residuos rastreados, se encuentra en
+El modelo de amenazas completo: datos tocados, datos NO tocados, permisos requeridos,
+postura por superficie y residuos rastreados, se encuentra en
 [`SECURITY.md`](SECURITY.md).
 
 ## Documentación
 
-Consulte [`docs/README.md`](docs/README.md) para obtener el mapa de documentación completo (Comience aquí /
-Referencia / Historial de la fase de desarrollo). Destacados:
+Consulte [`docs/README.md`](docs/README.md) para ver el mapa completo de la documentación (comience aquí / referencia / historial de la fase de desarrollo). Aspectos destacados:
 
-- [Guía de inicio rápido](docs/quickstart.md) — Una forma rápida de empezar (5 minutos).
-- [Manual](docs/handbook.md) — Guía para operadores y desarrolladores.
-- [SDK](docs/sdk.md) / [CLI](docs/cli.md) / [MCP](docs/mcp.md) — Referencias básicas.
-- [Políticas y eliminación de datos](docs/policy-and-redaction.md) — Principales características: capacidad, política, TrustZone.
-- [Operaciones](docs/operations.md) — Funciones: diagnóstico, verificación, reconstrucción, copia de seguridad, restauración.
-- [Manuales de operación](docs/runbooks/README.md) — Un manual por cada tipo de error.
-- [Preparación para el lanzamiento](docs/release-readiness.md) — Proceso de lanzamiento y patrones de errores conocidos.
+- [Guía de inicio rápido](docs/quickstart.md): la guía esencial en 5 minutos.
+- [Manual](docs/handbook.md): guía completa para operadores y desarrolladores.
+- [Arquitectura](docs/architecture.md): modelo de verdad federada y las siete leyes de la arquitectura.
+- [Contratos de almacenamiento](docs/store-contracts.md): qué posee y garantiza cada uno de los cuatro almacenes.
+- [Ley de mutación](docs/mutation-law.md) / [Gráficos de procedencia](docs/provenance-graphs.md): ciclo de vida de escritura segura y seguimiento del linaje.
+- [SDK](docs/sdk.md) / [CLI](docs/cli.md) / [MCP](docs/mcp.md): referencias.
+- [Política y ocultación de datos](docs/policy-and-redaction.md): Principal, Capacidad, Política, TrustZone.
+- [Operaciones](docs/operations.md): diagnóstico, verificación, reconstrucción, copia de seguridad, restauración.
+- [Manuales de operación](docs/runbooks/README.md): un manual por cada clase de error.
+- [Preparación para la publicación](docs/release-readiness.md): flujo de publicación y patrones de fallos conocidos.
 
 ## Licencia
 
