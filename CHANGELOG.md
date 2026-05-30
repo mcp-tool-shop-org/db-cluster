@@ -80,6 +80,15 @@ Internal swarm-finding IDs (KERNEL-X-NNN, STORES-X-NNN, AGG-NNN) appear as **bac
   and the content-addressing limits (metadata reads are not byte-integrity-checked;
   a consistent re-content is undetectable at the content layer) stand as
   documented in `SECURITY.md`.
+- **Retrieval snippets are redacted with artifact content.** A retrieved evidence
+  bundle can carry a short content snippet per artifact; under a content-stripping
+  policy (the default `ai-facing` zone) the snippet is now stripped alongside the
+  artifact's content, so a caller never receives content the policy redacts (S-1 —
+  closes a gap found by the pre-2.0.0 composed security re-audit).
+- **MCP redaction applies to the cluster the server fronts.** The `ai-facing`
+  redaction default protects the local cluster the MCP server is launched against;
+  selecting a Postgres or SQLite backend is a deliberate operator action through
+  `createSafeCluster`, not a redaction bypass (S-3).
 
 ### Migration notes
 
