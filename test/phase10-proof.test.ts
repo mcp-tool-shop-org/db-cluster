@@ -54,13 +54,21 @@ describe('Phase 10 proof suite', () => {
         // README mentions the package name
         expect(readme).toContain(pkg.name);
 
-        // README has a status section
-        expect(readme).toMatch(/## Status/);
+        // Front-door doctrine (commit 940b43a, "README is a front door — drop
+        // internal status/process"): the version-status block and the
+        // test-count line were deliberately removed from the README because
+        // "version status + process belong in the CHANGELOG, not the marketing
+        // front page." So the front door must NOT carry a status section —
+        // asserting its absence locks the doctrine in and catches a regression
+        // that re-introduces internal status to the README.
+        expect(readme).not.toMatch(/## Status/);
 
-        // README mentions test count (allowing optional `+` after the
-        // number, e.g. "623+ tests passing" — the README intentionally
-        // uses this shape to avoid weekly maintenance for small deltas).
-        expect(readme).toMatch(/\d+\+? tests? passing/i);
+        // Test reality now lives in the CHANGELOG (its doctrine-mandated home).
+        // Assert the test count there, allowing an optional `+` after the
+        // number (e.g. "1255+ tests passing") — the project intentionally uses
+        // this shape to avoid churn for small deltas.
+        const changelog = readDoc('CHANGELOG.md');
+        expect(changelog).toMatch(/\d+\+? tests? passing/i);
     });
 
     it('Proof 2: CLI docs mention every public command group', () => {
