@@ -14,6 +14,9 @@ Complete list of tools exposed by `db-cluster-mcp`.
 | `cluster_why` | `uri: string` | Human-readable explanation string |
 | `cluster_inspect_command` | `commandId: string` | Full command lifecycle state |
 | `cluster_list_receipts` | `limit?: number`, `since?: string` | Array of mutation receipts |
+| `cluster_list_entity_versions` | `id: string` | Array of entity versions (oldest-first, redacted per version) |
+| `cluster_get_entity_version` | `id: string`, `version: number` | One entity version (redacted) or null |
+| `cluster_list_commands` | `status?: string` | Array of commands (per-item gated + redacted) |
 | `cluster_policy_explain` | `principal: Principal`, `resource?: string` | Policy decision explanation |
 | `cluster_policy_test` | `principal: Principal`, `actions: Action[]` | Per-action decision results |
 
@@ -59,9 +62,9 @@ Every tool carries behavioral annotations:
 
 ## Tool count
 
-Total: **16 tools**
+Total: **19 tools**
 
-- 10 read-only
+- 13 read-only
 - 2 staged-only
 - 2 approval-sensitive
 - 2 write (cluster-mutating)

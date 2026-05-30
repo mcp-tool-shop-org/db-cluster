@@ -325,6 +325,27 @@ db-cluster verify-schema
 db-cluster verify-schema --json
 ```
 
+## Version history & command listing (Wave V2)
+
+### `db-cluster versions <entity-id>`
+
+List all retained versions of a canonical entity (oldest-first). Honors `--json`.
+
+```bash
+db-cluster versions <entity-id>
+db-cluster versions <entity-id> --json
+```
+
+### `db-cluster list-commands`
+
+List commands in the queue, optionally filtered by lifecycle status. Per-item policy-gated. Honors `--json` and `--quiet`.
+
+```bash
+db-cluster list-commands
+db-cluster list-commands --status proposed
+db-cluster list-commands --json
+```
+
 ## Shell completion
 
 ### `db-cluster completion <shell>`

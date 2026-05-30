@@ -103,6 +103,11 @@ const RULES = [
         file: 'R12-retrieval-without-ranking.yml',
         label: 'RetrievalPlanner.plan assembling a bundle without consuming rankByBM25 (RETR-001)',
     },
+    {
+        id: 'R13',
+        file: 'R13-version-read-without-per-element-redaction.yml',
+        label: 'policed listEntityVersions/listArtifactVersions without per-element evaluatePolicy redaction (VERSIONS-001)',
+    },
 ];
 
 /**

@@ -72,6 +72,9 @@ These tools read from stores but never mutate cluster state.
 | `cluster_why` | Compact explanation of why an object exists. |
 | `cluster_inspect_command` | Inspect command lifecycle state. |
 | `cluster_list_receipts` | List mutation receipts (proof of operations). |
+| `cluster_list_entity_versions` | List all retained versions of a canonical entity (redacted per version). |
+| `cluster_get_entity_version` | Fetch one specific version of a canonical entity. |
+| `cluster_list_commands` | List queue commands by lifecycle status (per-item gated + redacted). |
 | `cluster_policy_explain` | Explain policy decision for a principal + resource. |
 | `cluster_policy_test` | Test multiple policy actions without executing. |
 

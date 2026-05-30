@@ -266,6 +266,15 @@ const result = sdk.policyTest({
 // result.results[1].decision === 'deny'
 ```
 
+## Version history, lineage & cursor pagination (Wave V2)
+
+- `sdk.listEntityVersions(id)` / `sdk.getEntityVersion(id, version)` — read a canonical entity's retained version history (oldest-first) or one specific version. Owner truth, redacted **per version** under policy (VERSIONS-001).
+- `sdk.listArtifactVersions(filename)` — all artifact versions sharing a filename, redacted per element (`storagePath` never escapes).
+- `sdk.listCommands(status?)` — list queue commands, optionally by lifecycle status; per-item policy-gated + redacted (mirrors `listReceipts`) (AI-009).
+- `sdk.traceProvenance(subjectId)` — the full ledger lineage for a subject (SDK-009: this verb was previously kernel-only and omitted from the SDK).
+- `sdk.getReceipt(id)` — fetch a single receipt by id (sanitized), or `null` if absent (SDK-009).
+- `sdk.findPage(query, { limit, cursor })` — paginated find returning `{ items, nextCursor }`. The cursor is **opaque** and wraps V1's numeric `offset` — one pagination idiom (SDK-002). Pass `nextCursor` back to fetch the next page; `null` means the last page.
+
 ## Ownership law
 
 - The SDK never bypasses the kernel

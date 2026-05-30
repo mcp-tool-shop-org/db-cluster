@@ -27,6 +27,7 @@
  * docs/cli.md (CI/Docs agent maintains that file).
  */
 import { Command } from 'commander';
+import type { Command as ClusterCommand } from './types/command.js';
 import { dirname, resolve, join, sep } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -1525,6 +1526,51 @@ program
             console.log(`  [${r.committedAt}] ${r.resultSummary}`);
             console.log(`    id:      ${r.id}`);
             console.log(`    command: ${r.commandId}`);
+        }
+    }));
+
+// --- versions ---
+program
+    .command('versions <entity-id>')
+    .description('List all versions of a canonical entity (oldest-first)')
+    .option('--json', 'Output as JSON')
+    .action(cliCommand(async (entityId: string, opts: { json?: boolean }) => {
+        const kernel = getKernel();
+        const versions = await kernel.listEntityVersions(entityId);
+        if (opts.json) {
+            console.log(JSON.stringify(versions, null, 2));
+            return;
+        }
+        if (versions.length === 0) {
+            cliInfo(`No versions found for entity ${entityId}.`);
+            return;
+        }
+        cliInfo(`Versions of ${entityId} (${versions.length}):`);
+        for (const v of versions) {
+            cliInfo(`  v${v.version}  ${v.kind}/${v.name}  (updated ${v.updatedAt})`);
+        }
+    }));
+
+// --- list-commands ---
+program
+    .command('list-commands')
+    .description('List commands in the queue, optionally filtered by lifecycle status')
+    .option('--status <status>', 'Filter by status: proposed | validated | approved | committed | rejected | compensated')
+    .option('--json', 'Output as JSON')
+    .action(cliCommand(async (opts: { status?: string; json?: boolean }) => {
+        const kernel = getKernel();
+        const commands = await kernel.listCommands(opts.status as ClusterCommand['status'] | undefined);
+        if (opts.json) {
+            console.log(JSON.stringify(commands, null, 2));
+            return;
+        }
+        if (commands.length === 0) {
+            cliInfo('No commands found.');
+            return;
+        }
+        cliInfo(`Commands (${commands.length}):`);
+        for (const c of commands) {
+            cliInfo(`  [${c.status}] ${c.verb} → ${c.targetStore}  (id ${c.id})`);
         }
     }));
 

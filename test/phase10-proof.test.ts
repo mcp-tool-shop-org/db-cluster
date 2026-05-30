@@ -95,7 +95,9 @@ describe('Phase 10 proof suite', () => {
         const catalog = readDoc('examples/mcp/tool-catalog.md');
 
         const runtimeNames = TOOLS.map((t: { name: string }) => t.name).sort();
-        expect(runtimeNames.length).toBe(16);
+        // Wave V2 added 3 read-only tools (cluster_list_entity_versions,
+        // cluster_get_entity_version, cluster_list_commands): 16 → 19.
+        expect(runtimeNames.length).toBe(19);
 
         for (const name of runtimeNames) {
             expect(catalog).toContain(name);

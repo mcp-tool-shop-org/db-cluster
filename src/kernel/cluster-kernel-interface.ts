@@ -91,6 +91,34 @@ export interface ClusterKernelInterface {
     inspectEntity: ClusterKernel['inspectEntity'];
 
     /**
+     * List ALL versions of a canonical entity (VERSIONS-001), oldest-first.
+     * The policy wrapper applies PER-ELEMENT redaction across the version
+     * array (never redact-latest-then-return-raw-history).
+     *
+     * Throws:
+     *  - {@link PolicyDeniedError} (via policy wrapper)
+     */
+    listEntityVersions: ClusterKernel['listEntityVersions'];
+
+    /**
+     * Fetch one specific version of a canonical entity (VERSIONS-001).
+     * The policy wrapper mirrors inspectEntity's two-stage oracle-safe gate.
+     *
+     * Throws:
+     *  - {@link PolicyDeniedError} (via policy wrapper)
+     */
+    getEntityVersion: ClusterKernel['getEntityVersion'];
+
+    /**
+     * List ALL versions of an artifact sharing a filename (VERSIONS-001).
+     * The policy wrapper applies PER-ELEMENT redaction across the array.
+     *
+     * Throws:
+     *  - {@link PolicyDeniedError} (via policy wrapper)
+     */
+    listArtifactVersions: ClusterKernel['listArtifactVersions'];
+
+    /**
      * Trace provenance for a subject by walking the ledger lineage.
      * Returns the full event list ordered by ledger insertion.
      *
@@ -209,6 +237,16 @@ export interface ClusterKernelInterface {
      *  - {@link PolicyDeniedError} (via policy wrapper)
      */
     listReceipts: ClusterKernel['listReceipts'];
+
+    /**
+     * List commands in the queue, optionally filtered by lifecycle status
+     * (AI-009). The policy wrapper gates + redacts PER ITEM (mirroring
+     * listReceipts — never a single bundle gate, which reintroduces KERNEL-R007).
+     *
+     * Throws:
+     *  - {@link PolicyDeniedError} (via policy wrapper)
+     */
+    listCommands: ClusterKernel['listCommands'];
 
     // ─── Index verbs ─────────────────────────────────────────────────────
 

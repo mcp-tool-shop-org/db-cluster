@@ -1,0 +1,28 @@
+id: version-read-without-per-element-redaction
+language: typescript
+severity: error
+message: |
+  A policed version-history list read (`listEntityVersions` / `listArtifactVersions`
+  on PolicyEnforcedKernel) must redact PER ELEMENT — it iterates the version array
+  and calls `evaluatePolicy` + a redactor for EACH element (the findSources loop
+  form). The leak this guards is VERSIONS-001's core trap: redact-latest-then-
+  return-raw-history. A method body without an `evaluatePolicy(...)` call has
+  regressed to a single-shot gate (the inspectEntity form), which cannot redact
+  every element of an array. Use the per-element loop form to clear this gate.
+rule:
+  kind: method_definition
+  all:
+    - has:
+        field: name
+        regex: "^(listEntityVersions|listArtifactVersions)$"
+    - has:
+        field: body
+        pattern: $BODY
+  not:
+    has:
+      pattern: evaluatePolicy($$$)
+      stopBy: end
+files:
+  - "src/kernel/policy-enforced-kernel.ts"
+ignores:
+  - "test/**"

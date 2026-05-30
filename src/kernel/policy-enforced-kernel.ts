@@ -345,6 +345,97 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
     }
 
     /**
+     * VERSIONS-001 — list every version of a canonical entity, PER-ELEMENT
+     * redacted. The leak this guards: redact-latest-then-return-raw-history.
+     * Uses the findSources loop form (per-element evaluatePolicy + redact),
+     * NOT the inspectEntity single-entity form. All versions share id+kind so
+     * the decision is invariant, but redaction MUST run per element. An
+     * all-denied id collapses to `[]` — indistinguishable from an unknown id,
+     * so no existence oracle opens.
+     */
+    async listEntityVersions(id: string): Promise<Entity[]> {
+        // Coarse gate WITHOUT resourceUri — a principal that cannot read owner
+        // truth at all gets PolicyDeniedError regardless of the id supplied.
+        this.enforce('read_owner_truth', { ownerStore: 'canonical' });
+        const versions = await this.kernel.listEntityVersions(id);
+        const trustZone = this.context.trustZone ?? this.context.principal.trustZone;
+        const out: Entity[] = [];
+        for (const version of versions) {
+            const decision = evaluatePolicy({
+                principal: this.context.principal,
+                capability: 'read_owner_truth',
+                trustZone,
+                ownerStore: 'canonical',
+                resourceUri: `cluster://canonical/${id}`,
+                entityKind: version.kind,
+            }, this.policyOptions);
+            if (decision.decision !== 'allow') continue;
+            const rules = this.collectRedactionRules(decision);
+            out.push(rules.length > 0 ? redactEntity(version, rules) : version);
+        }
+        return out;
+    }
+
+    /**
+     * VERSIONS-001 — fetch one version, mirroring inspectEntity's two-stage
+     * oracle-safe gate. A `null` (unknown id / no such version) under a
+     * per-resource rule unifies to PolicyDeniedError so the not-found path and
+     * the refined-deny path are indistinguishable.
+     */
+    async getEntityVersion(id: string, version: number): Promise<Entity | null> {
+        this.enforce('read_owner_truth', { ownerStore: 'canonical' });
+        const entity = await this.kernel.getEntityVersion(id, version);
+        if (!entity) {
+            if (this.hasAnyPerResourceRule('read_owner_truth')) {
+                throw new PolicyDeniedError({
+                    decision: 'deny',
+                    matchedPolicyId: '__refined_deny',
+                    matchedPolicyName: 'Refined deny (per-resource gate)',
+                    capability: 'read_owner_truth',
+                    reason: 'Per-resource policy denied access.',
+                    principalId: this.context.principal.id,
+                    trustZone: this.context.trustZone ?? this.context.principal.trustZone,
+                    resourceUri: `cluster://canonical/${id}`,
+                    requiresApproval: false,
+                });
+            }
+            return null;
+        }
+        const decision = this.enforce('read_owner_truth', {
+            ownerStore: 'canonical',
+            resourceUri: `cluster://canonical/${id}`,
+            entityKind: entity.kind,
+        });
+        const rules = this.collectRedactionRules(decision);
+        return rules.length > 0 ? redactEntity(entity, rules) : entity;
+    }
+
+    /**
+     * VERSIONS-001 — list artifact versions sharing a filename, PER-ELEMENT
+     * redacted (each version is a distinct artifact id → per-element evaluate,
+     * findSources artifact-loop form). Denied versions are dropped.
+     */
+    async listArtifactVersions(filename: string): Promise<Artifact[]> {
+        this.enforce('read_owner_truth', { ownerStore: 'artifact' });
+        const versions = await this.kernel.listArtifactVersions(filename);
+        const trustZone = this.context.trustZone ?? this.context.principal.trustZone;
+        const out: Artifact[] = [];
+        for (const artifact of versions) {
+            const decision = evaluatePolicy({
+                principal: this.context.principal,
+                capability: 'read_owner_truth',
+                trustZone,
+                ownerStore: 'artifact',
+                resourceUri: `cluster://artifact/${artifact.id}`,
+            }, this.policyOptions);
+            if (decision.decision !== 'allow') continue;
+            const rules = this.collectRedactionRules(decision);
+            out.push(rules.length > 0 ? redactArtifact(artifact, rules) : artifact);
+        }
+        return out;
+    }
+
+    /**
      * Returns true when the principal has any policy rule that conditions
      * its match on a per-resource axis (uriPatterns, kinds, commandVerbs).
      * Used by the double-enforce pattern to decide whether NotFoundError
@@ -946,6 +1037,36 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
             if (decision.decision !== 'allow') continue;
             const rules = this.collectRedactionRules(decision);
             filtered.push(rules.length > 0 ? redactReceipt(receipt, rules) : receipt);
+        }
+        return filtered;
+    }
+
+    /**
+     * AI-009 — list commands, gated + redacted PER ITEM (mirrors listReceipts).
+     * A single bundle gate would reintroduce KERNEL-R007: restricted commands
+     * surfaced, and payloads carrying entity names leaked to a list-but-not-read
+     * principal. Two-stage: (1) bundle-level enforce('read_command') so a
+     * principal that cannot read commands at all gets a typed PolicyDeniedError;
+     * (2) per-command evaluatePolicy rooted at cluster://ledger/<id> + verb —
+     * deny drops the command, allow redacts its payload with that decision's rules.
+     */
+    async listCommands(status?: Command['status']): Promise<Command[]> {
+        this.enforce('read_command', { ownerStore: 'ledger' });
+        const trustZone = this.context.trustZone ?? this.context.principal.trustZone;
+        const all = await this.kernel.listCommands(status);
+        const filtered: Command[] = [];
+        for (const command of all) {
+            const decision = evaluatePolicy({
+                principal: this.context.principal,
+                capability: 'read_command',
+                trustZone,
+                ownerStore: 'ledger',
+                resourceUri: `cluster://ledger/${command.id}`,
+                commandVerb: command.verb,
+            }, this.policyOptions);
+            if (decision.decision !== 'allow') continue;
+            const rules = this.collectRedactionRules(decision);
+            filtered.push(rules.length > 0 ? redactCommand(command, rules) : command);
         }
         return filtered;
     }

@@ -13,6 +13,9 @@ import { PolicyEnforcedKernel } from '../kernel/policy-enforced-kernel.js';
 import { INTERNAL_TRUSTED_PRINCIPAL } from '../policy/index.js';
 import type { Artifact } from '../types/artifact.js';
 import type { Entity } from '../types/entity.js';
+import type { IndexRecord } from '../types/index-record.js';
+import type { ProvenanceEvent } from '../types/provenance-event.js';
+import { type Page, encodeCursor, decodeCursor } from '../types/page.js';
 import {
     sanitizeArtifactForOutput,
     sanitizeEntityForOutput,
@@ -57,6 +60,11 @@ type KernelLike = Pick<
     | 'compensateMutation'
     | 'inspectCommand'
     | 'listReceipts'
+    | 'listEntityVersions'
+    | 'getEntityVersion'
+    | 'listArtifactVersions'
+    | 'listCommands'
+    | 'traceProvenance'
 >;
 
 export interface PolicyExplainInput {
@@ -670,6 +678,85 @@ export class ClusterSDK {
      */
     async listReceipts(filter?: { commandId?: string; since?: string; limit?: number }): Promise<Receipt[]> {
         return this.kernel.listReceipts(filter);
+    }
+
+    // ─── Version history + lifecycle reads (Wave V2) ────────────────
+
+    /**
+     * List all versions of a canonical entity, oldest-first (VERSIONS-001).
+     * Delegates to the policed kernel (per-element redaction) and sanitizes
+     * each version at the SDK boundary.
+     */
+    async listEntityVersions(id: string): Promise<Entity[]> {
+        const versions = await this.kernel.listEntityVersions(id);
+        return versions.map((e) => sanitizeEntityForOutput(e) ?? e) as unknown as Entity[];
+    }
+
+    /**
+     * Fetch one specific version of a canonical entity, or null (VERSIONS-001).
+     */
+    async getEntityVersion(id: string, version: number): Promise<Entity | null> {
+        const entity = await this.kernel.getEntityVersion(id, version);
+        if (!entity) return null;
+        return (sanitizeEntityForOutput(entity) ?? entity) as unknown as Entity;
+    }
+
+    /**
+     * List all versions of an artifact sharing a filename (VERSIONS-001).
+     * Sanitized at the SDK boundary so `storagePath` never escapes.
+     */
+    async listArtifactVersions(filename: string): Promise<Artifact[]> {
+        const versions = await this.kernel.listArtifactVersions(filename);
+        return versions.map((a) => sanitizeArtifactForOutput(a) ?? a) as unknown as Artifact[];
+    }
+
+    /**
+     * List commands, optionally filtered by lifecycle status (AI-009).
+     * Delegates to the policed kernel (per-item gate + redaction); mirrors
+     * {@link listReceipts}.
+     */
+    async listCommands(status?: Command['status']): Promise<Command[]> {
+        return this.kernel.listCommands(status);
+    }
+
+    /**
+     * Trace provenance lineage for a subject id (SDK-009 — this verb was
+     * omitted from the SDK surface even though the kernel exposed it policed).
+     * Sanitizes each event at the boundary.
+     */
+    async traceProvenance(subjectId: string): Promise<ProvenanceEvent[]> {
+        const events = await this.kernel.traceProvenance(subjectId);
+        return events.map((ev) => sanitizeProvenanceEventForOutput(ev) ?? ev) as unknown as ProvenanceEvent[];
+    }
+
+    /**
+     * Fetch a single receipt by id (SDK-009). Typed convenience over the
+     * existing `resolve` / `ledger.getReceipt` path with
+     * `sanitizeReceiptForOutput`. Returns null when the receipt does not exist.
+     */
+    async getReceipt(id: string): Promise<Receipt | null> {
+        try {
+            const resolved = await this.resolve(`cluster://receipt/${id}`);
+            if (resolved.store !== 'receipt' || !resolved.object) return null;
+            return resolved.object as Receipt;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Paginated find over an OPAQUE cursor (SDK-002). ONE pagination idiom: the
+     * cursor wraps V1's numeric `IndexQuery.offset` (RETR-005); callers never
+     * pass a raw offset. Returns the page of index records + the next cursor
+     * (`null` on the last page). The cursor carries only the offset — no ids.
+     */
+    async findPage(query: string, opts?: { limit?: number; cursor?: string }): Promise<Page<IndexRecord>> {
+        const limit = opts?.limit ?? 20;
+        const offset = decodeCursor(opts?.cursor);
+        const result = await this.findSources(query, limit, offset);
+        const items = result.indexRecords.map((r) => sanitizeIndexRecordForOutput(r) ?? r) as unknown as IndexRecord[];
+        const nextCursor = items.length === limit ? encodeCursor(offset + limit) : null;
+        return { items, nextCursor };
     }
 
     // ─── Policy surface ────────────────────────────────────────────

@@ -36,6 +36,7 @@ import { validatePrincipal, validatePolicyConfig, PolicyConfigError } from './co
 // (owned by the policy domain); we only consume them.
 import { DEFAULT_POLICIES, DEFAULT_TRUST_ZONES, DEFAULT_VISIBILITY_RULES } from '../policy/default-policies.js';
 import type { AiErrorEnvelope } from '../types/ai-envelope.js';
+import type { Command } from '../types/command.js';
 
 const CLUSTER_DIR = resolve(process.env.DB_CLUSTER_DIR ?? process.cwd(), '.db-cluster');
 
@@ -580,6 +581,42 @@ export const TOOLS: AnnotatedTool[] = [
         annotations: { readOnly: true, writesCluster: false, approvalSensitive: false, stagedOnly: false, requiresExistingCommand: false },
     },
     {
+        name: 'cluster_list_entity_versions',
+        description: 'List all retained versions of a canonical entity, oldest-first (VERSIONS-001). Returns owner truth, redacted per policy PER VERSION. READ-ONLY.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                id: { type: 'string', description: 'Entity id' },
+            },
+            required: ['id'],
+        },
+        annotations: { readOnly: true, writesCluster: false, approvalSensitive: false, stagedOnly: false, requiresExistingCommand: false },
+    },
+    {
+        name: 'cluster_get_entity_version',
+        description: 'Fetch one specific version of a canonical entity (VERSIONS-001). Returns owner truth (redacted per policy) or null. READ-ONLY.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                id: { type: 'string', description: 'Entity id' },
+                version: { type: 'number', description: 'Version number (integer >= 1)' },
+            },
+            required: ['id', 'version'],
+        },
+        annotations: { readOnly: true, writesCluster: false, approvalSensitive: false, stagedOnly: false, requiresExistingCommand: false },
+    },
+    {
+        name: 'cluster_list_commands',
+        description: 'List commands in the queue, optionally filtered by lifecycle status (AI-009). Per-item policy-gated + redacted (restricted commands and payloads do not leak). READ-ONLY.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                status: { type: 'string', description: 'Optional lifecycle status filter (proposed | validated | approved | committed | rejected | compensated)' },
+            },
+        },
+        annotations: { readOnly: true, writesCluster: false, approvalSensitive: false, stagedOnly: false, requiresExistingCommand: false },
+    },
+    {
         name: 'cluster_policy_explain',
         description: 'Explain what the policy engine would decide for a given principal + capability + resource. Does NOT execute the action — dry-run policy check only. Never returns restricted object data. Includes decision, reason, matched policy, approval requirement, and visibility status.',
         inputSchema: {
@@ -967,6 +1004,44 @@ export async function handleTool(
             return {
                 _meta: { operation: 'read', writesCluster: false, commandId: command.id },
                 command: formatCommandOutput(command),
+            };
+        }
+
+        case 'cluster_list_entity_versions': {
+            // sdk.listEntityVersions delegates to the policed kernel (PER-ELEMENT
+            // redaction) and sanitizes each version — the surface adds no raw read.
+            const versions = await sdk.listEntityVersions(args.id as string);
+            return {
+                _meta: {
+                    operation: 'read',
+                    writesCluster: false,
+                    storeAccessed: 'canonical',
+                    ...(versions.length === 0 ? { empty_reason: 'no_data' as const } : {}),
+                },
+                versions,
+            };
+        }
+
+        case 'cluster_get_entity_version': {
+            const version = await sdk.getEntityVersion(args.id as string, args.version as number);
+            return {
+                _meta: { operation: 'read', writesCluster: false, storeAccessed: 'canonical' },
+                version: version ?? null,
+            };
+        }
+
+        case 'cluster_list_commands': {
+            // sdk.listCommands delegates to the policed kernel (PER-ITEM gate +
+            // redaction). formatCommandOutput wraps each with next-valid-actions.
+            const commands = await sdk.listCommands(args.status as Command['status'] | undefined);
+            return {
+                _meta: {
+                    operation: 'read',
+                    writesCluster: false,
+                    storeAccessed: 'ledger',
+                    ...(commands.length === 0 ? { empty_reason: 'no_data' as const } : {}),
+                },
+                commands: commands.map((c) => formatCommandOutput(c)),
             };
         }
 

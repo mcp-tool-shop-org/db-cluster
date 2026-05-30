@@ -806,6 +806,57 @@ export class ClusterKernel implements ClusterKernelInterface {
     }
 
     /**
+     * List ALL versions of a canonical entity, oldest-first (VERSIONS-001).
+     * Read-only passthrough to the canonical store's retained version history.
+     * The policy wrapper applies PER-ELEMENT redaction + oracle discipline —
+     * raw history must never reach a caller without per-version redaction.
+     *
+     * @param id - The entity id.
+     * @returns Every retained version ascending by `version`; empty if unknown.
+     */
+    async listEntityVersions(id: string): Promise<Entity[]> {
+        return this.stores.canonical.listVersions(id);
+    }
+
+    /**
+     * Fetch one specific version of a canonical entity (VERSIONS-001).
+     *
+     * @param id - The entity id.
+     * @param version - The exact version number (integer >= 1).
+     * @returns The matching version, or `null` if the id/version is unknown.
+     */
+    async getEntityVersion(id: string, version: number): Promise<Entity | null> {
+        return this.stores.canonical.getVersion(id, version);
+    }
+
+    /**
+     * List ALL versions of an artifact sharing a filename, oldest-first
+     * (VERSIONS-001 symmetry). Read-only passthrough to the artifact store.
+     *
+     * @param filename - The original filename / lineage key.
+     * @returns Every artifact sharing the filename; empty array if none.
+     */
+    async listArtifactVersions(filename: string): Promise<Artifact[]> {
+        return this.stores.artifact.versions(filename);
+    }
+
+    /**
+     * List commands in the queue, optionally filtered by lifecycle status
+     * (AI-009). Read-only enumeration over the persisted queue (or the
+     * in-memory map when no dataDir). The policy wrapper applies PER-ITEM
+     * gate + redaction (mirroring listReceipts) — never a single bundle gate.
+     *
+     * @param status - Optional lifecycle status filter.
+     * @returns All matching commands (raw — redaction is the policy layer's job).
+     */
+    async listCommands(status?: Command['status']): Promise<Command[]> {
+        const all = this.commandQueue
+            ? this.commandQueue.list()
+            : Array.from(this.memoryCommands.values());
+        return status ? all.filter((c) => c.status === status) : all;
+    }
+
+    /**
      * Trace provenance for a subject — walks ledger lineage.
      *
      * @param subjectId - The subject id (entity / artifact / command id).
