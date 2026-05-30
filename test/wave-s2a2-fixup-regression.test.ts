@@ -162,12 +162,21 @@ describe('FIX 1 — cluster_compensate_mutation refused on the AI-facing MCP sur
                 name: 'cluster_compensate_mutation',
                 arguments: { commandId, compensatedBy: 'ai', reason: 'attempted ai-side reversal' },
             });
-            const { body } = parseToolResult(res);
+            const { body, isError } = parseToolResult(res);
+            // AI-006 (Wave V4): the destructive-tool refusal now reads as an
+            // ERROR (the catch arm sets isError:true), not a success-path object.
+            expect(isError).toBe(true);
             // Structured AiErrorEnvelope refusal — NOT a successful compensation.
             expect(body.code).toBe('POLICY_DENIED');
-            expect(String(body.message)).toMatch(/operator|ai-facing|not available|privileged/i);
+            // CANONICAL wire shape: the human message is under `body.error`, NOT
+            // `body.message` (body.message is undefined on the wire). The gate
+            // refusal now conforms to the long-standing error envelope.
+            expect(String(body.error)).toMatch(/operator|ai-facing|not available|privileged/i);
             expect(body.retryable).toBe(false);
             expect(String(body.remediation_hint)).toMatch(/DB_CLUSTER_MCP_ALLOW_PRIVILEGED|operator|CLI|SDK/i);
+            // A2's envelope mapping: the compensate-gate context fields survive.
+            expect((body.context as Record<string, unknown>).surface).toBe('ai-facing');
+            expect((body.context as Record<string, unknown>).requiresPrivileged).toBe(true);
             // It did NOT write: no compensatingCommand / receipt in the body.
             expect(body.compensatingCommand).toBeUndefined();
             expect(body.receipt).toBeUndefined();
@@ -258,11 +267,16 @@ describe('[V3-001] INJECT-001 production wiring — mcpCommitGateActive() + Call
                 name: 'cluster_commit_mutation',
                 arguments: { commandId: cmd.id, actorId: 'ai' },
             });
-            const { body } = parseToolResult(res);
+            const { body, isError } = parseToolResult(res);
+            // AI-006 (Wave V4): the commit-gate refusal reads as an ERROR.
+            expect(isError).toBe(true);
             // Refused at the production surface because the command is not yet approved.
             expect(body.code).toBe('POLICY_DENIED');
-            expect(String(body.message)).toMatch(/approve|approved/i);
+            // CANONICAL wire shape: human message under `body.error`, not `body.message`.
+            expect(String(body.error)).toMatch(/approve|approved/i);
             expect(body.next_valid_actions).toContain('cluster_approve_mutation');
+            // A2's envelope mapping: the commit-gate context carries requiredStatus.
+            expect((body.context as Record<string, unknown>).requiredStatus).toBe('approved');
             // No receipt → no write occurred.
             expect(body.receipt).toBeUndefined();
         } finally {

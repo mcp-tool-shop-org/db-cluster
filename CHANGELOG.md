@@ -42,6 +42,27 @@ Internal swarm-finding IDs (KERNEL-X-NNN, STORES-X-NNN, AGG-NNN) appear as **bac
   is a structured `AiErrorEnvelope` (no raw error, no partial write). An AI caller
   must call `cluster_approve_mutation` first. Trusted in-process SDK callers are
   unaffected — the gate is MCP-surface only.
+- **MCP approval-gate refusals are now an ERROR result, not a success-shaped
+  object** (AI-006, Wave V4). The INJECT-001 refusal above previously came back
+  on the **success** path — a plain object with no `isError` flag — so a
+  spec-compliant host read a `POLICY_DENIED` on the two most destructive tools
+  (`cluster_commit_mutation`, `cluster_compensate_mutation`) as SUCCESS. The
+  refusal is now a proper MCP error result: `isError: true` at the top level,
+  with the `POLICY_DENIED` envelope JSON-stringified in `content[0].text` (the
+  human message is under `body.error`, code `POLICY_DENIED`,
+  `next_valid_actions: ['cluster_approve_mutation']` for the commit gate /
+  `['cluster_inspect_command']` for the compensate gate). **Any host that read
+  these refusals as success must update** to check `isError` first and parse the
+  body. Detect the error via the top-level `isError` boolean — not via `_meta`,
+  which lives inside the parsed body.
+- **`doctor` / `verify` now exit non-zero on a non-healthy cluster** (CLI-001,
+  Wave V4). Previously both commands always exited `0` regardless of cluster
+  health, so CI pipelines branching on `$?` silently treated a corrupt cluster as
+  fine. Now a healthy run still exits `0`, but a non-healthy run exits non-zero: a
+  `corrupt` or `unreachable` cluster exits `70` (`EX_SOFTWARE`), any other
+  non-healthy state exits `1`. **Scripts that relied on `doctor`/`verify` always
+  exiting `0` must update** — a non-zero exit from these commands is now a real
+  health signal, not a crash.
 
 ### Security
 
@@ -67,8 +88,17 @@ Internal swarm-finding IDs (KERNEL-X-NNN, STORES-X-NNN, AGG-NNN) appear as **bac
   Either (a) drive the lifecycle through `cluster_approve_mutation` before
   `cluster_commit_mutation` and consume the redacted read shape, or (b) if you
   genuinely run the server in a trusted operator context, set the privileged
-  opt-in flag (provisionally `DB_CLUSTER_MCP_ALLOW_PRIVILEGED`). Branch on
-  `AiErrorEnvelope.code` for the approval refusal rather than parsing prose.
+  opt-in flag (provisionally `DB_CLUSTER_MCP_ALLOW_PRIVILEGED`).
+- **MCP integrators (AI-006):** detect a failed tool call with the top-level
+  `isError === true` boolean, then `JSON.parse(result.content[0].text)` and branch
+  on `body.code`. For the approval-gate refusal the human message is under
+  `body.error` (not `body.message`), and `body.next_valid_actions` names the next
+  tool to call. Do **not** branch on `_meta.operation` — it lives inside the parsed
+  body, not on the tool result. See `docs/mcp.md` "Error envelope shape".
+- **Operators / CI (CLI-001):** `doctor` and `verify` now encode health in the
+  exit code. Replace `db-cluster doctor; <next step>` (which previously always
+  proceeded) with an exit-code check — `0` healthy, `70` corrupt/unreachable, `1`
+  other non-healthy. See `docs/cli.md`.
 - **SDK / package-root consumers:** see the Wave S2-A1 migration notes for the
   `createSafeCluster` / `@mcptoolshop/db-cluster/unsafe` move.
 - **Operators using a `config.json` `clusterDir`** that pointed outside cwd: move
@@ -77,7 +107,74 @@ Internal swarm-finding IDs (KERNEL-X-NNN, STORES-X-NNN, AGG-NNN) appear as **bac
 
 ### Backlinks
 
-KERNEL-001 (root facade, S2-A1) · KERNEL-002 (MCP ai-facing default) · INJECT-001 (MCP write approval gate) · EGRESS-002 (config.json clusterDir containment).
+KERNEL-001 (root facade, S2-A1) · KERNEL-002 (MCP ai-facing default) · INJECT-001 (MCP write approval gate) · EGRESS-002 (config.json clusterDir containment) · AI-006 / AI-007 (MCP error shape + spec annotations) · CLI-001 / CLI-007 / CLI-008 (doctor/verify exit codes, `stats`, `--json` error object) · STORE-011 (index-store vector overclaim reconciled).
+
+## Wave V4 — AI-facing error correctness + CLI health signals (AI-006/AI-007/CLI-001/CLI-007/CLI-008/STORE-011)
+
+Closes the gap between "documented behavior" and "wire behavior" on the two
+surfaces AI agents and operators consume most: the MCP error path and the CLI
+exit codes. Two of these changes are **breaking** (called out below and folded
+into the aggregate `[Unreleased]` breaking block above).
+
+### User-visible changes
+
+- **AI-007 — spec annotations on `listTools`.** Each tool now carries the
+  MCP-spec hint keys `readOnlyHint` / `destructiveHint` / `idempotentHint` under
+  `annotations`, with `destructiveHint: true` only for the two writesCluster
+  tools (`cluster_commit_mutation`, `cluster_compensate_mutation`). The internal
+  five-field classification (`readOnly` / `writesCluster` / `approvalSensitive` /
+  `stagedOnly` / `requiresExistingCommand`) is exposed separately under
+  `_meta['io.dbcluster/classification']` for hosts that want finer routing.
+  Additive — spec hosts can ignore the `_meta` block.
+- **CLI-007 — new `db-cluster stats` command.** Prints entity / command / receipt
+  counts (`entities`, `commands`, `receipts`); supports `--json`. Cheap
+  aggregation — it totals stored objects and does not maintain per-operation
+  signal counters.
+- **CLI-008 — structured error object under `--json`.** When `--json` is passed,
+  on error the CLI **also** writes `{ error: { code, message, hint } }` to stdout
+  (in addition to the human stderr message). Purely additive; exit codes are
+  unchanged — the existing `0 / 65 / 70 / 77 / 78` sysexits map is intact.
+- **STORE-011 — index docs no longer overclaim "vector".** The index store does
+  candidate full-text + metadata lookup; it has no vector/embedding search.
+  `docs/phase-1-cluster-spine.md` dropped the "vector-ready" wording from the
+  store table (BM25 full-text is real and stays; "vector-ready" was not).
+- **README "federated" clarification.** The README now states that "federated"
+  means specialized truth stores that may use different backends, and that the
+  Postgres backend currently applies to the **canonical store only** (artifact /
+  index / ledger run on local/SQLite).
+
+### Breaking changes
+
+- **AI-006 (MCP error shape) — BREAKING.** AI-facing MCP approval-gate refusals
+  (`cluster_commit_mutation`, `cluster_compensate_mutation`) now return a proper
+  MCP **error** result — `isError: true` with a `POLICY_DENIED` envelope
+  JSON-stringified in `content[0].text` — instead of a success-shaped object.
+  Hosts that read these refusals as success must update: check `isError` first,
+  then parse the body (human message under `body.error`, `code` `POLICY_DENIED`,
+  `next_valid_actions` `['cluster_approve_mutation']` for the commit gate /
+  `['cluster_inspect_command']` for the compensate gate). Detect via the top-level
+  `isError` boolean — not via `_meta`, which lives inside the parsed body.
+- **CLI-001 (doctor/verify exit codes) — BREAKING.** `db-cluster doctor` and
+  `db-cluster verify` now exit non-zero on a non-healthy cluster
+  (`corrupt`/`unreachable` → `70`, other non-healthy → `1`); they previously
+  always exited `0`. Scripts relying on exit `0` from these commands must update
+  to treat a non-zero exit as a health signal.
+
+### Migration notes
+
+- See the aggregate `[Unreleased]` migration notes above — the AI-006 (MCP error
+  detection via `isError`) and CLI-001 (doctor/verify exit-code check) migration
+  steps are documented there. AI-007, CLI-007, CLI-008, and STORE-011 require no
+  caller-side migration (annotations are additive, `stats` is new, the `--json`
+  error object is additive, and the doc wording fix changes no behavior).
+
+### Backlinks
+
+AI-006 (MCP approval-gate refusal → `isError` error result) · AI-007 (spec
+annotation hints + `_meta['io.dbcluster/classification']`) · CLI-001
+(doctor/verify health-reflecting exit codes) · CLI-007 (`stats` command) ·
+CLI-008 (`--json` error object on stdout) · STORE-011 (index-store vector
+overclaim reconciled; README federated/Postgres-canonical clarification).
 
 ## Wave V3 — Opt-in SQLite storage backend (STORE-006/SQLite)
 

@@ -270,6 +270,27 @@ db-cluster verify
 db-cluster verify --json --sample 200
 ```
 
+> **Exit codes reflect health.** `doctor` and `verify` are not pure
+> reporters — they encode cluster health in the **exit code** so CI can branch
+> on `$?` without parsing output. A healthy run exits `0`. A non-healthy run
+> exits non-zero: a `corrupt` or `unreachable` cluster exits `70`
+> (`EX_SOFTWARE`); any other non-healthy state (e.g. `degraded`, `stale`,
+> `missing`) exits `1`. See [Exit Codes](#exit-codes) for the full map. Both
+> commands remain read-only — they never mutate cluster state.
+
+### `db-cluster stats`
+
+Show cluster entity / command / receipt **counts**. Cheap aggregation — it
+totals stored objects (`entities`, `commands`, `receipts`) and does **not**
+maintain per-operation signal counters.
+
+```bash
+db-cluster stats
+db-cluster stats --json
+```
+
+`--json` emits the counts as an object, e.g. `{ "entities": 12, "commands": 4, "receipts": 9 }`.
+
 ### `db-cluster rebuild index`
 
 Rebuild the index from canonical + artifact truth.
@@ -378,6 +399,23 @@ db-cluster migration-status --json
 ```
 
 All JSON output is valid, parseable, and suitable for automation pipelines.
+
+### Structured errors under `--json`
+
+When `--json` is set, errors are **also** emitted as a structured object on
+**stdout**, in addition to the human-readable message on stderr (the two are
+additive — the stderr line is never suppressed). The shape is:
+
+```json
+{ "error": { "code": "POLICY_DENIED", "message": "<path-scrubbed message>", "hint": "<remediation hint or null>" } }
+```
+
+`code` is the stable typed-error code (the same one the exit code maps from),
+`message` is the path-scrubbed headline, and `hint` is the remediation hint
+(or `null` when the code has none). **Exit codes are unchanged** — the structured
+error object is purely additive; the `0 / 1 / 65 / 70 / 77 / 78` sysexits map in
+[Exit Codes](#exit-codes) is intact. A consumer can read the JSON from stdout and
+still branch on `$?`.
 
 ## Exit Codes
 

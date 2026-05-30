@@ -28,7 +28,7 @@ Physical backends are implementations of store law, not new product centers.
 
 **Postgres-backed CanonicalStore only.**
 
-This proves the physical-store thesis without stack sprawl. Once canonical truth survives Postgres, later phases can add object storage, graph, vector, and time-series backends from a position of discipline rather than enthusiasm.
+This proves the physical-store thesis without stack sprawl. Once canonical truth survives Postgres, later phases can add object storage, graph, and time-series backends from a position of discipline rather than enthusiasm.
 
 ## Non-Goals (Phase 8)
 

@@ -21,6 +21,7 @@
  *   R11 — snippet-without-integrity-read         (RETR-004/PROV-001 regression net)
  *   R12 — retrieval-without-ranking              (RETR-001 regression net)
  *   R13 — version-read-without-per-element-redaction (VERSIONS-001 regression net)
+ *   R14 — mcp-refusal-returned-not-thrown        (AI-006 regression net)
  *
  * Plus the additional non-ast-grep check, folded into the same verdict:
  *   SQL — sqlite-sql-safety.mjs: every SQL string in `src/adapters/sqlite/**` is
@@ -126,6 +127,11 @@ const RULES = [
         id: 'R13',
         file: 'R13-version-read-without-per-element-redaction.yml',
         label: 'policed listEntityVersions/listArtifactVersions without per-element evaluatePolicy redaction (VERSIONS-001)',
+    },
+    {
+        id: 'R14',
+        file: 'R14-mcp-refusal-returned-not-thrown.yml',
+        label: "MCP handler RETURNS an object literal with code:'POLICY_DENIED' instead of throwing ApprovalGateDeniedError (AI-006)",
     },
 ];
 

@@ -12,7 +12,7 @@ Not a mock. Not a generic data layer. Not one database pretending to be many. No
 | ----------------------- | --------------------------------------------------------- |
 | Canonical store         | entities, IDs, stable business/state records              |
 | Artifact store          | raw files, documents, source text, generated outputs      |
-| Index store             | discoverability, full-text/vector-ready lookup, metadata  |
+| Index store             | discoverability, full-text candidate lookup, metadata     |
 | Event/provenance ledger | actions, links, mutations, receipts, lineage              |
 
 The kernel can be thin. The UI can be primitive. The cluster cannot be fake.

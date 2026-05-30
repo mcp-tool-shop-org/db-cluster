@@ -138,7 +138,12 @@ default ai-facing zone the server **refuses** it; see below.)
 
 ## Tool annotations
 
-Tools carry `annotations` that declare their behavior:
+`listTools` returns, on every tool, the MCP-spec `annotations` hint keys plus a
+finer-grained internal classification under `_meta`. (AI-007, Wave V4.)
+
+### Spec hints — `annotations`
+
+These are the keys a spec-compliant host reads:
 
 ```typescript
 interface ToolAnnotations {
@@ -154,6 +159,31 @@ interface ToolAnnotations {
 | Staged-only | `true` | `false` |
 | Approval | `false` | `false` |
 | Write | `false` | `true` |
+
+`destructiveHint` is `true` **only** for the two write tools that mutate cluster
+truth — `cluster_commit_mutation` and `cluster_compensate_mutation`. Every other
+tool reports `destructiveHint: false`.
+
+### Internal classification — `_meta['io.dbcluster/classification']`
+
+For hosts that want the richer taxonomy, each tool also carries a five-field
+classification under `_meta['io.dbcluster/classification']`:
+
+```typescript
+interface McpToolClassification {
+    readOnly: boolean;                // never mutates cluster state
+    writesCluster: boolean;           // writes to a truth store
+    approvalSensitive: boolean;       // gated by the approval lifecycle
+    stagedOnly: boolean;              // only ever creates/changes staged commands
+    requiresExistingCommand: boolean; // operates on an existing command id
+}
+```
+
+The two vocabularies stay in sync: `destructiveHint` is exactly the
+`writesCluster` tools. A spec host can ignore the `_meta` block entirely and
+rely on the three hint keys; a db-cluster-aware host can read the classification
+for finer routing (e.g. distinguishing a staged-only proposal from an
+approval-sensitive transition).
 
 ## Artifact content boundary
 
@@ -227,7 +257,10 @@ void ({} as AiErrorEnvelope);
 void ({} as EmptyResultMeta);
 ```
 
-The MCP transport wraps the envelope in the standard MCP error response:
+The MCP transport wraps the envelope in the standard MCP error response. Note
+there is **no top-level `_meta`** — the result carries only `isError` and
+`content`; the error body (including its own `_meta.operation: 'error'`) lives
+inside `content[0].text`:
 
 ```json
 {
@@ -235,15 +268,45 @@ The MCP transport wraps the envelope in the standard MCP error response:
   "content": [
     {
       "type": "text",
-      "text": "<JSON-stringified AiErrorEnvelope>"
+      "text": "<JSON-stringified error body>"
     }
-  ],
-  "_meta": {
-    "operation": "error",
-    "code": "<same code as in body>"
-  }
+  ]
 }
 ```
+
+**Detect the error with the top-level `isError` boolean — never with `_meta`.**
+`isError` is the MCP-spec field on the tool result and the only signal a spec
+host can read *without* first parsing `content[0].text`. The `_meta.operation:
+'error'` field also lives **inside** the parsed body (`content[0].text`), so any
+predicate keyed on `_meta` requires you to parse the body first — and for
+strict spec hosts the top-level `_meta` may not be surfaced at all. So the
+reliable sequence is: (1) check `result.isError === true`, then (2)
+`JSON.parse(result.content[0].text)` to get the body, then (3) branch on
+`body.code` / `body.remediation_hint` / `body.next_valid_actions`.
+
+**AI-006 (Wave V4) — the approval-gate refusal body keys the message under
+`error`.** When `cluster_commit_mutation` / `cluster_compensate_mutation` refuse
+because the command is not `approved`, the parsed body is:
+
+```json
+{
+  "error": "Commit refused on the AI-facing MCP surface: the command is in 'validated' status, not 'approved'. The AI surface enforces approve-before-commit (separation of duties).",
+  "code": "POLICY_DENIED",
+  "retryable": false,
+  "remediation_hint": "Call cluster_approve_mutation on this command first, then retry cluster_commit_mutation.",
+  "context": { "errorClass": "ApprovalGateDeniedError", "commandId": "<command id>", "currentStatus": "validated", "requiredStatus": "approved" },
+  "_meta": { "operation": "error" },
+  "next_valid_actions": ["cluster_approve_mutation"]
+}
+```
+
+Read the human message from **`body.error`** (not `body.message`) for this gate
+refusal. `body.code` is `'POLICY_DENIED'`, and `body.next_valid_actions` names
+the exact tool to call next — `['cluster_approve_mutation']` for the commit gate,
+`['cluster_inspect_command']` for the compensate gate. (The canonical
+`AiErrorEnvelope` *type* names this field `message`, but the MCP transport
+serializes every error body's human message on the wire as `error` — so the
+recipe below reads `env.error` to match the wire.)
 
 ### AI agent branching pattern
 
@@ -259,16 +322,29 @@ declare function surfaceFailure(env: AiErrorEnvelope): Promise<void>;
 
 async function branch() {
     const result = await mcpClient.call('cluster_commit_mutation', { commandId });
-    if (result._meta?.operation === 'error') {
+
+    // Detect the error via the TOP-LEVEL `isError` boolean — the only
+    // reliable signal a spec host can read WITHOUT first parsing the body.
+    // (`_meta.operation: 'error'` lives INSIDE content[0].text, not on the
+    // tool result, so a host can't branch on it before parsing — see note
+    // below.)
+    if (result.isError === true) {
+        // Now parse the body to read the typed envelope.
         const env: AiErrorEnvelope = JSON.parse(result.content[0].text);
 
+        // NOTE: the human-readable message is `env.error` (NOT `env.message`).
         if (env.code === 'POLICY_DENIED') {
-            // Surface to operator; do NOT retry with elevated principal automatically.
+            // Approval gate refused the write. next_valid_actions tells you the
+            // exact tool to call next: ['cluster_approve_mutation'] for the
+            // commit gate (['cluster_inspect_command'] for the compensate gate).
+            // Surface to operator; do NOT retry with an elevated principal
+            // automatically.
             return askOperator(env.remediation_hint, env.context);
         }
-        if (env.next_valid_actions?.includes('validated')) {
-            // Validation step skipped — call validate first then retry commit.
-            await mcpClient.call('cluster_validate_mutation', { commandId });
+        if (env.next_valid_actions?.includes('cluster_approve_mutation')) {
+            // The command is validated but not yet approved — get it approved,
+            // then retry commit.
+            await mcpClient.call('cluster_approve_mutation', { commandId });
             return retry(commandId);
         }
         if (env.retryable) {

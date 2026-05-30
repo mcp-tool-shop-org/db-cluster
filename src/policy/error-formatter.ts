@@ -132,6 +132,16 @@ export function errorToAiEnvelope(
     setStr('to', e.to);
     setStr('terminalStatus', e.terminalStatus);
     setStr('reason', e.reason);
+    // AI-006 (Wave V4): ApprovalGateDeniedError gate context. `commandId` is
+    // already pulled above; these surface the gate specifics so the MCP
+    // envelope context matches the pre-fix on-wire refusal shape and the
+    // POLICY_DENIED next_valid_actions arm can branch on requiredStatus/surface.
+    setStr('currentStatus', e.currentStatus);
+    setStr('requiredStatus', e.requiredStatus);
+    setStr('surface', e.surface);
+    if (typeof e.requiresPrivileged === 'boolean') {
+        context.requiresPrivileged = e.requiresPrivileged;
+    }
     // PolicyDeniedError carries a structured `decision`.
     if (e.decision && typeof e.decision === 'object') {
         const d = e.decision as Record<string, unknown>;

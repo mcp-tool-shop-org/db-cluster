@@ -35,7 +35,7 @@ import { validatePrincipal, validatePolicyConfig, PolicyConfigError } from './co
 // (no policy, no redaction). These canonical defaults are READ-ONLY here
 // (owned by the policy domain); we only consume them.
 import { DEFAULT_POLICIES, DEFAULT_TRUST_ZONES, DEFAULT_VISIBILITY_RULES } from '../policy/default-policies.js';
-import type { AiErrorEnvelope } from '../types/ai-envelope.js';
+import { ApprovalGateDeniedError } from '../policy/approval-gate-denied-error.js';
 import type { Command } from '../types/command.js';
 
 const CLUSTER_DIR = resolve(process.env.DB_CLUSTER_DIR ?? process.cwd(), '.db-cluster');
@@ -1068,30 +1068,14 @@ export async function handleTool(
                     currentStatus = undefined;
                 }
                 if (currentStatus !== undefined && currentStatus !== 'approved') {
-                    // Structured refusal mirroring the on-wire AiErrorEnvelope
-                    // body the CallToolRequest catch arm produces (so AI
-                    // consumers branch on one shape across all error paths).
-                    const refusal: AiErrorEnvelope & { error: string; next_valid_actions: string[] } = {
-                        code: 'POLICY_DENIED',
-                        message:
-                            'Commit refused on the AI-facing MCP surface: the command is in ' +
+                    throw new ApprovalGateDeniedError(
+                        'Commit refused on the AI-facing MCP surface: the command is in ' +
                             `'${currentStatus}' status, not 'approved'. The AI surface enforces ` +
                             'approve-before-commit (separation of duties).',
-                        error:
-                            'Commit refused on the AI-facing MCP surface: the command is in ' +
-                            `'${currentStatus}' status, not 'approved'. The AI surface enforces ` +
-                            'approve-before-commit (separation of duties).',
-                        retryable: false,
-                        remediation_hint:
-                            'Call cluster_approve_mutation on this command first, then retry ' +
+                        'Call cluster_approve_mutation on this command first, then retry ' +
                             'cluster_commit_mutation.',
-                        context: { commandId: args.commandId, currentStatus, requiredStatus: 'approved' },
-                        next_valid_actions: ['cluster_approve_mutation'],
-                    };
-                    return {
-                        ...refusal,
-                        _meta: { operation: 'error' as const, approvalSensitive: true, writesCluster: false },
-                    };
+                        { commandId: args.commandId as string, currentStatus, requiredStatus: 'approved' },
+                    );
                 }
             }
             const result = await sdk.commitMutation(args.commandId as string, args.actorId as string);
@@ -1117,45 +1101,30 @@ export async function handleTool(
         }
 
         case 'cluster_compensate_mutation': {
-            // INJECT-001 (Wave S2-A2 fix-up): MCP-boundary corrective-write gate.
-            // `cluster_compensate_mutation` is a DESTRUCTIVE sibling of commit —
-            // it fast-tracks (validate + commit) a fresh *compensating* command
-            // with NO `approved` lifecycle of its own, so there is no `approved`
-            // state to gate on the way the commit arm does. Instead it is gated
-            // on the SAME privileged opt-in that drives the commit gate
-            // (`mcpCommitGateActive()` → `boundary.aiFacingGate`): under the
-            // redacting ai-facing default, compensation is an operator-level
-            // corrective action and is REFUSED on the AI-facing surface
-            // entirely. The explicit operator opt-in
+            // AI-006 (Wave V4): MCP-boundary corrective-write gate. Compensation
+            // fast-tracks (validate + commit) a fresh *compensating* command with
+            // NO `approved` lifecycle of its own, so there is no `approved` state
+            // to gate the way the commit arm does. It is an operator-level
+            // corrective write; under the redacting ai-facing default boundary it
+            // is REFUSED outright. The privileged operator opt-in
             // (DB_CLUSTER_MCP_ALLOW_PRIVILEGED — the same KERNEL-002 opt-in)
-            // clears `aiFacingGate` upstream and compensate proceeds as before.
-            // The kernel's compensate behavior and `committableStatuses` are
-            // UNCHANGED; this is an MCP-surface-only refusal.
+            // clears `aiFacingGate` upstream so a trusted non-AI caller proceeds.
+            // This refusal is MCP-surface-only: the kernel's compensate behavior
+            // and `committableStatuses` are untouched. Routing through
+            // ApprovalGateDeniedError (thrown) means the catch arm sets
+            // `isError: true` + builds the canonical AiErrorEnvelope — the
+            // pre-AI-006 code RETURNED a refusal on the success path (no isError).
             if (boundary?.aiFacingGate) {
-                const refusal: AiErrorEnvelope & { error: string; next_valid_actions: string[] } = {
-                    code: 'POLICY_DENIED',
-                    message:
-                        'Compensation refused on the AI-facing MCP surface: compensating a ' +
+                throw new ApprovalGateDeniedError(
+                    'Compensation refused on the AI-facing MCP surface: compensating a ' +
                         'committed mutation is an operator-level corrective action that writes ' +
                         'cluster truth (a fresh compensating command is auto-committed). It is ' +
                         'not available on the redacting ai-facing surface.',
-                    error:
-                        'Compensation refused on the AI-facing MCP surface: compensating a ' +
-                        'committed mutation is an operator-level corrective action that writes ' +
-                        'cluster truth (a fresh compensating command is auto-committed). It is ' +
-                        'not available on the redacting ai-facing surface.',
-                    retryable: false,
-                    remediation_hint:
-                        'Run compensation from a trusted, operator-controlled context: start the ' +
+                    'Run compensation from a trusted, operator-controlled context: start the ' +
                         'MCP server with DB_CLUSTER_MCP_ALLOW_PRIVILEGED=1, or perform the ' +
                         'correction via the CLI/SDK where an operator authorizes the write.',
-                    context: { commandId: args.commandId, surface: 'ai-facing', requiresPrivileged: true },
-                    next_valid_actions: ['cluster_inspect_command'],
-                };
-                return {
-                    ...refusal,
-                    _meta: { operation: 'error' as const, approvalSensitive: true, writesCluster: false },
-                };
+                    { commandId: args.commandId as string, surface: 'ai-facing', requiresPrivileged: true },
+                );
             }
             const result = await sdk.compensateMutation(args.commandId as string, args.compensatedBy as string, args.reason as string);
             // AGG-006 fix (Wave A3 fix-up): see cluster_commit_mutation —
@@ -1315,13 +1284,39 @@ export const server = new Server(
 
 export { mcpCommitGateActive };
 
+/**
+ * AI-007 (Wave V4): derive the MCP-spec ToolAnnotations hint keys from our
+ * internal 5-field classification vocab. The spec keys
+ * (readOnlyHint/destructiveHint/idempotentHint) are what a spec-compliant host
+ * reads; emitting them makes the README's readOnlyHint/destructiveHint claim
+ * true. `destructiveHint` is true ONLY for the two `writesCluster` tools
+ * (commit + compensate). The internal 5-field flags are emitted SEPARATELY
+ * under a namespaced `_meta` key — NEVER co-mingled into `annotations` (a
+ * strict host validates `annotations` against the spec shape and could choke
+ * on non-spec keys).
+ */
+function toSpecAnnotations(a: ToolAnnotations): {
+    readOnlyHint: boolean;
+    destructiveHint: boolean;
+    idempotentHint: boolean;
+} {
+    return {
+        readOnlyHint: a.readOnly,
+        destructiveHint: a.writesCluster, // only commit + compensate are writesCluster:true
+        idempotentHint: a.readOnly, // reads repeat without additional effect; writes/proposals do not
+    };
+}
+
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: TOOLS.map((t) => ({
         name: t.name,
         description: t.description,
         inputSchema: t.inputSchema,
-        // Pass annotations through for MCP hosts that support them
-        annotations: t.annotations,
+        // AI-007: PURE spec annotations only — no non-spec keys here.
+        annotations: toSpecAnnotations(t.annotations),
+        // Internal 5-field classification kept under a namespaced _meta key so
+        // hosts that want it can read it without polluting the spec annotations.
+        _meta: { 'io.dbcluster/classification': t.annotations },
     })),
 }));
 
@@ -1411,6 +1406,23 @@ function lifecycleNextValidActions(code: string, context?: Record<string, unknow
             // with corrections — the validation.checks detail tells the
             // caller which check failed.
             return ['cluster_propose_mutation'];
+        case 'POLICY_DENIED': {
+            // AI-006 (Wave V4): the AI-facing approval gates throw
+            // ApprovalGateDeniedError (code POLICY_DENIED) with gate context.
+            // Branch so the AI gets the right next step:
+            //   - commit gate (requiredStatus === 'approved') → approve first
+            //   - compensate gate (surface 'ai-facing' / requiresPrivileged) → inspect
+            // A REAL kernel PolicyDeniedError (no gate fields, carries
+            // capability/matchedPolicyName instead) has no lifecycle remedy →
+            // return undefined so next_valid_actions is omitted (safe degrade).
+            if (context?.requiredStatus === 'approved') {
+                return ['cluster_approve_mutation'];
+            }
+            if (context?.surface === 'ai-facing' || context?.requiresPrivileged === true) {
+                return ['cluster_inspect_command'];
+            }
+            return undefined;
+        }
         default:
             return undefined;
     }

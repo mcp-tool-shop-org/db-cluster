@@ -41,3 +41,6 @@ site/.astro/
 site/dist/
 site/node_modules/
 .polyglot-cache.json
+
+# Agent/session scratch (e.g. scheduled-task locks) — never committed
+.claude/

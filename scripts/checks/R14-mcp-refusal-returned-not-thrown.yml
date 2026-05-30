@@ -1,0 +1,36 @@
+id: mcp-refusal-returned-not-thrown
+language: typescript
+severity: error
+message: |
+  An MCP tool handler RETURNS an object literal carrying `code: 'POLICY_DENIED'`
+  (AI-006, Wave V4 regression net). This is the pre-fix bug shape: the
+  AI-facing approval gates (cluster_commit_mutation / cluster_compensate_mutation)
+  used to RETURN a bespoke refusal object on the success path, so the MCP wire
+  result had NO `isError: true` — a destructive-tool refusal silently read as a
+  SUCCESS to the host. The fix THROWS `ApprovalGateDeniedError(...)` instead, so
+  the registered CallToolRequestSchema catch arm sets `isError: true` and builds
+  the canonical error envelope.
+
+  Do NOT re-introduce a returned refusal. Throw ApprovalGateDeniedError (from
+  src/policy/approval-gate-denied-error.ts) so the gate refusal reads as an
+  error. (POLICY_DENIED legitimately appears as a string VALUE inside the catch
+  arm's envelope — but that envelope is built from `sanitized.code`, never a
+  literal `code: 'POLICY_DENIED'` in a `return`-ed object literal, so this rule
+  does not match the legitimate path.)
+rule:
+  kind: return_statement
+  has:
+    kind: object
+    has:
+      kind: pair
+      all:
+        - has:
+            field: key
+            regex: "^code$"
+        - has:
+            field: value
+            regex: "POLICY_DENIED"
+files:
+  - "src/mcp/server.ts"
+ignores:
+  - "test/**"

@@ -618,6 +618,14 @@ export function cliCommand<T extends unknown[]>(
     fn: (...args: T) => Promise<void>,
 ): (...args: T) => Promise<void> {
     return async (...args: T) => {
+        // CLI-008 (Wave V4): when --json is set, the catch arm ALSO emits a
+        // structured { error: { code, message, hint } } object to STDOUT (in
+        // addition to — never instead of — the human stderr output below).
+        // Commander passes the command's parsed opts object as one of the
+        // action args, so we sniff for `.json === true` across all args.
+        const jsonMode = (args as unknown[]).some(
+            (a) => a !== null && typeof a === 'object' && (a as { json?: unknown }).json === true,
+        );
         try {
             await fn(...args);
         } catch (err: unknown) {
@@ -636,7 +644,18 @@ export function cliCommand<T extends unknown[]>(
                 // the SAME scrubber the sibling adapter-error arm below
                 // applies (redactErrorForCli), so both Cluster catch arms
                 // sanitize consistently.
-                process.stderr.write(colorizeFormattedError(renderClusterErrorForCli(err)) + '\n');
+                const rendered = renderClusterErrorForCli(err);
+                process.stderr.write(colorizeFormattedError(rendered) + '\n');
+                if (jsonMode) {
+                    // `rendered` is `<scrubbed headline>\n  → try: <hint>`; split
+                    // so the JSON `message` is the scrubbed headline only and the
+                    // hint comes from the subclass's remediationHint (the same
+                    // single source of truth the human render uses).
+                    const headline = rendered.split('\n  → try: ')[0];
+                    process.stdout.write(
+                        JSON.stringify({ error: { code: err.code, message: headline, hint: err.remediationHint ?? null } }) + '\n',
+                    );
+                }
                 process.exit(typedErrorToExitCode(err.code));
                 return;
             }
@@ -647,10 +666,16 @@ export function cliCommand<T extends unknown[]>(
                 // and adapter-error arms scrub via renderClusterErrorForCli /
                 // redactErrorForCli; this arm printed raw. Route it through the
                 // SAME scrubber for parity so no absolute path leaks to stderr.
-                process.stderr.write(cliColor.error(redactErrorForCli(err)) + '\n');
+                const scrubbed = redactErrorForCli(err);
+                process.stderr.write(cliColor.error(scrubbed) + '\n');
                 const hint = remediationForCode(err.code);
                 if (hint) {
                     process.stderr.write(`  ${cliColor.hint(`→ try: ${hint}`)}\n`);
+                }
+                if (jsonMode) {
+                    process.stdout.write(
+                        JSON.stringify({ error: { code: err.code, message: scrubbed, hint: hint ?? null } }) + '\n',
+                    );
                 }
                 process.exit(typedErrorToExitCode(err.code));
                 return;
@@ -682,17 +707,32 @@ export function cliCommand<T extends unknown[]>(
                 if (hint) {
                     process.stderr.write(`  ${cliColor.hint(`→ try: ${hint}`)}\n`);
                 }
+                if (jsonMode) {
+                    process.stdout.write(
+                        JSON.stringify({ error: { code: adapterErr.code, message: safeMsg, hint: hint ?? null } }) + '\n',
+                    );
+                }
                 process.exit(typedErrorToExitCode(adapterErr.code));
                 return;
             }
+            // CLI-008 (Wave V4): compute the scrubbed/generic message once so
+            // both the human stderr line and the --json stdout object use it.
+            // Under DEBUG=1 the full stack still goes to stderr for the trusted
+            // operator, but the JSON body stays scrubbed (never leak a stack to
+            // a structured consumer).
+            const message = err instanceof Error
+                ? redactErrorForCli(err)
+                : 'An internal error occurred.';
             if (process.env.DEBUG === '1') {
                 // Full stack for trusted operator debug.
                 console.error(err);
             } else {
-                const message = err instanceof Error
-                    ? redactErrorForCli(err)
-                    : 'An internal error occurred.';
                 process.stderr.write(cliColor.error(`Error: ${message}`) + '\n');
+            }
+            if (jsonMode) {
+                process.stdout.write(
+                    JSON.stringify({ error: { code: 'INTERNAL_ERROR', message, hint: null } }) + '\n',
+                );
             }
             process.exit(1);
         }
@@ -2241,6 +2281,16 @@ program
                 }
             }
         }
+        // CLI-001 (Wave V4): doctor/verify DETECT corruption but historically
+        // exited 0, so `db-cluster doctor && deploy` passed on a corrupt
+        // cluster. Reflect health in the exit code. Use `process.exitCode`
+        // (NOT process.exit()) so the --json stdout write above flushes fully.
+        // A HEALTHY run leaves exitCode at its default 0 (the broken-fix trap:
+        // never make healthy runs exit non-zero).
+        if (health.status !== 'healthy') {
+            process.exitCode =
+                health.status === 'corrupt' || health.status === 'unreachable' ? 70 : 1;
+        }
     }));
 
 program
@@ -2275,6 +2325,51 @@ program
                 const icon = check.status === 'healthy' ? '✓' : check.severity === 'error' ? '✗' : '!';
                 console.log(`  ${icon} ${check.name}: ${check.message}`);
             }
+        }
+        // CLI-001 (Wave V4): doctor/verify DETECT corruption but historically
+        // exited 0, so `db-cluster doctor && deploy` passed on a corrupt
+        // cluster. Reflect health in the exit code. Use `process.exitCode`
+        // (NOT process.exit()) so the --json stdout write above flushes fully.
+        // A HEALTHY run leaves exitCode at its default 0 (the broken-fix trap:
+        // never make healthy runs exit non-zero).
+        if (health.status !== 'healthy') {
+            process.exitCode =
+                health.status === 'corrupt' || health.status === 'unreachable' ? 70 : 1;
+        }
+    }));
+
+// CLI-007 (Wave V4): cheap cluster census. Counts only — entity / command /
+// receipt totals via the EXISTING list surfaces (canonical.list, the
+// CommandQueue, ledger.listReceipts). Deliberately NOT instrumented:
+// per-operation read/write/denial counters would need an OperatorSignal
+// buffer the kernel does not expose, so those are out of scope here.
+program
+    .command('stats')
+    .description('Show cluster entity / command / receipt counts (cheap aggregation; no per-operation signal counters).')
+    .option('--json', 'Output as JSON')
+    .action(cliCommand(async (opts) => {
+        const stores = createLocalCluster(CLUSTER_DIR);
+        // Mirrors the doctor/verify actions' CommandQueue(CLUSTER_DIR) idiom.
+        const { CommandQueue } = await import('./kernel/command-queue.js');
+        const commandQueue = new CommandQueue(CLUSTER_DIR);
+        const [entities, receipts] = await Promise.all([
+            stores.canonical.list(),
+            stores.ledger.listReceipts({}),
+        ]);
+        // CommandQueue.list() is a synchronous read over all persisted
+        // commands across every lifecycle status — the cheapest total
+        // (no per-status listByStatus summing needed).
+        const stats = {
+            entities: entities.length,
+            commands: commandQueue.list().length,
+            receipts: receipts.length,
+        };
+        if (opts.json) {
+            console.log(JSON.stringify(stats, null, 2));
+        } else if (!cliQuiet) {
+            console.log(`Entities:  ${stats.entities}`);
+            console.log(`Commands:  ${stats.commands}`);
+            console.log(`Receipts:  ${stats.receipts}`);
         }
     }));
 

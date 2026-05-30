@@ -16,6 +16,8 @@
 
 **AI-native federated database cluster.** Specialized truth stores behaving as one governed substrate — typed errors, structured exit codes, mutation receipts, MCP + SDK + CLI surfaces.
 
+"Federated" means specialized truth stores that may run on different backends; the Postgres backend currently applies to the **canonical store only** — the artifact, index, and ledger stores run on the local/SQLite backends.
+
 ## Who is this for
 
 - **AI agents** that need trustworthy retrieval, structured error envelopes, and a mutation lifecycle that won't let them silently corrupt state.

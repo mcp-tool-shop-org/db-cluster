@@ -589,11 +589,12 @@ Local fallback: if `DB_CLUSTER_CANONICAL_BACKEND` is not set, all stores use loc
 
 ### 10.4 Non-goals (not yet)
 
-- Vector backend for index store
 - Graph backend for provenance
 - S3 artifact backend
 - Distributed replication
 - Hosted control plane
+
+A vector/embedding backend for the index store is intentionally absent from this list: it is a permanent design non-goal, not a deferral. The index does full-text candidate lookup only.
 
 ---
 

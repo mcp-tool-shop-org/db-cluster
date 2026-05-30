@@ -35,12 +35,73 @@ import { createHash } from 'node:crypto';
 
 import { ClusterSDK } from '../src/sdk/cluster-sdk.js';
 import { buildSDKOptions, handleTool } from '../src/mcp/server.js';
+import { redactError } from '../src/mcp/sanitize.js';
 import {
     DEFAULT_POLICIES,
     DEFAULT_TRUST_ZONES,
     DEFAULT_VISIBILITY_RULES,
 } from '../src/policy/default-policies.js';
 import type { Principal } from '../src/types/policy.js';
+
+// ─── Canonical MCP error-wire reconstruction ────────────────────────────────
+//
+// AI-006 (Wave V4): the AI-facing approval gates no longer RETURN a refusal
+// object on the success path — `handleTool` now THROWS ApprovalGateDeniedError,
+// and the production `CallToolRequestSchema` catch arm (src/mcp/server.ts)
+// redacts it into the CANONICAL error envelope with `isError: true`. This
+// helper mirrors that catch arm byte-for-byte so a direct `handleTool` call in
+// a test sees exactly what an AI consumer reads over the wire: the human
+// message under `body.error` (NOT body.message), `isError: true`, and
+// lifecycle `next_valid_actions`. (Pattern borrowed from
+// test/wave-c1-tests-mcp-envelope.test.ts.)
+const COMMAND_LIFECYCLE_TOOLS = new Set([
+    'cluster_propose_mutation',
+    'cluster_validate_mutation',
+    'cluster_approve_mutation',
+    'cluster_reject_mutation',
+    'cluster_commit_mutation',
+    'cluster_compensate_mutation',
+    'cluster_inspect_command',
+]);
+
+function lifecycleNextValidActions(code: string, context?: Record<string, unknown>): string[] | undefined {
+    if (code !== 'POLICY_DENIED') return undefined;
+    if (context?.requiredStatus === 'approved') return ['cluster_approve_mutation'];
+    if (context?.surface === 'ai-facing' || context?.requiresPrivileged === true) return ['cluster_inspect_command'];
+    return undefined;
+}
+
+/**
+ * Drive a tool through the production-equivalent boundary: on success return
+ * the raw result with `isError:false`; on throw, build the canonical envelope
+ * (matching src/mcp/server.ts) and return `{ body, isError:true }`.
+ */
+async function callToolEnvelope(
+    name: string,
+    args: Record<string, unknown>,
+    sdk: ClusterSDK,
+    boundary?: { aiFacingGate?: boolean },
+): Promise<{ body: Record<string, unknown>; isError: boolean }> {
+    try {
+        const result = await handleTool(name, args, sdk, boundary) as Record<string, unknown>;
+        return { body: result, isError: false };
+    } catch (err) {
+        const sanitized = redactError(err);
+        const body: Record<string, unknown> = {
+            error: sanitized.message,
+            code: sanitized.code,
+            retryable: sanitized.retryable,
+            remediation_hint: sanitized.remediation_hint,
+            context: sanitized.context,
+            _meta: { operation: 'error' as const },
+        };
+        if (COMMAND_LIFECYCLE_TOOLS.has(name)) {
+            const nva = lifecycleNextValidActions(sanitized.code, sanitized.context);
+            if (nva !== undefined) body.next_valid_actions = nva;
+        }
+        return { body, isError: true };
+    }
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -296,20 +357,30 @@ describe('INJECT-001 — MCP commit refuses non-approved command under ai-facing
         await sdk.validateMutation(cmd.id);
 
         // Commit through the MCP boundary WITH the ai-facing gate active.
-        const refused = await handleTool(
+        // AI-006 (Wave V4): the gate now THROWS ApprovalGateDeniedError;
+        // callToolEnvelope reconstructs the canonical error wire shape the
+        // production CallTool catch arm produces (isError + body.error).
+        const { body: refused, isError } = await callToolEnvelope(
             'cluster_commit_mutation',
             { commandId: cmd.id, actorId: 'agent' },
             sdk,
             { aiFacingGate: true },
-        ) as Record<string, unknown>;
+        );
 
-        // Must be a structured AiErrorEnvelope refusal (NOT a successful commit).
+        // Must read as an ERROR (the destructive-refusal-as-error fix) and be a
+        // structured AiErrorEnvelope refusal (NOT a successful commit).
+        expect(isError).toBe(true);
         expect((refused._meta as Record<string, unknown> | undefined)?.operation).toBe('error');
-        expect(typeof refused.code).toBe('string');
+        expect(refused.code).toBe('POLICY_DENIED');
+        // CANONICAL wire shape: human message under `body.error`.
+        expect(typeof refused.error).toBe('string');
+        expect((refused.error as string).toLowerCase()).toMatch(/approve/);
         expect(typeof refused.remediation_hint).toBe('string');
         expect((refused.remediation_hint as string).toLowerCase()).toMatch(/approve/);
         expect(Array.isArray(refused.next_valid_actions)).toBe(true);
         expect(refused.next_valid_actions).toContain('cluster_approve_mutation');
+        // The commit-gate context carries requiredStatus === 'approved'.
+        expect((refused.context as Record<string, unknown>).requiredStatus).toBe('approved');
 
         // The command must NOT have committed.
         const inspected = await sdk.inspectCommand(cmd.id);
