@@ -14,9 +14,9 @@
   <a href="https://github.com/mcp-tool-shop-org/db-cluster/pkgs/container/db-cluster"><img src="https://img.shields.io/badge/ghcr.io-db--cluster-2496ED?logo=docker" alt="Docker image on GHCR" /></a>
 </p>
 
-**Cluster de banco de dados federado nativo de IA.** Armazenamentos de dados especializados que funcionam como um único substrato governado — erros tipados, códigos de saída estruturados, recibos de mutação, MCP + SDK + interfaces CLI.
+**As bases de dados tradicionais partem do princípio de que o utilizador que faz as consultas é cuidadoso e segue um padrão determinado. Os agentes de IA não são assim.**
 
-"Federado" significa armazenamentos de dados especializados que podem ser executados em diferentes backends; o backend Postgres atualmente se aplica apenas ao **armazenamento canônico** — os armazenamentos de artefatos, índices e registros são executados nos backends locais/SQLite.
+Uma base de dados convencional fornece ao agente erros escritos para programadores humanos, aplica qualquer alteração assim que esta é considerada válida e devolve todos os campos que a consulta afeta, de modo que o agente não consegue determinar de forma fiável o que fazer a seguir, não há nada que impeça uma injeção de comandos e os dados confidenciais são enviados diretamente para a janela de contexto. O db-cluster foi concebido tendo em conta essa diferença: bases de dados especializadas que funcionam como um único conjunto atrás de um único núcleo com políticas aplicadas, adaptando-se às necessidades do agente — erros tipificados que indicam o que fazer a seguir, recuperação que devolve um conjunto de evidências citáveis, ocultação em todos os caminhos de leitura e um ciclo de vida de proposta → aprovação → aplicação que impede que uma injeção de comandos corrompa silenciosamente a base de dados. Local por predefinição, Postgres e SQLite quando se pretende aumentar a capacidade, através de CLI, SDK e MCP.
 
 ## Para quem é isso?
 
@@ -66,6 +66,8 @@ Um cluster de banco de dados federado onde:
 - **Registro de eventos/linhagem** — ações, links, mutações, recibos, linhagem
 
 O kernel roteia. O índice descobre. O cluster detém os dados.
+
+"Federado" significa armazenamentos de dados especializados que podem ser executados em diferentes backends; o backend Postgres atualmente se aplica apenas ao **armazenamento canônico** — os armazenamentos de artefatos, índices e registros são executados nos backends locais/SQLite.
 
 ## O que isso não é
 

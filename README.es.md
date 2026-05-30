@@ -14,24 +14,23 @@
   <a href="https://github.com/mcp-tool-shop-org/db-cluster/pkgs/container/db-cluster"><img src="https://img.shields.io/badge/ghcr.io-db--cluster-2496ED?logo=docker" alt="Docker image on GHCR" /></a>
 </p>
 
-**Clúster de base de datos federada nativo de IA.** Almacenes de datos especializados que funcionan como un sustrato gobernado único: errores tipados, códigos de salida estructurados, recibos de mutación, MCP + SDK + interfaces CLI.
-
-"Federada" significa almacenes de datos especializados que pueden ejecutarse en diferentes entornos; el entorno de Postgres se aplica actualmente solo al **almacén canónico**: los almacenes de artefactos, índices y registros se ejecutan en los entornos locales/SQLite.
+**Las bases de datos tradicionales asumen un llamador cuidadoso y determinista. Los agentes de IA no lo son.**
+Un almacén convencional proporciona a un agente errores escritos para desarrolladores humanos, confirma cualquier operación que se le indique en el instante en que es válida y devuelve todos los campos a los que afecta la consulta, de modo que el agente no puede determinar de forma fiable qué hacer a continuación, no hay nada que impida una inyección de indicaciones y sus datos, y los secretos terminan directamente en la ventana de contexto. db-cluster se diseñó teniendo en cuenta esta diferencia: almacenes de datos especializados que se ejecutan como un único clúster detrás de un único núcleo con políticas aplicadas, satisfaciendo las necesidades del agente: errores tipados que indican qué hacer a continuación, recuperación que devuelve un conjunto de pruebas citables, eliminación en cada ruta de lectura y un ciclo de vida de propuesta → aprobación → confirmación que evitará que una inyección de indicaciones corrompa silenciosamente su almacén. De forma predeterminada, es local; Postgres y SQLite cuando se amplía, a través de CLI, SDK y MCP.
 
 ## ¿Para quién es esto?
 
-- **Agentes de IA** que necesitan una recuperación fiable, envolventes de errores estructurados y un ciclo de vida de mutación que no les permita corromper el estado de forma silenciosa.
-- **Operadores** que ejecutan almacenes de gráficos y procedencia y que desean códigos de salida tipados, diagnósticos de verificación, manuales de procedimientos y copias de seguridad/restauraciones seguras.
-- **Desarrolladores** que crean aplicaciones basadas en clústeres y que desean una API pública deliberada, pruebas de instalación inicial y JSDoc + ejemplos por método.
-- **Usuarios de paneles de control** que auditan la información del clúster: propiedad del almacén, linaje de procedencia, vista previa de comandos, vista de ocultación.
+- **Agentes de IA** que necesitan una recuperación fiable, estructuras de errores y un ciclo de vida de mutación que evite que corrompan el estado de forma silenciosa.
+- **Operadores** que ejecutan almacenes de gráficos y procedencia y que desean códigos de salida tipados, diagnósticos de verificación/detección de errores, libros de procedimientos y copias de seguridad/restauraciones seguras.
+- **Desarrolladores** que crean aplicaciones basadas en clústeres y que desean una API pública bien definida, pruebas de instalación inicial y JSDoc + ejemplos por método.
+- **Usuarios de paneles de control** que auditan la integridad del clúster: propiedad del almacén, linaje de procedencia, vista previa de comandos, vista de eliminación.
 
 ## ¿Por qué usar db-cluster?
 
-- **Errores tipados con `remediationHint`** (sugerencia de remediación): cada subclase de `ClusterError` responde a QUÉ HACER, no solo a QUÉ falló (códigos de salida de la CLI 65/70/77/78 asignados a códigos de error tipados).
-- **Envolventes de errores de IA**: esquema `{code, message, retryable, remediation_hint, context, next_valid_actions}`; los agentes de IA pueden ramificarse en función de `code` y `retryable` en lugar de analizar texto.
-- **Recibos en cada mutación**: direccionables por contenido; grafo de procedencia; contrato de reconstrucción a partir de la información del almacén de índices.
-- **Servidor MCP con anotaciones de seguridad**: las herramientas de solo lectura / por etapas / aprobación / escritura tienen cada una indicadores `readOnlyHint` / `destructiveHint` legibles por máquina. El servidor tiene como valor predeterminado la zona de confianza `ai-facing` (ocultación ACTIVADA), y las herramientas de escritura de MCP se niegan a confirmar hasta que el comando esté `aprobado`.
-- **Política aplicada por defecto**: la fábrica de raíz del paquete `createSafeCluster()` devuelve un controlador con políticas aplicadas (un `PolicyEnforcedKernel` + operaciones de solo lectura, sin modificadores de almacén sin procesar). Los almacenes sin procesar y sin políticas son accesibles solo a través de la vía de escape explícita `@mcptoolshop/db-cluster/unsafe`.
+- **Errores tipados con `remediationHint`**: cada subclase de `ClusterError` responde a QUÉ HAY QUE HACER, no solo a QUÉ falló (códigos de salida de CLI 65/70/77/78 asignados a códigos de error tipados).
+- **Estructuras de errores de IA**: esquema `{code, message, retryable, remediation_hint, context, next_valid_actions}`; los agentes de IA pueden ramificarse en función de `code` y `retryable` en lugar de analizar texto.
+- **Comprobantes en cada mutación**: direccionables por contenido; grafo de procedencia; contrato de reconstrucción a partir de la verdad en el almacén de índices.
+- **Servidor MCP con anotaciones de seguridad**: las herramientas de solo lectura, por etapas, de aprobación y de escritura tienen cada una indicadores `readOnlyHint` / `destructiveHint` legibles por máquina. El servidor utiliza de forma predeterminada la zona de confianza `ai-facing` (eliminación activada, sin contenido sin procesar), y las herramientas de escritura de MCP se niegan a confirmar hasta que el comando sea `aprobado`.
+- **Políticas aplicadas de forma predeterminada**: la fábrica de la raíz del paquete `createSafeCluster()` devuelve un controlador con políticas aplicadas (un `PolicyEnforcedKernel` + operaciones de solo lectura, sin modificadores de almacén sin procesar). Los almacenes sin procesar y sin políticas son accesibles solo a través de la vía de escape explícita `@mcptoolshop/db-cluster/unsafe`.
 
 ## Guía de inicio rápido (3 pasos)
 
@@ -41,14 +40,14 @@ npx @mcptoolshop/db-cluster ingest ./file.md    # 2. ingest an artifact
 npx @mcptoolshop/db-cluster retrieve "query"    # 3. retrieve an evidence bundle
 ```
 
-O instale globalmente y use los archivos binarios `db-cluster` y `db-cluster-mcp` directamente:
+O instálelo globalmente y utilice directamente los comandos `db-cluster` y `db-cluster-mcp`:
 
 ```bash
 npm install -g @mcptoolshop/db-cluster
 db-cluster init
 ```
 
-O ejecute a través de Docker (no se requiere la instalación de Node):
+O ejecútelo a través de Docker (no se requiere la instalación de Node):
 
 ```bash
 docker run --rm -v "$PWD:/workspace" ghcr.io/mcp-tool-shop-org/db-cluster:latest init
@@ -58,14 +57,16 @@ Ruta completa óptima: [`docs/quickstart.md`](docs/quickstart.md) (5 minutos).
 
 ## ¿Qué es esto?
 
-Un clúster de base de datos federada donde:
+Un clúster de bases de datos federadas en el que:
 
 - **Almacén canónico**: entidades, ID, registros de estado estables
-- **Almacén de artefactos**: archivos sin procesar, documentos, texto fuente, salidas generadas
-- **Almacén de índices**: capacidad de descubrimiento, búsqueda de texto completo (clasificada), búsqueda de metadatos
-- **Registro de eventos/procedencia**: acciones, enlaces, mutaciones, recibos, linaje
+- **Almacén de artefactos**: archivos sin procesar, documentos, texto fuente, resultados generados
+- **Almacén de índices**: capacidad de búsqueda, búsqueda de texto completo (clasificada), búsqueda de metadatos
+- **Registro de eventos/procedencia**: acciones, vínculos, mutaciones, comprobantes, linaje
 
-El núcleo enruta. El índice descubre. El clúster posee la información.
+El núcleo enruta. El índice descubre. El clúster es el propietario de la verdad.
+
+"Federado" significa que estos almacenes pueden ejecutarse en diferentes backends: el backend de Postgres se aplica actualmente solo al **almacén canónico**: los almacenes de artefactos, índices y registros se ejecutan en los backends locales o SQLite.
 
 ## ¿Qué no es esto?
 
@@ -73,17 +74,17 @@ El núcleo enruta. El índice descubre. El clúster posee la información.
 - Un índice sobre muchos almacenes
 - Middleware de gobernanza
 - Una base de datos vectorial con complementos
-- Una capa de memoria de agente
+- Una capa de memoria del agente
 
 ## Leyes de la arquitectura
 
-1. Cada hecho tiene un almacén propietario.
-2. Los índices son derivados: se pueden eliminar y reconstruir a partir de los almacenes propietarios.
-3. La IA nunca modifica directamente el estado sin procesar.
-4. Cada respuesta se remonta a la fuente de información.
-5. Cada mutación cruza una frontera de comando tipada.
-6. La información de los artefactos es inmutable por defecto: las correcciones crean versiones, no sobrescriben.
-7. El núcleo enruta; el clúster posee.
+1. Cada hecho tiene un almacén propietario
+2. Los índices son derivados: se pueden eliminar y reconstruir a partir de los almacenes propietarios
+3. La IA nunca modifica directamente el estado sin procesar
+4. Cada respuesta se remonta a la fuente de la verdad
+5. Cada mutación cruza una frontera de comando tipada
+6. La verdad del artefacto es inmutable de forma predeterminada: las correcciones crean versiones, no sobrescriben
+7. El núcleo enruta; el clúster es el propietario
 
 ## CLI
 
@@ -112,47 +113,25 @@ Consulte [`docs/cli.md`](docs/cli.md) para obtener la referencia completa de la 
 
 ## Modelo de confianza
 
-db-cluster se ejecuta **localmente**. Lee y escribe un directorio `.db-cluster/` en el
-directorio de trabajo al que lo apunte y lee los artefactos que le pase a `ingest`.
-Por defecto, **no hay salida de red** y **no hay telemetría**. La única
-conexión saliente opcional es a un host de Postgres si establece
-`DB_CLUSTER_POSTGRES_URL`. **db-cluster no configura SSL/TLS para esa
-conexión en v1.0.0**: el transporte es texto sin formato a menos que su cadena de conexión lo imponga (por ejemplo, `sslmode=require`, que el controlador `pg` respeta), un proxy de terminación TLS o una red privada. La configuración de TLS administrada por el controlador se
-planifica para una versión futura.
+db-cluster se ejecuta **localmente**. Lee y escribe en un directorio `.db-cluster/` en el directorio de trabajo al que lo apunte y lee los artefactos que le pase a `ingest`. No hay **salida de red** de forma predeterminada y **no hay telemetría**. La única conexión saliente opcional es a un host de Postgres si establece `DB_CLUSTER_POSTGRES_URL`. **db-cluster no configura SSL/TLS para esa conexión en la versión 1.0.0**: el transporte es texto sin formato a menos que su cadena de conexión lo aplique (por ejemplo, `sslmode=require`, que el controlador `pg` respeta), un proxy que finalice TLS o una red privada. La configuración de TLS administrada por el controlador se planea para una versión futura.
 
-Las herramientas del servidor MCP leen y escriben solo en los almacenes locales; nunca llegan a la
-red, y las respuestas estructuradas `AiErrorEnvelope` nunca filtran rastreos de pila ni
-rutas de archivos. **El servidor MCP tiene como valor predeterminado la zona de confianza `ai-facing` con
-ocultación ACTIVADA**: el contenido de los artefactos y los atributos de entidad confidenciales se eliminan
-en la frontera por defecto, y ninguna herramienta de MCP devuelve bytes de artefacto sin procesar. Un operador
-que necesita la postura privilegiada (`internal` / `cluster-admin`) debe optar explícitamente
-a través de una marca de entorno (provisionalmente `DB_CLUSTER_MCP_ALLOW_PRIVILEGED`;
-consulte [`docs/mcp.md`](docs/mcp.md)). **Las herramientas de escritura de MCP aplican la aprobación**:
-`cluster_commit_mutation` y `cluster_compensate_mutation` se niegan a escribir
-a menos que el comando esté en estado `aprobado`; el llamador primero debe llamar
-a `cluster_approve_mutation`, y el rechazo es un `AiErrorEnvelope` estructurado,
-no una escritura parcial. (Los llamadores de SDK en proceso de confianza no se ven afectados; esta puerta de enlace
-es solo para la superficie de MCP). Los comandos de CLI destructivos (`restore`, `rebuild index`,
-`compensate`, `backup --force-overwrite`) requieren una marca `--yes` explícita más
-una confirmación interactiva en TTY.
+Las herramientas del servidor MCP solo leen y escriben en los almacenes locales; nunca acceden a la red, y las respuestas estructuradas de `AiErrorEnvelope` nunca revelan rastros de la pila o rutas del sistema de archivos. **De forma predeterminada, el servidor MCP utiliza la zona de confianza `ai-facing` con la función de ocultación activada:** el contenido de los artefactos y los atributos confidenciales de las entidades se eliminan en el límite de forma predeterminada, y ninguna herramienta de MCP devuelve bytes de artefactos sin procesar. Un operador que necesite los permisos especiales (`internal` / `cluster-admin`) debe habilitarlos explícitamente mediante una variable de entorno (provisionalmente `DB_CLUSTER_MCP_ALLOW_PRIVILEGED`; consulte [`docs/mcp.md`](docs/mcp.md)). **Las herramientas de escritura de MCP aplican la aprobación:** `cluster_commit_mutation` y `cluster_compensate_mutation` se niegan a escribir a menos que el comando tenga el estado `approved`; el llamador primero debe llamar a `cluster_approve_mutation`, y el rechazo es una respuesta estructurada de `AiErrorEnvelope`, no una escritura parcial. (Los llamadores de SDK de confianza que se ejecutan en el mismo proceso no se ven afectados; esta restricción solo se aplica a la interfaz de MCP). Los comandos destructivos de la CLI (`restore`, `rebuild index`, `compensate`, `backup --force-overwrite`) requieren una opción explícita `--yes` y una confirmación interactiva en la terminal.
 
-El modelo de amenazas completo: datos tocados, datos NO tocados, permisos requeridos,
-postura por superficie y residuos rastreados, se encuentra en
-[`SECURITY.md`](SECURITY.md).
+El modelo de amenazas completo (datos a los que se accede, datos a los que NO se accede, permisos requeridos, postura por interfaz y residuos rastreados) se encuentra en [`SECURITY.md`](SECURITY.md).
 
 ## Documentación
 
-Consulte [`docs/README.md`](docs/README.md) para ver el mapa completo de la documentación (comience aquí / referencia / historial de la fase de desarrollo). Aspectos destacados:
+Consulte [`docs/README.md`](docs/README.md) para obtener el mapa completo de la documentación (Comience aquí / Referencia / Historial de la fase de desarrollo). Aspectos destacados:
 
-- [Guía de inicio rápido](docs/quickstart.md): la guía esencial en 5 minutos.
-- [Manual](docs/handbook.md): guía completa para operadores y desarrolladores.
-- [Arquitectura](docs/architecture.md): modelo de verdad federada y las siete leyes de la arquitectura.
+- [Guía de inicio rápido](docs/quickstart.md): la ruta óptima en 5 minutos.
+- [Manual](docs/handbook.md): guía canónica para operadores y desarrolladores.
+- [Arquitectura](docs/architecture.md): modelo de verdad federado y las siete leyes de la arquitectura.
 - [Contratos de almacenamiento](docs/store-contracts.md): qué posee y garantiza cada uno de los cuatro almacenes.
 - [Ley de mutación](docs/mutation-law.md) / [Gráficos de procedencia](docs/provenance-graphs.md): ciclo de vida de escritura segura y seguimiento del linaje.
-- [SDK](docs/sdk.md) / [CLI](docs/cli.md) / [MCP](docs/mcp.md): referencias.
-- [Política y ocultación de datos](docs/policy-and-redaction.md): Principal, Capacidad, Política, TrustZone.
+- [SDK](docs/sdk.md) / [CLI](docs/cli.md) / [MCP](docs/mcp.md): referencias de la interfaz.
+- [Política y ocultación](docs/policy-and-redaction.md): Principal, Capacidad, Política, Zona de confianza.
 - [Operaciones](docs/operations.md): diagnóstico, verificación, reconstrucción, copia de seguridad, restauración.
-- [Manuales de operación](docs/runbooks/README.md): un manual por cada clase de error.
+- [Manuales de operación](docs/runbooks/README.md): un manual por clase de error tipificado.
 - [Preparación para la publicación](docs/release-readiness.md): flujo de publicación y patrones de fallos conocidos.
 
 ## Licencia

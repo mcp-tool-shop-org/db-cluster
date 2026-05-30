@@ -14,9 +14,9 @@
   <a href="https://github.com/mcp-tool-shop-org/db-cluster/pkgs/container/db-cluster"><img src="https://img.shields.io/badge/ghcr.io-db--cluster-2496ED?logo=docker" alt="Docker image on GHCR" /></a>
 </p>
 
-**Cluster de base de données fédérée conçu pour l’IA.** Ensemble de référentiels de données spécialisés fonctionnant comme un substrat unifié : erreurs typées, codes de sortie structurés, accusés de réception de mutations, MCP + SDK + interfaces CLI.
+**Les bases de données traditionnelles partent du principe qu’elles interagissent avec un système qui effectue des requêtes de manière précise et prévisible. Les agents d’IA ne le font pas.**
 
-« Fédéré » signifie un ensemble de référentiels de données spécialisés qui peuvent fonctionner sur différents supports ; le support Postgres s’applique actuellement uniquement au **référentiel canonique** : les référentiels d’artefacts, d’index et de registre fonctionnent sur les supports locaux/SQLite.
+Une base de données classique transmet à l’agent des erreurs rédigées pour des développeurs humains, valide et enregistre immédiatement tout ce qui lui est soumis, et renvoie toutes les données concernées par la requête. Ainsi, l’agent ne peut pas déterminer de manière fiable la prochaine étape, rien ne protège contre une injection de requête et les données sensibles sont directement accessibles. db-cluster a été conçu pour résoudre ce problème : il s’agit de bases de données spécialisées qui fonctionnent comme un seul ensemble derrière un noyau unique, en respectant les exigences de l’agent : des erreurs typées qui indiquent la prochaine étape, une récupération qui renvoie un ensemble de preuves vérifiables, une suppression sur chaque chemin de lecture et un cycle de vie « proposer → approuver → valider » qui empêche une injection de requête de corrompre silencieusement la base de données. Par défaut, il s’agit d’une base de données locale, mais elle peut être étendue à Postgres et SQLite, et est accessible via une interface en ligne de commande, un kit de développement logiciel et un protocole de communication multiplateforme.
 
 ## À qui s’adresse ceci ?
 
@@ -66,6 +66,8 @@ Un cluster de base de données fédérée dans lequel :
 - **Registre d’événements/de provenance** : actions, liens, mutations, accusés de réception, lignée
 
 Le noyau effectue le routage. L’index effectue la découverte. Le cluster est propriétaire des données.
+
+« Fédéré » signifie un ensemble de référentiels de données spécialisés qui peuvent fonctionner sur différents supports ; le support Postgres s’applique actuellement uniquement au **référentiel canonique** : les référentiels d’artefacts, d’index et de registre fonctionnent sur les supports locaux/SQLite.
 
 ## Ce que ce n’est pas
 

@@ -14,9 +14,16 @@
   <a href="https://github.com/mcp-tool-shop-org/db-cluster/pkgs/container/db-cluster"><img src="https://img.shields.io/badge/ghcr.io-db--cluster-2496ED?logo=docker" alt="Docker image on GHCR" /></a>
 </p>
 
-**AI-native federated database cluster.** Specialized truth stores behaving as one governed substrate — typed errors, structured exit codes, mutation receipts, MCP + SDK + CLI surfaces.
-
-"Federated" means specialized truth stores that may run on different backends; the Postgres backend currently applies to the **canonical store only** — the artifact, index, and ledger stores run on the local/SQLite backends.
+**Traditional databases assume a careful, deterministic caller. AI agents are neither.**
+A conventional store hands an agent errors written for human developers, commits whatever
+write it's given the instant it's valid, and returns every field the query touches — so the
+agent can't reliably tell what to do next, nothing stands between a prompt-injection and
+your data, and secrets land straight in the context window. db-cluster was designed from
+that mismatch outward: specialized truth stores that run as one cluster behind a single
+policy-enforced kernel, meeting the agent on its terms — typed errors that say what to do
+next, retrieval that returns a citable evidence bundle, redaction on every read path, and a
+propose → approve → commit lifecycle that won't let a prompt-injection silently corrupt your
+store. Local by default, Postgres and SQLite when you scale, across CLI, SDK, and MCP.
 
 ## Who is this for
 
@@ -66,6 +73,8 @@ A federated database cluster where:
 - **Event/provenance ledger** — actions, links, mutations, receipts, lineage
 
 The kernel routes. The index discovers. The cluster owns truth.
+
+"Federated" means these stores may run on different backends: the Postgres backend currently applies to the **canonical store only** — the artifact, index, and ledger stores run on the local or SQLite backends.
 
 ## What this is not
 

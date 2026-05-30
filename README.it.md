@@ -14,24 +14,23 @@
   <a href="https://github.com/mcp-tool-shop-org/db-cluster/pkgs/container/db-cluster"><img src="https://img.shields.io/badge/ghcr.io-db--cluster-2496ED?logo=docker" alt="Docker image on GHCR" /></a>
 </p>
 
-**Cluster di database federato progettato per l'IA.** Archivi di dati specializzati che operano come un'unica entità gestita: errori tipizzati, codici di uscita strutturati, ricevute di modifica, MCP + SDK + interfacce CLI.
-
-"Federato" significa archivi di dati specializzati che possono essere eseguiti su diversi backend; attualmente, il backend Postgres si applica solo all'**archivio principale** (canone): gli archivi di artefatti, indici e registri vengono eseguiti sui backend locali/SQLite.
+**I database tradizionali presuppongono un chiamante attento e deterministico. Gli agenti di intelligenza artificiale non lo sono.**
+Un archivio convenzionale fornisce a un agente errori scritti per gli sviluppatori umani, esegue qualsiasi operazione di scrittura che gli viene fornita nel momento in cui è valida e restituisce tutti i campi a cui la query fa riferimento, in modo che l'agente non possa determinare in modo affidabile cosa fare successivamente, non c'è nulla che impedisca un'iniezione di prompt e i dati sensibili finiscono direttamente nella finestra di contesto. db-cluster è stato progettato partendo da questa incongruenza: archivi specializzati che funzionano come un unico cluster dietro un singolo kernel con applicazione di policy, soddisfacendo le esigenze dell'agente: errori tipizzati che indicano cosa fare successivamente, recupero che restituisce un insieme di prove verificabili, rimozione di informazioni su ogni percorso di lettura e un ciclo di vita di proposta → approvazione → esecuzione che impedisce a un'iniezione di prompt di corrompere silenziosamente l'archivio. Per impostazione predefinita, è locale; quando si aumenta la capacità, si utilizzano Postgres e SQLite tramite CLI, SDK e MCP.
 
 ## A chi è destinato
 
-- **Agenti IA** che necessitano di un recupero affidabile, strutture di errore strutturate e un ciclo di vita delle modifiche che impedisca la corruzione silenziosa dello stato.
+- **Agenti di intelligenza artificiale** che necessitano di un recupero affidabile, strutture di errore strutturate e un ciclo di vita delle modifiche che impedisca loro di corrompere silenziosamente lo stato.
 - **Operatori** che gestiscono archivi di grafi e provenienza e desiderano codici di uscita tipizzati, strumenti di diagnostica per la verifica, manuali operativi e backup/ripristino sicuri.
-- **Sviluppatori** che creano applicazioni basate su cluster e desiderano un'API pubblica ben definita, test di installazione iniziale e documentazione JSDoc + esempi per ogni metodo.
-- **Utenti di dashboard** che eseguono audit dei dati del cluster: proprietà dell'archivio, provenienza, anteprima dei comandi, visualizzazione con rimozione di informazioni sensibili.
+- **Sviluppatori** che creano applicazioni basate su cluster e desiderano un'API pubblica ben definita, test di installazione iniziale e JSDoc + esempi per ogni metodo.
+- **Utenti di dashboard** che eseguono audit dei dati del cluster: proprietà dell'archivio, provenienza, anteprima dei comandi, visualizzazione delle informazioni rimosse.
 
 ## Perché utilizzare db-cluster
 
-- **Errori tipizzati con `remediationHint`**: ogni sottoclasse di `ClusterError` indica COSA FARE, non solo COSA è fallito (i codici di uscita CLI 65/70/77/78 sono mappati ai codici di errore tipizzati).
-- **Strutture di errore IA**: schema `{code, message, retryable, remediation_hint, context, next_valid_actions}`; gli agenti IA possono ramificare in base a `code` e `retryable` anziché analizzare il testo.
-- **Ricevute per ogni modifica**: indirizzabili in base al contenuto; grafico di provenienza; contratto di ricostruzione dai dati dell'archivio degli indici.
-- **Server MCP con annotazioni di sicurezza**: gli strumenti di sola lettura, in fase di test, di approvazione e di scrittura includono tutti flag `readOnlyHint` / `destructiveHint` leggibili dalla macchina. Il server utilizza per impostazione predefinita la zona di fiducia `ai-facing` (rimozione di informazioni sensibili ATTIVA) e gli strumenti di scrittura MCP rifiutano di eseguire il commit finché il comando non è `approvato`.
-- **Politiche applicate per impostazione predefinita**: la factory root del pacchetto `createSafeCluster()` restituisce un gestore con politiche applicate (un `PolicyEnforcedKernel` + operazioni di sola lettura, nessun modificatore di archivio non protetto). Gli archivi non protetti sono accessibili solo tramite la via di fuga esplicita `@mcptoolshop/db-cluster/unsafe`.
+- **Errori tipizzati con `remediationHint`**: ogni sottoclasse di `ClusterError` risponde indicando COSA FARE, non solo COSA è fallito (i codici di uscita CLI 65/70/77/78 sono mappati ai codici di errore tipizzati).
+- **Strutture di errore per l'IA**: schema `{code, message, retryable, remediation_hint, context, next_valid_actions}`; gli agenti di intelligenza artificiale possono ramificare in base a `code` e `retryable` anziché analizzare il testo.
+- **Ricevute per ogni modifica**: indirizzabili in base al contenuto; grafico di provenienza; contratto di ricostruzione dai dati di origine sull'archivio di indici.
+- **Server MCP con annotazioni di sicurezza**: gli strumenti di sola lettura, in fase di preparazione, di approvazione e di scrittura dispongono ciascuno di flag `readOnlyHint` / `destructiveHint` leggibili dalla macchina. Per impostazione predefinita, il server utilizza la zona di fiducia `ai-facing` (rimozione delle informazioni attiva, nessun contenuto non elaborato) e gli strumenti di scrittura MCP rifiutano di eseguire l'operazione fino a quando il comando non viene `approvato`.
+- **Applicazione di policy per impostazione predefinita**: la factory root del pacchetto `createSafeCluster()` restituisce un gestore con policy applicate (un `PolicyEnforcedKernel` + operazioni di sola lettura, nessun modificatore di archivio non elaborato). Gli archivi non elaborati e senza policy sono accessibili solo tramite la funzione di escape esplicita `@mcptoolshop/db-cluster/unsafe`.
 
 ## Guida rapida (3 passaggi)
 
@@ -41,7 +40,7 @@ npx @mcptoolshop/db-cluster ingest ./file.md    # 2. ingest an artifact
 npx @mcptoolshop/db-cluster retrieve "query"    # 3. retrieve an evidence bundle
 ```
 
-Oppure, installare a livello globale e utilizzare direttamente i binari `db-cluster` e `db-cluster-mcp`:
+Oppure, installare a livello globale e utilizzare direttamente i binari `db-cluster` e `db-cluster-mcp`.
 
 ```bash
 npm install -g @mcptoolshop/db-cluster
@@ -60,16 +59,18 @@ Percorso completo ottimale: [`docs/quickstart.md`](docs/quickstart.md) (5 minuti
 
 Un cluster di database federato in cui:
 
-- **Archivio principale**: entità, ID, record di stato stabili
-- **Archivio di artefatti**: file, documenti, testo di origine, output generati
+- **Archivio canonico**: entità, ID, record di stato stabili
+- **Archivio di artefatti**: file non elaborati, documenti, testo di origine, output generati
 - **Archivio di indici**: individuabilità, ricerca completa (ordinata), ricerca di metadati
 - **Registro eventi/provenienza**: azioni, collegamenti, modifiche, ricevute, provenienza
 
-Il kernel instrada. L'indice individua. Il cluster possiede i dati.
+Il kernel instrada. L'indice individua. Il cluster possiede la verità.
 
-## Cos'è che non è
+"Federato" significa che questi archivi possono essere eseguiti su backend diversi: il backend Postgres si applica attualmente solo all'**archivio canonico**: gli archivi di artefatti, indici e registro vengono eseguiti sui backend locali o SQLite.
 
-- Un assistente di database IA
+## Cos'è
+
+- Un assistente di database per l'IA
 - Un indice su più archivi
 - Middleware di governance
 - Un database vettoriale con plugin
@@ -77,12 +78,12 @@ Il kernel instrada. L'indice individua. Il cluster possiede i dati.
 
 ## Leggi sull'architettura
 
-1. Ogni dato ha un archivio proprietario
+1. Ogni fatto ha un archivio proprietario
 2. Gli indici sono derivati: possono essere eliminati e ricostruiti dagli archivi proprietari
-3. L'IA non modifica mai direttamente lo stato originale
-4. Ogni risposta traccia la fonte dei dati
-5. Ogni modifica attraversa un confine di comando tipizzato
-6. I dati degli artefatti sono immutabili per impostazione predefinita: le correzioni creano versioni, non sovrascrivono
+3. L'IA non modifica mai direttamente lo stato non elaborato
+4. Ogni risposta può essere fatta risalire alla fonte di verità
+5. Ogni modifica supera un confine di comando tipizzato
+6. La verità degli artefatti è immutabile per impostazione predefinita: le correzioni creano versioni, non sovrascrivono
 7. Il kernel instrada; il cluster possiede
 
 ## CLI
@@ -103,7 +104,7 @@ db-cluster commit ...
 db-cluster receipts
 ```
 
-Consultare [`docs/cli.md`](docs/cli.md) per il riferimento completo della CLI (inclusa la tabella dei codici di uscita degli errori tipizzati).
+Consultare [`docs/cli.md`](docs/cli.md) per il riferimento completo della CLI (inclusa la tabella dei codici di uscita tipizzati).
 
 ## Prerequisiti
 
@@ -112,26 +113,26 @@ Consultare [`docs/cli.md`](docs/cli.md) per il riferimento completo della CLI (i
 
 ## Modello di fiducia
 
-db-cluster viene eseguito **localmente**. Legge e scrive una directory `.db-cluster/` nella directory di lavoro a cui lo si indirizza e legge gli artefatti che vengono passati a `ingest`. Per impostazione predefinita, **non c'è traffico di rete in uscita** e **non c'è telemetria**. L'unica connessione in uscita facoltativa è verso un host Postgres se si imposta `DB_CLUSTER_POSTGRES_URL`. **db-cluster non configura SSL/TLS per tale connessione nella versione 1.0.0**: il trasporto è in testo semplice a meno che la stringa di connessione non lo applichi (ad esempio, `sslmode=require`, che il driver `pg` rispetta), un proxy che termina TLS o una rete privata. La configurazione TLS gestita dal driver è prevista per una versione futura.
+db-cluster viene eseguito **localmente**. Legge e scrive una directory `.db-cluster/` nella directory di lavoro a cui lo si indirizza e legge gli artefatti che vengono passati a `ingest`. Per impostazione predefinita, **non c'è traffico di rete in uscita** e **non c'è telemetria**. L'unica connessione in uscita facoltativa è verso un host Postgres se si imposta `DB_CLUSTER_POSTGRES_URL`. **db-cluster non configura SSL/TLS per tale connessione nella versione 1.0.0**: il trasporto è in testo non crittografato a meno che la stringa di connessione non lo applichi (ad esempio, `sslmode=require`, che il driver `pg` rispetta), un proxy che termina la connessione TLS o una rete privata. La configurazione TLS gestita dal driver è prevista per una versione futura.
 
-Gli strumenti del server MCP leggono e scrivono solo gli archivi locali: non raggiungono mai la rete e le risposte strutturate `AiErrorEnvelope` non divulgano mai tracce dello stack o percorsi del file system. **Il server MCP utilizza per impostazione predefinita la zona di fiducia `ai-facing` con la rimozione di informazioni sensibili ATTIVA**: il contenuto degli artefatti e gli attributi sensibili delle entità vengono rimossi al limite per impostazione predefinita e nessuno strumento MCP restituisce byte di artefatti non elaborati. Un operatore che necessita della postura privilegiata (`internal` / `cluster-admin`) deve esplicitamente accettare tramite un flag di ambiente (provvisoriamente `DB_CLUSTER_MCP_ALLOW_PRIVILEGED`; vedere [`docs/mcp.md`](docs/mcp.md)). **Gli strumenti di scrittura MCP applicano l'approvazione**: `cluster_commit_mutation` e `cluster_compensate_mutation` rifiutano di scrivere a meno che il comando non sia nello stato `approvato`: il chiamante deve prima chiamare `cluster_approve_mutation` e il rifiuto è una struttura `AiErrorEnvelope`, non una scrittura parziale. (I chiamanti SDK attendibili in-process non sono interessati: questo gateway è solo per la superficie MCP). I comandi CLI distruttivi (`restore`, `rebuild index`, `compensate`, `backup --force-overwrite`) richiedono un flag esplicito `--yes` più una conferma interattiva su TTY.
+Gli strumenti server MCP leggono e scrivono solo gli archivi locali; non accedono mai alla rete e le risposte strutturate di tipo `AiErrorEnvelope` non rivelano mai tracce dello stack o percorsi del file system. **Per impostazione predefinita, il server MCP utilizza la zona di fiducia `ai-facing` con la funzione di anonimizzazione attiva:** il contenuto degli artefatti e gli attributi sensibili delle entità vengono rimossi al limite, e nessuno strumento MCP restituisce byte di artefatti non elaborati. Un operatore che necessita dei privilegi (`internal` / `cluster-admin`) deve abilitare esplicitamente questa funzione tramite un flag di ambiente (provvisoriamente `DB_CLUSTER_MCP_ALLOW_PRIVILEGED`; vedere [`docs/mcp.md`](docs/mcp.md)). **Gli strumenti di scrittura MCP richiedono l'approvazione:** `cluster_commit_mutation` e `cluster_compensate_mutation` rifiutano di scrivere a meno che il comando non si trovi nello stato `approved`; il chiamante deve prima chiamare `cluster_approve_mutation`, e il rifiuto è una risposta strutturata di tipo `AiErrorEnvelope`, non una scrittura parziale. (Le chiamate attendibili all'interno del processo SDK non sono interessate; questo controllo si applica solo all'interfaccia MCP). I comandi CLI distruttivi (`restore`, `rebuild index`, `compensate`, `backup --force-overwrite`) richiedono un flag esplicito `--yes` e una conferma interattiva sul terminale.
 
-Il modello di minaccia completo: dati toccati, dati NON toccati, autorizzazioni richieste, postura per ogni interfaccia e residui tracciati, è disponibile in [`SECURITY.md`](SECURITY.md).
+Il modello completo delle minacce (dati interessati, dati non interessati, autorizzazioni richieste, postura per ogni interfaccia e residui tracciati) è disponibile in [`SECURITY.md`](SECURITY.md).
 
 ## Documentazione
 
-Per la mappa completa della documentazione, consultare il file [`docs/README.md`](docs/README.md) (iniziare da qui / riferimento / cronologia della fase di sviluppo). Punti salienti:
+Per la mappa completa della documentazione, vedere [`docs/README.md`](docs/README.md) (iniziare da qui / riferimento / cronologia della fase di sviluppo). Punti salienti:
 
 - [Guida rapida](docs/quickstart.md) — percorso ottimale in 5 minuti
 - [Manuale](docs/handbook.md) — guida completa per operatori e sviluppatori
-- [Architettura](docs/architecture.md) — modello federato e le sette leggi dell'architettura
-- [Contratti di archiviazione](docs/store-contracts.md) — cosa possiede e garantisce ciascuno dei quattro sistemi di archiviazione
+- [Architettura](docs/architecture.md) — modello di verità federato e le sette leggi dell'architettura
+- [Contratti di archiviazione](docs/store-contracts.md) — cosa possiede e garantisce ciascuno dei quattro archivi
 - [Legge sulla modifica](docs/mutation-law.md) / [Grafici di provenienza](docs/provenance-graphs.md) — ciclo di vita della scrittura sicura e tracciamento della provenienza
-- [SDK](docs/sdk.md) / [CLI](docs/cli.md) / [MCP](docs/mcp.md) — riferimenti generali
-- [Politiche e mascheramento](docs/policy-and-redaction.md) — Principale, Capacità, Politica, TrustZone
+- [SDK](docs/sdk.md) / [CLI](docs/cli.md) / [MCP](docs/mcp.md) — riferimenti alle interfacce
+- [Politica e anonimizzazione](docs/policy-and-redaction.md) — Principale, Capacità, Politica, Zona di fiducia
 - [Operazioni](docs/operations.md) — controllo, verifica, ricostruzione, backup, ripristino
 - [Manuali operativi](docs/runbooks/README.md) — un manuale per ogni classe di errore
-- [Pronti per il rilascio](docs/release-readiness.md) — flusso di rilascio e modelli di errore noti
+- [Prontezza per il rilascio](docs/release-readiness.md) — flusso di rilascio e modelli di errore noti
 
 ## Licenza
 
