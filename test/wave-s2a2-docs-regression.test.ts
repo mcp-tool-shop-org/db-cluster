@@ -142,23 +142,23 @@ describe('site-config.ts — only-exported-entry wording removed', () => {
 // CHANGELOG — pending 2.0.0 (MAJOR) section with A2 + A1 breaking surface
 // ───────────────────────────────────────────────────────────────────────────
 
-describe('CHANGELOG.md — pending 2.0.0 MAJOR section', () => {
+describe('CHANGELOG.md — 2.0.0 MAJOR section', () => {
     const cl = () => read('CHANGELOG.md');
 
-    it('has an Unreleased / next-release 2.0.0 section', () => {
-        expect(cl()).toMatch(/##\s*\[?Unreleased\]?[^\n]*2\.0\.0/i);
+    it('has a 2.0.0 release section', () => {
+        expect(cl()).toMatch(/^##\s+v?2\.0\.0\b/m);
     });
 
-    it('captures the A2 changes (KERNEL-002, INJECT-001, EGRESS-002)', () => {
+    it('captures the MCP-surface breaking changes user-facingly', () => {
         const c = cl();
-        expect(c).toContain('KERNEL-002');
-        expect(c).toContain('INJECT-001');
-        expect(c).toContain('EGRESS-002');
+        expect(c).toMatch(/ai-facing/i);
+        expect(c).toMatch(/approv/i);
+        expect(c).toContain('isError');
     });
 
-    it('notes the A1 KERNEL-001 breaking surface change as the MAJOR driver', () => {
+    it('notes the package-root breaking surface change', () => {
         const c = cl();
-        expect(c).toContain('KERNEL-001');
+        expect(c).toContain('createSafeCluster');
         // The /unsafe escape hatch is the breaking-surface tell.
         expect(c).toMatch(/@mcptoolshop\/db-cluster\/unsafe/);
     });

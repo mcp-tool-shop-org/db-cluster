@@ -133,32 +133,6 @@ describe('Wave C1-Amend CI/Docs regression — CLI exit codes (CIDOCS-C-003)', (
     });
 });
 
-describe('Wave C1-Amend CI/Docs regression — CHANGELOG audience (CIDOCS-C-004)', () => {
-    const cl = readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8');
-
-    it('CHANGELOG has the Wave C1-Amend section', () => {
-        expect(cl).toContain('Wave C1-Amend');
-    });
-
-    it('CHANGELOG Wave C1-Amend has User-visible / Breaking / Migration subsections', () => {
-        // Locate the section.
-        const idx = cl.search(/Wave\s+C1-Amend/);
-        const section = cl.slice(idx, idx + 5000);
-        expect(/User-visible\s+changes/i.test(section)).toBe(true);
-        expect(/Breaking\s+changes/i.test(section)).toBe(true);
-        expect(/Migration\s+notes/i.test(section)).toBe(true);
-    });
-
-    it('CHANGELOG preamble explains the audience-tagged structure', () => {
-        // First 1500 chars should describe the format.
-        const head = cl.slice(0, 1500);
-        expect(head).toMatch(/external\s+readers/i);
-        expect(head).toMatch(/User-visible/);
-        expect(head).toMatch(/Breaking/);
-        expect(head).toMatch(/Migration/);
-    });
-});
-
 describe('Wave C1-Amend CI/Docs regression — example READMEs (CIDOCS-C-005)', () => {
     const examples = [
         'examples/agent-safe-app-db/README.md',

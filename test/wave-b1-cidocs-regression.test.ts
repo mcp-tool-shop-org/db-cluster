@@ -95,13 +95,7 @@ describe('Wave B1-Amend CI/Docs regression — release-readiness has known-flake
     });
 });
 
-describe('Wave B1-Amend CI/Docs regression — CHANGELOG entry', () => {
-    const cl = readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8');
-
-    it('CIDOCS-B-005: CHANGELOG has a Wave B1-Amend section', () => {
-        expect(cl).toContain('Wave B1-Amend');
-    });
-
+describe('Wave B1-Amend CI/Docs regression — README test-count claim', () => {
     it('CIDOCS-B-005: README test-count claim is updated post-B1', () => {
         const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
         // Either the post-A4 claim (778+) or the Wave B1-Amend update (anything

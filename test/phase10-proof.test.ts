@@ -63,12 +63,13 @@ describe('Phase 10 proof suite', () => {
         // that re-introduces internal status to the README.
         expect(readme).not.toMatch(/## Status/);
 
-        // Test reality now lives in the CHANGELOG (its doctrine-mandated home).
-        // Assert the test count there, allowing an optional `+` after the
-        // number (e.g. "1255+ tests passing") — the project intentionally uses
-        // this shape to avoid churn for small deltas.
+        // Version reality lives in the CHANGELOG (its doctrine-mandated home),
+        // not the README front door. Assert the changelog documents the current
+        // package version as a release section heading — so the public notes
+        // track the shipped version without broadcasting internal test counts.
         const changelog = readDoc('CHANGELOG.md');
-        expect(changelog).toMatch(/\d+\+? tests? passing/i);
+        const versionRe = new RegExp(`^##\\s+v?${pkg.version.replace(/\./g, '\\.')}\\b`, 'm');
+        expect(changelog).toMatch(versionRe);
     });
 
     it('Proof 2: CLI docs mention every public command group', () => {
