@@ -99,6 +99,15 @@ const POLICY_KERNEL_EXTRAS = new Set<string>([
     // ClusterKernel has no policy gate to validate against, so it isn't
     // mirrored there.
     'assertOwnerStore',
+    // S-1 (Wave V5) — `redactResolvedArtifact` is a private policy-layer helper
+    // used by `retrieveBundle` (per-object loop + bundle-level map) to redact
+    // the ResolvedEvidence WRAPPER: it redacts `.object` via redactArtifact AND
+    // drops the content `snippet` when an `artifact_content` rule applies (the
+    // snippet rides the wrapper, outside redactArtifact's reach). TS `private`
+    // is compile-time only, so the method is mechanically on the prototype.
+    // ClusterKernel has no policy bundle / redaction layer, so it isn't
+    // mirrored there — a sibling of `collectRedactionRules` / `assertOwnerStore`.
+    'redactResolvedArtifact',
 ]);
 
 /**

@@ -4,7 +4,7 @@ import type { Entity } from '../types/entity.js';
 import type { Artifact } from '../types/artifact.js';
 import type { IndexRecord } from '../types/index-record.js';
 import type { ProvenanceEvent } from '../types/provenance-event.js';
-import type { EvidenceBundle } from '../types/evidence-bundle.js';
+import type { EvidenceBundle, ResolvedEvidence } from '../types/evidence-bundle.js';
 import type { ProvenanceGraph, TraceOptions, ProvenanceNode } from '../types/provenance-graph.js';
 import type { Receipt } from '../types/receipt.js';
 import type { Command } from '../types/command.js';
@@ -278,6 +278,38 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
         }
 
         return rules;
+    }
+
+    /**
+     * S-1 (Wave V5): redact a resolved-artifact WRAPPER, not just its `.object`.
+     *
+     * `ResolvedEvidence.snippet` (RETR-004) is a ≤240-char window of raw
+     * artifact CONTENT that rides the wrapper, OUTSIDE `redactArtifact`'s reach
+     * (which only touches the `Artifact` object). Pre-fix, the per-object and
+     * bundle-level redaction maps spread `{ ...ra, object }` and carried
+     * `snippet` untouched — so under a content-stripping zone the object content
+     * was stripped while the snippet leaked the same content (composed-audit
+     * finding S-1, I3, feature-introduced V1/RETR-004).
+     *
+     * Invariant: `snippet` is present IFF the caller is allowed artifact
+     * content. When the matched rules carry an `artifact_content` rule
+     * (strip / mask / summarize / hash) the snippet is DROPPED; otherwise it
+     * survives unchanged (V1's feature must not be over-stripped). This is the
+     * SINGLE definition both `retrieveBundle` redaction paths share, so a future
+     * refactor of either path cannot silently re-open the leak (closes S-2).
+     */
+    private redactResolvedArtifact(
+        ra: ResolvedEvidence<Artifact>,
+        rules: RedactionRule[],
+    ): ResolvedEvidence<Artifact> {
+        const object = rules.length > 0 ? redactArtifact(ra.object, rules) : ra.object;
+        const out: ResolvedEvidence<Artifact> = { ...ra, object };
+        // Drop the content excerpt whenever the matched rules redact content —
+        // same trigger that drives `redactArtifact`'s storagePath strip.
+        if (rules.some((r) => r.target === 'artifact_content')) {
+            delete out.snippet;
+        }
+        return out;
     }
 
     // ─── Read verbs ──────────────────────────────────────────────────
@@ -676,8 +708,8 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
             }, this.policyOptions);
             if (ownerDecision.decision !== 'allow') continue;
             const rules = this.collectRedactionRules(ownerDecision);
-            const obj = rules.length > 0 ? redactArtifact(ra.object, rules) : ra.object;
-            filteredArtifacts.push({ ...ra, object: obj });
+            // S-1: redact the WRAPPER (object + snippet), not just the object.
+            filteredArtifacts.push(this.redactResolvedArtifact(ra, rules));
             allowedArtifactIds.add(ra.object.id);
         }
 
@@ -755,7 +787,7 @@ export class PolicyEnforcedKernel implements ClusterKernelInterface {
             ? filteredEntities.map((re) => ({ ...re, object: redactEntity(re.object, bundleRules) }))
             : filteredEntities;
         const redactedArtifacts = bundleRules.length > 0
-            ? filteredArtifacts.map((ra) => ({ ...ra, object: redactArtifact(ra.object, bundleRules) }))
+            ? filteredArtifacts.map((ra) => this.redactResolvedArtifact(ra, bundleRules))
             : filteredArtifacts;
 
         return {
