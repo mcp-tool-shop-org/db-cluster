@@ -2,6 +2,12 @@
 
 All notable user-facing changes to db-cluster. This project follows [semantic versioning](https://semver.org).
 
+## 2.0.1
+
+Documentation-only release — no code, API, or behavior changes from 2.0.0.
+
+- **Refreshed the README front door.** The landing copy now leads with the problem db-cluster exists to solve — traditional databases assume a careful, deterministic caller, and AI agents are neither — and maps it to what db-cluster does differently. Translations refreshed across all 7 languages.
+
 ## 2.0.0
 
 The first major release since 1.0.0. db-cluster gains ranked retrieval, entity and artifact version history, an opt-in embedded SQLite backend, and a round of contract-honesty and security hardening. Several public contracts changed — see **Breaking changes** and **Migration**.
