@@ -103,35 +103,6 @@ db-cluster receipts
 
 See [`docs/cli.md`](docs/cli.md) for the full CLI reference (including the typed-error exit-code table).
 
-## Status
-
-**v1.0.0 — shipping.** db-cluster is audit-hardened across the dogfood-swarm
-protocol — Stage A (correctness, Waves A1–A4), Stage B (proactive health,
-Wave B1-Amend), and Stage C (humanization, Wave C1-Amend).
-**1247+ tests passing** deterministically across 83 files, release-gate 9/9
-PASS, lint clean.
-
-### What's in v1.0.0
-
-- **Federated truth model** — canonical, artifact, index, ledger stores; kernel routes, cluster owns; index is derivative.
-- **Typed errors with `remediationHint` everywhere** — `ClusterError` base + per-class subclasses; CLI maps to sysexits.h (65/70/77/78); `AiErrorEnvelope` at every AI boundary.
-- **Mutation lifecycle** — propose → validate → approve → commit → (compensate). Every commit emits a content-addressable receipt.
-- **MCP server** — 16 tools with safety annotations (`readOnlyHint` / `destructiveHint` / `requiresApprovalHint`); structured error results, never raw stacks.
-- **Policy & redaction** — policy-enforced by default: the root `createSafeCluster()` returns a policed `PolicyEnforcedKernel` handle (raw stores only via `@mcptoolshop/db-cluster/unsafe`); `Principal` / `Capability` / `Policy` / `TrustZone` / `VisibilityRule` types; redaction at every read path.
-- **Operator surface** — `doctor`, `verify`, `rebuild index`, `backup`, `restore`, `compensate`, `migration-status`. Destructive commands gated by `--yes` + interactive TTY confirmation.
-- **Dashboard demo** — viewer-only React dashboard for cluster truth (`dashboard/`), with `ComponentState<T>` + `StateBoundary` HOC for loading/empty/error states.
-- **Release gate** — 9 stages enforced by `scripts/release-gate.mjs`: build, tests, pack, smoke-install, docs-drift, package-exports, completeness, doc-drift, JSDoc-completeness.
-
-### Tracked residuals for v1.x
-
-- `V2-C1-009` — long-running MCP ops (doctor/verify/rebuild/backup/restore) currently surface as single-shot tools; granular progress streaming is documented but not in v1.0.0. See [`docs/release-readiness.md`](docs/release-readiness.md).
-- `KERNEL-C-012` — OperatorSignal cross-domain channel is a v1.1+ architectural extension.
-- Stryker mutation testing is shipped (`npm run test:mutation`) but experimental — not in the standing release-gate per the v2 dogfood-swarm verifier-3 doctrine.
-
-### Dogfood-swarm history
-
-Stage A (correctness, Waves A1–A4) → Stage B (proactive health, Wave B1-Amend) → Stage C (humanization, Wave C1-Amend) → **Stage D folds into Phase 10 Full Treatment** (logo, landing page, handbook, inline CLI color polish). No Stage D swarm wave dispatched. Full audit trail in [`CHANGELOG.md`](CHANGELOG.md) and the `swarm-stage-*-*.md` reports at the repo root.
-
 ## Prerequisites
 
 - Node.js 20+ (enforced via `engines.node` in `package.json`)
@@ -176,6 +147,8 @@ Reference / Development phase history). Highlights:
 
 - [Quickstart](docs/quickstart.md) — 5-minute golden path
 - [Handbook](docs/handbook.md) — canonical operator + developer guide
+- [Architecture](docs/architecture.md) — federated truth model + the seven architecture laws
+- [Mutation law](docs/mutation-law.md) / [Provenance graphs](docs/provenance-graphs.md) — safe-write lifecycle and lineage tracing
 - [SDK](docs/sdk.md) / [CLI](docs/cli.md) / [MCP](docs/mcp.md) — surface references
 - [Policy and Redaction](docs/policy-and-redaction.md) — Principal, Capability, Policy, TrustZone
 - [Operations](docs/operations.md) — doctor, verify, rebuild, backup, restore
