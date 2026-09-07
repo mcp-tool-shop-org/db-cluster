@@ -1,3 +1,15 @@
+# --- Measured CI cost (dogfood-swarm SKILL item 8) --------------------------
+# ~29 billable min per push (6 jobs), derived from run 34123484614
+# on 2026-09-07, which cost 119 min across 9 jobs BEFORE the macOS cells
+# came out. 3 macOS cells (node 20/22/24) each ran ~2.3 min of wall time and each billed 30 min at the x10 macOS rate.
+# This package ships to npm and publishes no darwin artifact, so those cells
+# tested a platform nothing is released for. Studio rule: never macos-latest
+# unless explicitly requested (.claude/rules/github-actions.md). Windows stays -
+# path handling and file locking genuinely differ there.
+# GitHub bills per JOB, rounded UP to the minute, x2 Windows / x10 macOS, so
+# billable minutes exceed wall time. Re-measure, never estimate:
+#   gh api repos/mcp-tool-shop-org/db-cluster/actions/runs/<id>/jobs
+# ---------------------------------------------------------------------------
 name: CI
 on:
   push:
@@ -18,7 +30,7 @@ jobs:
       fail-fast: false
       matrix:
         node: [20, 22, 24]
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
