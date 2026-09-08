@@ -27,7 +27,7 @@ Baseline drift from re-audit-2: **none**. Wave A3 started from documented post-A
 
 ## 2. Wave A3 v2 architecture — overview
 
-Wave A3 introduced the **dogfood-swarm v2 protocol** (per `C:/Users/mikey/.claude/projects/E--AI-claude-synergy/memory/dogfood-swarm-v2-design.md`):
+Wave A3 introduced the **dogfood-swarm v2 protocol** (per `~/.claude/projects/E--AI-claude-synergy/memory/dogfood-swarm-v2-design.md`):
 
 1. **5 parallel fix agents** with exclusive file ownership (Kernel, Stores, Surface, Tests, CI/Docs)
 2. **3 lens-specialized adversarial verifier agents** running AFTER all fix agents complete (contract-completeness / cross-boundary information-flow / invariant-test-completeness)
@@ -401,7 +401,7 @@ Save points retained: all 6 (`swarm-stage-a-save-1779834974` through `swarm-stag
 This report + the verifier ensemble report (`swarm-stage-a-wave-a3-verifier-aggregate-1779861998.md`) + the 3 verifier output JSONs in `.verifier-outputs/` go to the advisor session for:
 
 1. **Stage A re-audit-3 OR Stage A exit decision** per the saturation criterion verdict in §13
-2. **Promotion of dogfood-swarm-v2-design.md** to canonical memory (`C:/Users/mikey/.claude/projects/F--AI/memory/dogfood-swarm.md`) — single-data-point validation now exists
+2. **Promotion of dogfood-swarm-v2-design.md** to canonical memory (`~/.claude/projects/F--AI/memory/dogfood-swarm.md`) — single-data-point validation now exists
 3. **Stage B work intake** — 18+ items enumerated in §8 with clear architectural / process / test-hardening classifications
 
 The advisor's call: re-audit-3 (verify the saturation indicators independently) OR exit Stage A (accept the saturation verdict and move to Stage B).

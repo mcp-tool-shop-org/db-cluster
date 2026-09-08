@@ -189,7 +189,7 @@ Save points retained: all 8 (pre-A4 stage-b-1 + this wave's stage-a-amend-a4 + 6
 
 The 11 should-have-been-A items are closed + mass test migration landed deterministically + family-of-call-sites probe surfaced 4 sibling bugs the prior 3-lens ensemble missed at scope. All of these are evidence for promoting:
 
-1. **dogfood-swarm-v2-design.md** to canonical memory (`C:/Users/mikey/.claude/projects/F--AI/memory/dogfood-swarm.md`) WITH the **family-of-call-sites probe** addition documented as a v2-protocol-load-bearing instruction.
+1. **dogfood-swarm-v2-design.md** to canonical memory (`~/.claude/projects/F--AI/memory/dogfood-swarm.md`) WITH the **family-of-call-sites probe** addition documented as a v2-protocol-load-bearing instruction.
 2. **The "saturation-based exit criterion"** continues to work — Stage A is exitable under it despite 6 HIGH residuals (all explicitly deferred-to-B1-Amend with reasoned scope).
 
 ### Deferred to B1-Amend (13 items + architectural)

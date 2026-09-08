@@ -187,7 +187,7 @@ substitution:
 > catch the lifecycle and per-store invariants that a kernel change could
 > break, which is what mutation testing approximates by mutating production
 > code. See the protocol at
-> `C:/Users/mikey/.claude/projects/F--AI/memory/dogfood-swarm.md`.
+> `~/.claude/projects/F--AI/memory/dogfood-swarm.md`.
 
 The Stryker config files are kept (marked "experimental, not in CI" via a
 top-of-file comment in `vitest.stryker.config.ts`) so an operator who wants
