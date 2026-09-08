@@ -10,7 +10,7 @@ import { defineConfig } from 'vitest/config';
  * standing release-gate.
  *
  * Per the v2 dogfood-swarm protocol's verifier-3 doctrine
- * (`C:/Users/mikey/.claude/projects/F--AI/memory/dogfood-swarm.md`), the
+ * (the studio memory store's `dogfood-swarm.md`), the
  * invariant-test-completeness lens substitutes for mutation coverage in the
  * standing gate. See `docs/release-readiness.md` "Stryker mutation testing
  * — current disposition" for the full rationale.

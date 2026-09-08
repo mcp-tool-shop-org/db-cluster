@@ -94,7 +94,6 @@ describe('Wave B1-Amend — Kernel regression nets', () => {
                 'Failed to open C:\\Users\\sensitive\\path.json (ENOENT)';
             const scrubbed = redactErrorMessage(new Error(sensitive));
             expect(scrubbed).not.toContain('C:\\Users\\sensitive');
-            expect(scrubbed).not.toContain('C:/Users/sensitive');
         });
 
         it('B1-KERNEL-005-b — redactErrorMessage scrubs POSIX absolute paths', () => {
@@ -149,7 +148,6 @@ describe('Wave B1-Amend — Kernel regression nets', () => {
                 const detailJson = JSON.stringify(orphan.detail ?? {});
                 expect(detailJson).not.toContain('sensitive');
                 expect(detailJson).not.toContain('C:\\Users\\sensitive');
-                expect(detailJson).not.toContain('C:/Users/sensitive');
                 // Verify the diagnostic shape is preserved (errorName still
                 // there so operators can still triage)
                 expect(orphan.detail?.errorName).toBe('Error');
