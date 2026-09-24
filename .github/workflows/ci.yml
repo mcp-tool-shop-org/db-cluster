@@ -40,6 +40,11 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: 'npm'
+      # Atlas requires Node 22 or later, and one cell is enough, so the check
+      # runs on the Node 22 Linux cell only.
+      - name: Atlas check
+        if: matrix.node == 22 && matrix.os == 'ubuntu-latest'
+        run: npx --yes @dogfood-lab/atlas@1.15.0 check
       - run: npm ci
       # Build first — `lint:examples` resolves `db-cluster`, `db-cluster/sdk`,
       # `db-cluster/policy` (self-reference via package.json `exports`), which
