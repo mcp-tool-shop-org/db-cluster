@@ -111,6 +111,26 @@ export function validateCommand(command: Command): Command {
 }
 
 /**
+ * Check a one-call mutator's input with the rules the proposal path
+ * applies, before the mutator writes anything. `createEntity` and
+ * `ingestArtifact` skip propose → validate, and used to validate only the
+ * synthetic command they built after the store write, which left an
+ * entity with no command, receipt or provenance when the check failed.
+ *
+ * @throws {CommandValidationFailedError} - the payload fails its verb's checks.
+ * @throws {InvalidContentShapeError} - an ingest payload's content is neither
+ *         a Buffer nor a string.
+ */
+export function assertValidPayload(
+    verb: CommandVerb,
+    targetStore: Command['targetStore'],
+    payload: Record<string, unknown>,
+    proposedBy: string,
+): void {
+    validateCommand(proposeCommand(verb, targetStore, payload, proposedBy));
+}
+
+/**
  * Approve a validated command — operator/policy gate.
  */
 export function approveCommand(command: Command, approvedBy: string, note?: string): Command {

@@ -387,6 +387,23 @@ describe('TESTS-C-004 — CLI live exit-code assertions per typed-error code', (
         });
     });
 
+    // ─── COMMAND_VALIDATION_FAILED → 65 EX_DATAERR ────────────────────────
+    // `entity create` used to store the entity and only then validate it,
+    // so this exit came with an entity that no command or receipt recorded.
+    it('COMMAND_VALIDATION_FAILED exits 65 (EX_DATAERR) for `entity create` with an empty name, and writes nothing', () => {
+        const { dir } = initCluster('validation-failed');
+        try {
+            const result = runCli(['entity', 'create', '--kind', 'note', '--name', ''], { cwd: dir });
+            expect(result.status).toBe(65);
+            expect(result.stderr).toMatch(/create_entity requires kind and name/);
+            expect(result.stderr).toMatch(/→\s*try:/);
+            const stats = runCli(['stats', '--json'], { cwd: dir });
+            expect(JSON.parse(stats.stdout)).toEqual({ entities: 0, commands: 0, receipts: 0 });
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
     // FAMILY-PROBE: scan typedErrorToExitCode source and confirm every code in
     // the map either has a live spawn test above OR is unreachable from CLI.
     it('FAMILY-PROBE: every typedErrorToExitCode code is either live-asserted or documented unreachable', () => {
@@ -407,6 +424,7 @@ describe('TESTS-C-004 — CLI live exit-code assertions per typed-error code', (
             'INVALID_BACKEND_CONFIG',
             'INVALID_CLUSTER_URI',
             'RESOLVE_NOT_FOUND',
+            'COMMAND_VALIDATION_FAILED',
         ]);
         // Codes that cannot be triggered from CLI through normal user paths
         // (kernel-internal failure modes only reachable via embedded SDK use,
@@ -434,7 +452,6 @@ describe('TESTS-C-004 — CLI live exit-code assertions per typed-error code', (
             'COMMAND_NOT_FOUND', // lifecycle command id miss; covered in kernel-regression
             'COMMAND_ALREADY_TERMINAL', // lifecycle transition guard; covered in kernel-regression
             'INVALID_STATE_TRANSITION', // lifecycle transition guard; covered in kernel-regression
-            'COMMAND_VALIDATION_FAILED', // validate-time payload check; covered in kernel-regression
             'INVALID_ACTOR', // the CLI always resolves a non-blank operator (--actor > DB_CLUSTER_OPERATOR > OS user > 'cli-user'); SDK + MCP paths covered in actor-required-regression
         ]);
         for (const code of codes) {
