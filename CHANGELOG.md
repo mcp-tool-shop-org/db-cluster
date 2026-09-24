@@ -8,6 +8,10 @@ All notable user-facing changes to db-cluster. This project follows [semantic ve
 
 - **Node.js 22.12 or later is required.** `engines.node` is now `>=22.12` (was `>=20`). Node 20 reached end-of-life on 2026-04-30, and the dependencies had already moved past it: the CLI's `commander` 15 requires Node 22.12, and the optional SQLite driver `better-sqlite3` 13 requires Node 22. CI tests Node 22 and 24 on Linux and Windows.
 
+### Fixes
+
+- **Kernel mutations require an actor.** `createEntity`, `ingestArtifact`, `linkEvidence`, `proposeMutation`, `approveMutation`, `rejectMutation`, `commitMutation`, `compensateMutation` and `rebuildIndex` now reject a missing or blank actor with the typed `INVALID_ACTOR` error (CLI exit 65) before touching any store. Previously the local backend recorded provenance with no actor, and the SQLite backend failed only after the write, leaving an orphaned mutation. The CLI always supplies an actor; SDK and MCP callers that omitted one, or sent an empty string, now get the error.
+
 ### Notes
 
 - **`npm ci` can drop the SQLite driver.** `better-sqlite3` 13 ships prebuilt binaries inside its npm package, but `npm ci` still attempts a `node-gyp` build of it. Where that build cannot run (no C++ toolchain, or a Visual Studio release the bundled node-gyp does not recognize), npm removes the optional package, binary and all. A plain `npm install` is unaffected. If selecting the SQLite backend fails with `SQLITE_DRIVER_UNAVAILABLE` after an `npm ci`, either give the machine a C++ toolchain or install with `npm ci --ignore-scripts` when nothing else in the project needs its install scripts. db-cluster's own CI does the latter.

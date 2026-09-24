@@ -272,6 +272,10 @@ const TYPED_ERROR_ENRICHMENT: Record<string, ErrorEnrichment> = {
         retryable: false,
         remediation_hint: 'payload.content must be a Buffer instance or a string (contentHash reference). Re-propose with one of those shapes.',
     },
+    INVALID_ACTOR: {
+        retryable: false,
+        remediation_hint: 'The actor field (actorId, proposedBy, approvedBy, rejectedBy or compensatedBy) must be a non-empty id. Re-issue the call naming who performs it.',
+    },
     POLICY_DENIED: {
         retryable: false,
         remediation_hint: 'The principal lacks the required capability for this resource. Use `cluster_policy_explain` to inspect which capability is missing, or request a principal with that role.',

@@ -433,6 +433,7 @@ The CLI maps every typed error to a stable POSIX exit code (`<sysexits.h>`). Ope
 | `INVALID_CONTENT_HASH` | `65` | `EX_DATAERR` | Hash isn't 64-char lowercase hex | `db-cluster ingest --hash bogus123` |
 | `STAGED_CONTENT_TAMPERED` | `65` | `EX_DATAERR` | Staging file rewritten between propose and commit | `db-cluster commit <id>` after manual staging-dir edit |
 | `INVALID_CONTENT_SHAPE` | `65` | `EX_DATAERR` | `payload.content` is JSON-roundtripped Buffer | propose with `content: {type:'Buffer', data:[...]}` |
+| `INVALID_ACTOR` | `65` | `EX_DATAERR` | A mutation's actor (`actorId`, `proposedBy`, `approvedBy`, `rejectedBy`, `compensatedBy`) is missing or blank | Not reachable from the CLI, which always supplies one (`--actor`, `DB_CLUSTER_OPERATOR`, the OS user); an SDK or MCP call with `approvedBy: ""` |
 | `IMPORT_CONFLICT` | `65` | `EX_DATAERR` | Restore record id matches but content differs | `db-cluster restore tampered-backup.json` |
 | `LEDGER_CYCLE_DETECTED` | `65` | `EX_DATAERR` | parentEventId chain has a cycle | `db-cluster trace <uri>` over a corrupted ledger |
 | `INVALID_POLICY_CONFIG` | `78` | `EX_CONFIG` | Policy YAML failed validation | `db-cluster --policy bad.yaml ...` |

@@ -403,6 +403,7 @@ describe('TESTS-C-004 — CLI live exit-code assertions per typed-error code', (
             'COMMAND_ALREADY_TERMINAL', // lifecycle transition guard; covered in kernel-regression
             'INVALID_STATE_TRANSITION', // lifecycle transition guard; covered in kernel-regression
             'COMMAND_VALIDATION_FAILED', // validate-time payload check; covered in kernel-regression
+            'INVALID_ACTOR', // the CLI always resolves a non-blank operator (--actor > DB_CLUSTER_OPERATOR > OS user > 'cli-user'); SDK + MCP paths covered in actor-required-regression
         ]);
         for (const code of codes) {
             const known = LIVE_ASSERTED.has(code) || DOCUMENTED_UNREACHABLE.has(code);
