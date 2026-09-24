@@ -1,0 +1,54 @@
+summary: ""
+boundaries:
+  - name: .github
+    globs:
+      - .github/**
+    role: config
+  - name: .stage-b-amend
+    globs:
+      - .stage-b-amend/**
+    role: docs
+  - name: .stage-b-audit
+    globs:
+      - .stage-b-audit/**
+    role: docs
+  - name: .verifier-outputs
+    globs:
+      - .verifier-outputs/**
+    role: config
+  - name: .verifier-outputs-b1
+    globs:
+      - .verifier-outputs-b1/**
+    role: config
+  - name: dashboard
+    globs:
+      - dashboard/**
+    role: code
+  - name: docs
+    globs:
+      - docs/**
+    role: docs
+  - name: examples
+    globs:
+      - examples/**
+    role: code
+  - name: root
+    globs:
+      - "*"
+    role: config
+  - name: scripts
+    globs:
+      - scripts/**
+    role: code
+  - name: site
+    globs:
+      - site/**
+    role: site
+  - name: src
+    globs:
+      - src/**
+    role: code
+  - name: test
+    globs:
+      - test/**
+    role: test

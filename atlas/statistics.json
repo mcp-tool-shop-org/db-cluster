@@ -1,0 +1,2652 @@
+{
+  "boundaries": [
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "low",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": ".github",
+      "qualifyingSourceCommits": 0,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "low",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": ".stage-b-amend",
+      "qualifyingSourceCommits": 0,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "low",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": ".stage-b-audit",
+      "qualifyingSourceCommits": 0,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "low",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": ".verifier-outputs",
+      "qualifyingSourceCommits": 0,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "low",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": ".verifier-outputs-b1",
+      "qualifyingSourceCommits": 0,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "low",
+        "importsAndCoChanges": [],
+        "importsOnly": [
+          "test"
+        ]
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": "dashboard",
+      "qualifyingSourceCommits": 1,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "low",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": "docs",
+      "qualifyingSourceCommits": 0,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "low",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": "examples",
+      "qualifyingSourceCommits": 3,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "low",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": "root",
+      "qualifyingSourceCommits": 4,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [
+          "src"
+        ],
+        "collapsed": false,
+        "confidence": "low",
+        "importsAndCoChanges": [],
+        "importsOnly": [
+          "test"
+        ]
+      },
+      "cohesion": 0,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": "scripts",
+      "qualifyingSourceCommits": 12,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "low",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": "site",
+      "qualifyingSourceCommits": 3,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "low",
+        "importsAndCoChanges": [
+          "scripts"
+        ],
+        "importsOnly": [
+          "dashboard",
+          "examples",
+          "test"
+        ]
+      },
+      "cohesion": 0.644291,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": "src",
+      "qualifyingSourceCommits": 25,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "low",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "full",
+      "highWater": null,
+      "name": "test",
+      "qualifyingSourceCommits": 30,
+      "rebaseline": null
+    }
+  ],
+  "churn": {
+    "definition": "commits is how many commits in the window touch the file, including merges and commits dropped from coupling. lines is added plus deleted in those commits.",
+    "files": [
+      {
+        "commits": 2,
+        "lines": 53,
+        "path": ".github/dependabot.yml"
+      },
+      {
+        "commits": 9,
+        "lines": 71,
+        "path": ".github/workflows/ci.yml"
+      },
+      {
+        "commits": 2,
+        "lines": 98,
+        "path": ".github/workflows/docker-publish.yml"
+      },
+      {
+        "commits": 6,
+        "lines": 60,
+        "path": ".github/workflows/pages.yml"
+      },
+      {
+        "commits": 6,
+        "lines": 32,
+        "path": ".github/workflows/release-gate.yml"
+      },
+      {
+        "commits": 7,
+        "lines": 204,
+        "path": ".github/workflows/release.yml"
+      },
+      {
+        "commits": 7,
+        "lines": 36,
+        "path": ".github/workflows/smoke-install.yml"
+      },
+      {
+        "commits": 7,
+        "lines": 46,
+        "path": ".gitignore"
+      },
+      {
+        "commits": 1,
+        "lines": 300,
+        "path": ".stage-b-amend/agent-cidocs-report.md"
+      },
+      {
+        "commits": 1,
+        "lines": 137,
+        "path": ".stage-b-amend/agent-fixup-report.md"
+      },
+      {
+        "commits": 1,
+        "lines": 271,
+        "path": ".stage-b-amend/agent-kernel-report.md"
+      },
+      {
+        "commits": 1,
+        "lines": 206,
+        "path": ".stage-b-amend/agent-stores-report.md"
+      },
+      {
+        "commits": 1,
+        "lines": 325,
+        "path": ".stage-b-amend/agent-surface-report.md"
+      },
+      {
+        "commits": 1,
+        "lines": 265,
+        "path": ".stage-b-amend/agent-tests-report.md"
+      },
+      {
+        "commits": 1,
+        "lines": 636,
+        "path": ".stage-b-audit/agent-cidocs-findings.md"
+      },
+      {
+        "commits": 1,
+        "lines": 459,
+        "path": ".stage-b-audit/agent-kernel-findings.md"
+      },
+      {
+        "commits": 1,
+        "lines": 539,
+        "path": ".stage-b-audit/agent-stores-findings.md"
+      },
+      {
+        "commits": 1,
+        "lines": 500,
+        "path": ".stage-b-audit/agent-surface-findings.md"
+      },
+      {
+        "commits": 1,
+        "lines": 432,
+        "path": ".stage-b-audit/agent-tests-findings.md"
+      },
+      {
+        "commits": 2,
+        "lines": 193,
+        "path": ".verifier-outputs-b1/v1-wave-b1-resilience.json"
+      },
+      {
+        "commits": 1,
+        "lines": 191,
+        "path": ".verifier-outputs-b1/v2-wave-b1-operational-visibility.json"
+      },
+      {
+        "commits": 1,
+        "lines": 193,
+        "path": ".verifier-outputs-b1/v3-wave-b1-migration-safety.json"
+      },
+      {
+        "commits": 1,
+        "lines": 141,
+        "path": ".verifier-outputs/v1-contract-completeness.json"
+      },
+      {
+        "commits": 1,
+        "lines": 156,
+        "path": ".verifier-outputs/v1-wave-a4-contract-completeness.json"
+      },
+      {
+        "commits": 1,
+        "lines": 204,
+        "path": ".verifier-outputs/v2-cross-boundary.json"
+      },
+      {
+        "commits": 1,
+        "lines": 154,
+        "path": ".verifier-outputs/v2-wave-a4-cross-boundary.json"
+      },
+      {
+        "commits": 1,
+        "lines": 161,
+        "path": ".verifier-outputs/v3-invariant-test-completeness.json"
+      },
+      {
+        "commits": 1,
+        "lines": 190,
+        "path": ".verifier-outputs/v3-wave-a4-invariant-test-completeness.json"
+      },
+      {
+        "commits": 2,
+        "lines": 134,
+        "path": "AI Safe Data Control Plane over Fed.txt"
+      },
+      {
+        "commits": 28,
+        "lines": 2747,
+        "path": "CHANGELOG.md"
+      },
+      {
+        "commits": 3,
+        "lines": 68,
+        "path": "Dockerfile"
+      },
+      {
+        "commits": 2,
+        "lines": 366,
+        "path": "Is it true that AI has a hard time.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 42,
+        "path": "LICENSE"
+      },
+      {
+        "commits": 5,
+        "lines": 497,
+        "path": "README.es.md"
+      },
+      {
+        "commits": 5,
+        "lines": 334,
+        "path": "README.fr.md"
+      },
+      {
+        "commits": 5,
+        "lines": 404,
+        "path": "README.hi.md"
+      },
+      {
+        "commits": 5,
+        "lines": 389,
+        "path": "README.it.md"
+      },
+      {
+        "commits": 5,
+        "lines": 367,
+        "path": "README.ja.md"
+      },
+      {
+        "commits": 31,
+        "lines": 396,
+        "path": "README.md"
+      },
+      {
+        "commits": 5,
+        "lines": 342,
+        "path": "README.pt-BR.md"
+      },
+      {
+        "commits": 5,
+        "lines": 402,
+        "path": "README.zh.md"
+      },
+      {
+        "commits": 1,
+        "lines": 49,
+        "path": "SCORECARD.md"
+      },
+      {
+        "commits": 4,
+        "lines": 143,
+        "path": "SECURITY.md"
+      },
+      {
+        "commits": 2,
+        "lines": 84,
+        "path": "SHIP_GATE.md"
+      },
+      {
+        "commits": 3,
+        "lines": 977,
+        "path": "dashboard/ClusterTruthInspector.jsx"
+      },
+      {
+        "commits": 4,
+        "lines": 191,
+        "path": "dashboard/README.md"
+      },
+      {
+        "commits": 2,
+        "lines": 228,
+        "path": "dashboard/components/CommandPreviewPanel.jsx"
+      },
+      {
+        "commits": 3,
+        "lines": 268,
+        "path": "dashboard/components/OperationsPanel.jsx"
+      },
+      {
+        "commits": 3,
+        "lines": 228,
+        "path": "dashboard/components/PolicyViewToggle.jsx"
+      },
+      {
+        "commits": 1,
+        "lines": 286,
+        "path": "dashboard/demo-data.js"
+      },
+      {
+        "commits": 4,
+        "lines": 297,
+        "path": "dashboard/index.html"
+      },
+      {
+        "commits": 2,
+        "lines": 22,
+        "path": "dashboard/lib/apply-redaction.d.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 73,
+        "path": "dashboard/lib/apply-redaction.js"
+      },
+      {
+        "commits": 1,
+        "lines": 154,
+        "path": "dashboard/lib/state-boundary.jsx"
+      },
+      {
+        "commits": 1,
+        "lines": 0,
+        "path": "dashboard/screenshots/01-default.png"
+      },
+      {
+        "commits": 1,
+        "lines": 0,
+        "path": "dashboard/screenshots/02-full.png"
+      },
+      {
+        "commits": 1,
+        "lines": 0,
+        "path": "dashboard/screenshots/03-full2.png"
+      },
+      {
+        "commits": 1,
+        "lines": 0,
+        "path": "dashboard/screenshots/04-hq.png"
+      },
+      {
+        "commits": 1,
+        "lines": 47,
+        "path": "db-cluster-feature-pass-FEAT-S1.appendix.json"
+      },
+      {
+        "commits": 1,
+        "lines": 605,
+        "path": "db-cluster-feature-pass-FEAT-S1.domains.json"
+      },
+      {
+        "commits": 1,
+        "lines": 538,
+        "path": "db-cluster-feature-pass-FEAT-S1.md"
+      },
+      {
+        "commits": 2,
+        "lines": 69,
+        "path": "docs/README.md"
+      },
+      {
+        "commits": 2,
+        "lines": 105,
+        "path": "docs/architecture.md"
+      },
+      {
+        "commits": 5,
+        "lines": 472,
+        "path": "docs/cli.md"
+      },
+      {
+        "commits": 4,
+        "lines": 102,
+        "path": "docs/cluster-uris.md"
+      },
+      {
+        "commits": 9,
+        "lines": 1329,
+        "path": "docs/handbook.md"
+      },
+      {
+        "commits": 8,
+        "lines": 519,
+        "path": "docs/mcp.md"
+      },
+      {
+        "commits": 1,
+        "lines": 161,
+        "path": "docs/mutation-law.md"
+      },
+      {
+        "commits": 3,
+        "lines": 181,
+        "path": "docs/operations.md"
+      },
+      {
+        "commits": 2,
+        "lines": 76,
+        "path": "docs/package-boundary.md"
+      },
+      {
+        "commits": 1,
+        "lines": 63,
+        "path": "docs/phase-0-doctrine.md"
+      },
+      {
+        "commits": 1,
+        "lines": 59,
+        "path": "docs/phase-1-closeout.md"
+      },
+      {
+        "commits": 2,
+        "lines": 98,
+        "path": "docs/phase-1-cluster-spine.md"
+      },
+      {
+        "commits": 2,
+        "lines": 59,
+        "path": "docs/phase-10-closeout.md"
+      },
+      {
+        "commits": 1,
+        "lines": 54,
+        "path": "docs/phase-11-closeout.md"
+      },
+      {
+        "commits": 1,
+        "lines": 120,
+        "path": "docs/phase-11-dogfood-report.md"
+      },
+      {
+        "commits": 1,
+        "lines": 36,
+        "path": "docs/phase-12-closeout.md"
+      },
+      {
+        "commits": 1,
+        "lines": 36,
+        "path": "docs/phase-12-dogfood-repair.md"
+      },
+      {
+        "commits": 1,
+        "lines": 66,
+        "path": "docs/phase-12-repair-report.md"
+      },
+      {
+        "commits": 1,
+        "lines": 67,
+        "path": "docs/phase-13-closeout.md"
+      },
+      {
+        "commits": 1,
+        "lines": 79,
+        "path": "docs/phase-13-dashboard-integration.md"
+      },
+      {
+        "commits": 1,
+        "lines": 65,
+        "path": "docs/phase-14-closeout.md"
+      },
+      {
+        "commits": 1,
+        "lines": 72,
+        "path": "docs/phase-14-repo-knowledge-integration-gate.md"
+      },
+      {
+        "commits": 1,
+        "lines": 87,
+        "path": "docs/phase-14-repo-knowledge-integration-report.md"
+      },
+      {
+        "commits": 4,
+        "lines": 75,
+        "path": "docs/phase-15-closeout.md"
+      },
+      {
+        "commits": 1,
+        "lines": 65,
+        "path": "docs/phase-2-closeout.md"
+      },
+      {
+        "commits": 1,
+        "lines": 71,
+        "path": "docs/phase-2-cross-store-identity.md"
+      },
+      {
+        "commits": 1,
+        "lines": 36,
+        "path": "docs/phase-3-closeout.md"
+      },
+      {
+        "commits": 1,
+        "lines": 42,
+        "path": "docs/phase-4-closeout.md"
+      },
+      {
+        "commits": 1,
+        "lines": 44,
+        "path": "docs/phase-5-closeout.md"
+      },
+      {
+        "commits": 1,
+        "lines": 104,
+        "path": "docs/phase-6-closeout.md"
+      },
+      {
+        "commits": 1,
+        "lines": 78,
+        "path": "docs/phase-7-closeout.md"
+      },
+      {
+        "commits": 1,
+        "lines": 75,
+        "path": "docs/phase-8-closeout.md"
+      },
+      {
+        "commits": 2,
+        "lines": 45,
+        "path": "docs/phase-8-physical-store-expansion.md"
+      },
+      {
+        "commits": 1,
+        "lines": 65,
+        "path": "docs/phase-9-closeout.md"
+      },
+      {
+        "commits": 1,
+        "lines": 53,
+        "path": "docs/phase-9-operations-recovery.md"
+      },
+      {
+        "commits": 4,
+        "lines": 249,
+        "path": "docs/policy-and-redaction.md"
+      },
+      {
+        "commits": 3,
+        "lines": 232,
+        "path": "docs/provenance-graphs.md"
+      },
+      {
+        "commits": 3,
+        "lines": 141,
+        "path": "docs/quickstart.md"
+      },
+      {
+        "commits": 6,
+        "lines": 133,
+        "path": "docs/release-notes-v0.1.md"
+      },
+      {
+        "commits": 7,
+        "lines": 239,
+        "path": "docs/release-readiness.md"
+      },
+      {
+        "commits": 1,
+        "lines": 64,
+        "path": "docs/repo-knowledge-mapping.md"
+      },
+      {
+        "commits": 3,
+        "lines": 169,
+        "path": "docs/retrieval-bundles.md"
+      },
+      {
+        "commits": 1,
+        "lines": 68,
+        "path": "docs/runbooks/README.md"
+      },
+      {
+        "commits": 1,
+        "lines": 149,
+        "path": "docs/runbooks/corrupt-store.md"
+      },
+      {
+        "commits": 1,
+        "lines": 119,
+        "path": "docs/runbooks/index-stale.md"
+      },
+      {
+        "commits": 1,
+        "lines": 135,
+        "path": "docs/runbooks/orphan-mutations.md"
+      },
+      {
+        "commits": 2,
+        "lines": 154,
+        "path": "docs/runbooks/postgres-unreachable.md"
+      },
+      {
+        "commits": 7,
+        "lines": 349,
+        "path": "docs/sdk.md"
+      },
+      {
+        "commits": 4,
+        "lines": 173,
+        "path": "docs/store-contracts.md"
+      },
+      {
+        "commits": 2,
+        "lines": 84,
+        "path": "examples/agent-safe-app-db/README.md"
+      },
+      {
+        "commits": 6,
+        "lines": 235,
+        "path": "examples/agent-safe-app-db/index.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 47,
+        "path": "examples/dogfood-project-memory/README.md"
+      },
+      {
+        "commits": 1,
+        "lines": 67,
+        "path": "examples/dogfood-project-memory/schema.md"
+      },
+      {
+        "commits": 1,
+        "lines": 10,
+        "path": "examples/mcp/config.example.json"
+      },
+      {
+        "commits": 2,
+        "lines": 122,
+        "path": "examples/mcp/safety-model.md"
+      },
+      {
+        "commits": 2,
+        "lines": 74,
+        "path": "examples/mcp/tool-catalog.md"
+      },
+      {
+        "commits": 2,
+        "lines": 75,
+        "path": "examples/project-memory-cluster/README.md"
+      },
+      {
+        "commits": 7,
+        "lines": 226,
+        "path": "examples/project-memory-cluster/index.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 65,
+        "path": "examples/quickstart/README.md"
+      },
+      {
+        "commits": 1,
+        "lines": 69,
+        "path": "examples/quickstart/commands.md"
+      },
+      {
+        "commits": 1,
+        "lines": 28,
+        "path": "examples/quickstart/evidence.md"
+      },
+      {
+        "commits": 1,
+        "lines": 8,
+        "path": "examples/quickstart/expected-output/doctor.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 5,
+        "path": "examples/quickstart/expected-output/ingest.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 5,
+        "path": "examples/quickstart/expected-output/init.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 74,
+        "path": "examples/research-evidence-cluster/README.md"
+      },
+      {
+        "commits": 7,
+        "lines": 239,
+        "path": "examples/research-evidence-cluster/index.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 95,
+        "path": "examples/sdk/README.md"
+      },
+      {
+        "commits": 6,
+        "lines": 137,
+        "path": "examples/sdk/local-cluster.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 132,
+        "path": "examples/sdk/mutation-lifecycle.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 186,
+        "path": "examples/sdk/policy-redaction.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 228,
+        "path": "examples/sdk/postgres-canonical.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 150,
+        "path": "examples/sdk/retrieval-bundle.ts"
+      },
+      {
+        "commits": 10,
+        "lines": 8486,
+        "path": "package-lock.json"
+      },
+      {
+        "commits": 18,
+        "lines": 153,
+        "path": "package.json"
+      },
+      {
+        "commits": 2,
+        "lines": 1682,
+        "path": "phase map.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 14,
+        "path": "scripts/checks/R1-kernel-underscore-access.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 29,
+        "path": "scripts/checks/R10-path-scrub-regex-outside-redactor.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 31,
+        "path": "scripts/checks/R11-snippet-without-integrity-read.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 28,
+        "path": "scripts/checks/R12-retrieval-without-ranking.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 28,
+        "path": "scripts/checks/R13-version-read-without-per-element-redaction.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 36,
+        "path": "scripts/checks/R14-mcp-refusal-returned-not-thrown.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 24,
+        "path": "scripts/checks/R2-index-clear-then-loop.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "scripts/checks/R3-raw-cluster-resolver-instantiation.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 22,
+        "path": "scripts/checks/R4-switch-on-resolved-store-incomplete.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 36,
+        "path": "scripts/checks/R5-optional-import-contract-method.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 32,
+        "path": "scripts/checks/R6-content-read-without-hash-check.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 39,
+        "path": "scripts/checks/R7-update-mutation-without-previous.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 37,
+        "path": "scripts/checks/R8-ledger-append-without-integrity-stamp.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 41,
+        "path": "scripts/checks/R9-sdk-artifact-without-sanitize.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 6,
+        "path": "scripts/checks/fixtures/r10-bad.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 13,
+        "path": "scripts/checks/fixtures/r10-good.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 31,
+        "path": "scripts/checks/fixtures/r9-bad.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 40,
+        "path": "scripts/checks/fixtures/r9-good.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 565,
+        "path": "scripts/checks/sqlite-sql-safety.mjs"
+      },
+      {
+        "commits": 7,
+        "lines": 424,
+        "path": "scripts/completeness-checks.mjs"
+      },
+      {
+        "commits": 1,
+        "lines": 106,
+        "path": "scripts/dashboard-snapshot.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 800,
+        "path": "scripts/doc-drift.mjs"
+      },
+      {
+        "commits": 1,
+        "lines": 236,
+        "path": "scripts/dogfood-ingest.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 94,
+        "path": "scripts/dogfood-ops.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 144,
+        "path": "scripts/dogfood-policy.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 61,
+        "path": "scripts/dogfood-query.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 128,
+        "path": "scripts/dogfood-replay.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 97,
+        "path": "scripts/dogfood-trace.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 93,
+        "path": "scripts/dogfood-update.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 291,
+        "path": "scripts/jsdoc-gate.mjs"
+      },
+      {
+        "commits": 10,
+        "lines": 356,
+        "path": "scripts/release-gate.mjs"
+      },
+      {
+        "commits": 1,
+        "lines": 90,
+        "path": "scripts/repo-knowledge-dashboard-snapshot.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 98,
+        "path": "scripts/repo-knowledge-ops.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 96,
+        "path": "scripts/repo-knowledge-update-demo.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 282,
+        "path": "scripts/smoke-install.mjs"
+      },
+      {
+        "commits": 1,
+        "lines": 30,
+        "path": "site/astro.config.mjs"
+      },
+      {
+        "commits": 1,
+        "lines": 7922,
+        "path": "site/package-lock.json"
+      },
+      {
+        "commits": 1,
+        "lines": 18,
+        "path": "site/package.json"
+      },
+      {
+        "commits": 1,
+        "lines": 7,
+        "path": "site/src/content.config.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 127,
+        "path": "site/src/content/docs/handbook/architecture.md"
+      },
+      {
+        "commits": 2,
+        "lines": 145,
+        "path": "site/src/content/docs/handbook/cli.md"
+      },
+      {
+        "commits": 3,
+        "lines": 150,
+        "path": "site/src/content/docs/handbook/getting-started.md"
+      },
+      {
+        "commits": 3,
+        "lines": 64,
+        "path": "site/src/content/docs/handbook/index.md"
+      },
+      {
+        "commits": 2,
+        "lines": 128,
+        "path": "site/src/content/docs/handbook/mcp.md"
+      },
+      {
+        "commits": 2,
+        "lines": 132,
+        "path": "site/src/content/docs/handbook/operations.md"
+      },
+      {
+        "commits": 3,
+        "lines": 160,
+        "path": "site/src/content/docs/handbook/policy-and-redaction.md"
+      },
+      {
+        "commits": 2,
+        "lines": 165,
+        "path": "site/src/content/docs/handbook/sdk.md"
+      },
+      {
+        "commits": 1,
+        "lines": 33,
+        "path": "site/src/pages/index.astro"
+      },
+      {
+        "commits": 3,
+        "lines": 89,
+        "path": "site/src/site-config.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 3,
+        "path": "site/src/styles/global.css"
+      },
+      {
+        "commits": 1,
+        "lines": 5,
+        "path": "site/src/styles/starlight-custom.css"
+      },
+      {
+        "commits": 1,
+        "lines": 5,
+        "path": "site/tsconfig.json"
+      },
+      {
+        "commits": 3,
+        "lines": 390,
+        "path": "src/adapters/factory.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 511,
+        "path": "src/adapters/local/errors.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 27,
+        "path": "src/adapters/local/index.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 357,
+        "path": "src/adapters/local/local-artifact-store.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 364,
+        "path": "src/adapters/local/local-canonical-store.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 161,
+        "path": "src/adapters/local/local-index-store.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 1238,
+        "path": "src/adapters/local/local-ledger-store.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 248,
+        "path": "src/adapters/local/tmp-cleanup.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 5,
+        "path": "src/adapters/postgres/index.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 17,
+        "path": "src/adapters/postgres/migrations/001_create_canonical_entities.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 30,
+        "path": "src/adapters/postgres/migrations/002_add_entity_version.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 363,
+        "path": "src/adapters/postgres/postgres-canonical-store.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 139,
+        "path": "src/adapters/postgres/schema.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 59,
+        "path": "src/adapters/sqlite/errors.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 40,
+        "path": "src/adapters/sqlite/index.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 24,
+        "path": "src/adapters/sqlite/migrations/001_init.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 27,
+        "path": "src/adapters/sqlite/migrations/index.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 263,
+        "path": "src/adapters/sqlite/schema.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 309,
+        "path": "src/adapters/sqlite/sqlite-artifact-store.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 305,
+        "path": "src/adapters/sqlite/sqlite-canonical-store.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 170,
+        "path": "src/adapters/sqlite/sqlite-db.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 194,
+        "path": "src/adapters/sqlite/sqlite-index-store.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 690,
+        "path": "src/adapters/sqlite/sqlite-ledger-store.ts"
+      },
+      {
+        "commits": 21,
+        "lines": 3601,
+        "path": "src/cli.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 82,
+        "path": "src/cli/color-output.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 144,
+        "path": "src/contracts/artifact-store.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 191,
+        "path": "src/contracts/canonical-store.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 128,
+        "path": "src/contracts/index-store.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 20,
+        "path": "src/contracts/index.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 324,
+        "path": "src/contracts/ledger-store.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 110,
+        "path": "src/dashboard/dashboard-model.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 341,
+        "path": "src/dashboard/inspector-data.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 347,
+        "path": "src/dashboard/ops-model.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 173,
+        "path": "src/index.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 126,
+        "path": "src/indexing/bm25.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 133,
+        "path": "src/indexing/content-indexer.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 77,
+        "path": "src/indexing/tokenizer.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 160,
+        "path": "src/integrations/repo-knowledge/compare-retrieval.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 579,
+        "path": "src/integrations/repo-knowledge/ingest.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 140,
+        "path": "src/integrations/repo-knowledge/mapping.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 112,
+        "path": "src/integrations/repo-knowledge/update-workflow.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 334,
+        "path": "src/kernel/cluster-kernel-interface.ts"
+      },
+      {
+        "commits": 17,
+        "lines": 2793,
+        "path": "src/kernel/cluster-kernel.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 251,
+        "path": "src/kernel/command-queue.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 371,
+        "path": "src/kernel/commands.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 599,
+        "path": "src/kernel/errors.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 81,
+        "path": "src/kernel/index.ts"
+      },
+      {
+        "commits": 11,
+        "lines": 1530,
+        "path": "src/kernel/policy-enforced-kernel.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 54,
+        "path": "src/kernel/provenance.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 22,
+        "path": "src/kernel/receipts.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 176,
+        "path": "src/mcp/config-validator.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 2,
+        "path": "src/mcp/index.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 659,
+        "path": "src/mcp/sanitize.ts"
+      },
+      {
+        "commits": 12,
+        "lines": 1892,
+        "path": "src/mcp/server.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 825,
+        "path": "src/ops/backup.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 704,
+        "path": "src/ops/doctor.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 47,
+        "path": "src/ops/errors.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 43,
+        "path": "src/ops/health.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 646,
+        "path": "src/ops/integrity-checks.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 131,
+        "path": "src/ops/migrations.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 148,
+        "path": "src/ops/provenance-check.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 484,
+        "path": "src/ops/rebuild.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 147,
+        "path": "src/ops/receipt-check.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 776,
+        "path": "src/ops/verify.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 55,
+        "path": "src/policy/approval-gate-denied-error.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 151,
+        "path": "src/policy/default-policies.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 168,
+        "path": "src/policy/error-formatter.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 62,
+        "path": "src/policy/index.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 307,
+        "path": "src/policy/policy-engine.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 799,
+        "path": "src/policy/redactor.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 192,
+        "path": "src/policy/store-output-sanitizers.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 1,
+        "path": "src/provenance/index.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 827,
+        "path": "src/provenance/trace-builder.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 100,
+        "path": "src/resolver/cluster-resolver.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 2,
+        "path": "src/resolver/index.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 2,
+        "path": "src/retrieval/index.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 353,
+        "path": "src/retrieval/retrieval-planner.ts"
+      },
+      {
+        "commits": 10,
+        "lines": 923,
+        "path": "src/sdk/cluster-sdk.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 4,
+        "path": "src/sdk/index.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 142,
+        "path": "src/types/ai-envelope.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 15,
+        "path": "src/types/artifact.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 70,
+        "path": "src/types/command.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 114,
+        "path": "src/types/component-state.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 20,
+        "path": "src/types/entity.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 112,
+        "path": "src/types/evidence-bundle.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 86,
+        "path": "src/types/health.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 14,
+        "path": "src/types/index-record.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 37,
+        "path": "src/types/index.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 179,
+        "path": "src/types/integrity.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 40,
+        "path": "src/types/page.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 237,
+        "path": "src/types/policy.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 32,
+        "path": "src/types/provenance-event.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 136,
+        "path": "src/types/provenance-graph.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 26,
+        "path": "src/types/receipt.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 155,
+        "path": "src/types/redaction.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 39,
+        "path": "src/unsafe.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 117,
+        "path": "src/uri/cluster-uri.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 8,
+        "path": "src/uri/index.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 184,
+        "path": "src/util/tmp-paths.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 41,
+        "path": "stryker.conf.json"
+      },
+      {
+        "commits": 1,
+        "lines": 216,
+        "path": "swarm-stage-a-amend-20260527-004737Z.md"
+      },
+      {
+        "commits": 1,
+        "lines": 225,
+        "path": "swarm-stage-a-amend-a2-20260527-025742Z.md"
+      },
+      {
+        "commits": 2,
+        "lines": 415,
+        "path": "swarm-stage-a-amend-a3-20260527-064344Z.md"
+      },
+      {
+        "commits": 2,
+        "lines": 247,
+        "path": "swarm-stage-a-amend-a4-20260527-112600Z.md"
+      },
+      {
+        "commits": 1,
+        "lines": 361,
+        "path": "swarm-stage-a-audit-20260526-225638Z.md"
+      },
+      {
+        "commits": 1,
+        "lines": 373,
+        "path": "swarm-stage-a-reaudit-20260527-013038Z.md"
+      },
+      {
+        "commits": 1,
+        "lines": 391,
+        "path": "swarm-stage-a-reaudit2-20260527-033921Z.md"
+      },
+      {
+        "commits": 1,
+        "lines": 388,
+        "path": "swarm-stage-a-wave-a3-verifier-aggregate-1779861998.md"
+      },
+      {
+        "commits": 1,
+        "lines": 212,
+        "path": "swarm-stage-a-wave-a4-verifier-aggregate-1779881160.md"
+      },
+      {
+        "commits": 1,
+        "lines": 302,
+        "path": "swarm-stage-b-amend-1-20260527-130000Z.md"
+      },
+      {
+        "commits": 1,
+        "lines": 394,
+        "path": "swarm-stage-b-audit-1-20260527-091803Z.md"
+      },
+      {
+        "commits": 1,
+        "lines": 248,
+        "path": "swarm-stage-b-wave-b1-verifier-aggregate-1779884900.md"
+      },
+      {
+        "commits": 1,
+        "lines": 354,
+        "path": "swarm-stage-c-amend-1-20260527-170000Z.md"
+      },
+      {
+        "commits": 1,
+        "lines": 472,
+        "path": "swarm-stage-c-audit-1-1779892297.md"
+      },
+      {
+        "commits": 1,
+        "lines": 163,
+        "path": "swarm-stage-c-wave-c1-verifier-actionability-OUTPUT.json"
+      },
+      {
+        "commits": 1,
+        "lines": 191,
+        "path": "swarm-stage-c-wave-c1-verifier-aggregate-1779897954.md"
+      },
+      {
+        "commits": 1,
+        "lines": 163,
+        "path": "swarm-stage-c-wave-c1-verifier-edge-state-OUTPUT.json"
+      },
+      {
+        "commits": 1,
+        "lines": 153,
+        "path": "swarm-stage-c-wave-c1-verifier-op-progress-OUTPUT.json"
+      },
+      {
+        "commits": 1,
+        "lines": 101,
+        "path": "test/README.md"
+      },
+      {
+        "commits": 2,
+        "lines": 308,
+        "path": "test/adapters.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 286,
+        "path": "test/backend-parity.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 150,
+        "path": "test/cli-docs.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 120,
+        "path": "test/cli.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 168,
+        "path": "test/command-index-consistency.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 178,
+        "path": "test/command-persistence.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 242,
+        "path": "test/content-index.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 61,
+        "path": "test/contracts.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 135,
+        "path": "test/dashboard-command-preview.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 243,
+        "path": "test/dashboard-model.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 99,
+        "path": "test/dashboard-ops.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 232,
+        "path": "test/dashboard-policy-view.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 120,
+        "path": "test/dashboard-snapshot.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 228,
+        "path": "test/doctor-head-truncation-regression.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 173,
+        "path": "test/dogfood-mutation.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 148,
+        "path": "test/dogfood-ops.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 179,
+        "path": "test/dogfood-policy.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 36,
+        "path": "test/dogfood-replay.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 95,
+        "path": "test/dogfood-retrieval.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 87,
+        "path": "test/dogfood-trace.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 199,
+        "path": "test/explain.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 25,
+        "path": "test/fixtures/incomplete-artifact-store.fixture.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 36,
+        "path": "test/fixtures/incomplete-canonical-store.fixture.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 36,
+        "path": "test/fixtures/incomplete-ledger-store-event.fixture.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 36,
+        "path": "test/fixtures/incomplete-ledger-store-receipt.fixture.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 165,
+        "path": "test/install-smoke.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 253,
+        "path": "test/kernel.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 218,
+        "path": "test/path-traversal.test.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 381,
+        "path": "test/phase10-proof.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 293,
+        "path": "test/phase11-proof.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 424,
+        "path": "test/phase12-proof.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 232,
+        "path": "test/phase13-proof.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 225,
+        "path": "test/phase14-proof.test.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 444,
+        "path": "test/phase15-proof.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 360,
+        "path": "test/phase2-proof.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 308,
+        "path": "test/phase3-proof.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 409,
+        "path": "test/phase4-proof.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 430,
+        "path": "test/phase5-proof.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 346,
+        "path": "test/phase8-proof.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 222,
+        "path": "test/phase9-proof.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 664,
+        "path": "test/policy-engine.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 738,
+        "path": "test/policy-kernel.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 498,
+        "path": "test/policy-surface.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 248,
+        "path": "test/postgres-canonical-store.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 267,
+        "path": "test/postgres-kernel-regression.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 617,
+        "path": "test/proof.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 154,
+        "path": "test/rebuild.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 139,
+        "path": "test/repo-knowledge-dashboard.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 202,
+        "path": "test/repo-knowledge-ingest.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 135,
+        "path": "test/repo-knowledge-mapping.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 189,
+        "path": "test/repo-knowledge-mutation.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 244,
+        "path": "test/repo-knowledge-ops.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 127,
+        "path": "test/repo-knowledge-retrieval.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 234,
+        "path": "test/resolver.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 173,
+        "path": "test/restore-artifacts.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 325,
+        "path": "test/retrieval.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 154,
+        "path": "test/sql-injection.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 307,
+        "path": "test/typed-error-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 143,
+        "path": "test/uri.test.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 232,
+        "path": "test/verb-parity.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 891,
+        "path": "test/wave-a3-kernel-regression.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 1043,
+        "path": "test/wave-a3-stores-regression.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 596,
+        "path": "test/wave-a3-surface-regression.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 1013,
+        "path": "test/wave-a3-tests-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 536,
+        "path": "test/wave-a4-fixup-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 384,
+        "path": "test/wave-a4-kernel-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 690,
+        "path": "test/wave-a4-stores-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 327,
+        "path": "test/wave-a4-surface-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 275,
+        "path": "test/wave-a4-tests-regression.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 389,
+        "path": "test/wave-b1-cidocs-regression.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 548,
+        "path": "test/wave-b1-fixup-regression.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 557,
+        "path": "test/wave-b1-kernel-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 674,
+        "path": "test/wave-b1-stores-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 523,
+        "path": "test/wave-b1-surface-regression.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 414,
+        "path": "test/wave-c1-cidocs-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 510,
+        "path": "test/wave-c1-fixup-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 765,
+        "path": "test/wave-c1-kernel-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 831,
+        "path": "test/wave-c1-stores-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 634,
+        "path": "test/wave-c1-surface-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 399,
+        "path": "test/wave-c1-tests-cli-snapshots.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 554,
+        "path": "test/wave-c1-tests-dashboard-render.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 436,
+        "path": "test/wave-c1-tests-exit-codes.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 217,
+        "path": "test/wave-c1-tests-jsdoc-examples.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 667,
+        "path": "test/wave-c1-tests-mcp-envelope.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 125,
+        "path": "test/wave-phase-10-cli-color.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 281,
+        "path": "test/wave-s2a1-contracts-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 411,
+        "path": "test/wave-s2a1-fixup-ops-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 283,
+        "path": "test/wave-s2a1-fixup-wiring-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 383,
+        "path": "test/wave-s2a1-kernel-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 490,
+        "path": "test/wave-s2a1-local-adapters-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 425,
+        "path": "test/wave-s2a1-ops-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 265,
+        "path": "test/wave-s2a1-surface-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 244,
+        "path": "test/wave-s2a2-cli-ops-regression.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 255,
+        "path": "test/wave-s2a2-docs-regression.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 567,
+        "path": "test/wave-s2a2-fixup-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 359,
+        "path": "test/wave-s2a2-gating-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 0,
+        "path": "test/wave-s2a2-policy-regression.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 496,
+        "path": "test/wave-s2a2-surfaces-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 84,
+        "path": "test/wave-v1-callsite-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 143,
+        "path": "test/wave-v1-ranker-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 154,
+        "path": "test/wave-v1-retrieval-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 97,
+        "path": "test/wave-v1-store-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 57,
+        "path": "test/wave-v1-tests-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 79,
+        "path": "test/wave-v2-kernel-reads.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 104,
+        "path": "test/wave-v2-mcp-cli.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 115,
+        "path": "test/wave-v2-policy-versions.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 103,
+        "path": "test/wave-v2-sdk.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 37,
+        "path": "test/wave-v2-tests-regression.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 370,
+        "path": "test/wave-v3-cross-adapter-integrity.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 648,
+        "path": "test/wave-v3-sqlite-canonical-artifact.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 224,
+        "path": "test/wave-v3-sqlite-foundation.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 211,
+        "path": "test/wave-v3-sqlite-hardening.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 730,
+        "path": "test/wave-v3-sqlite-index-ledger.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 996,
+        "path": "test/wave-v3-sqlite-parity.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 292,
+        "path": "test/wave-v4-cli-exit-codes.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 367,
+        "path": "test/wave-v4-mcp-gate-iserror.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 186,
+        "path": "test/wave-v5-snippet-redaction.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 526,
+        "path": "test/wave5-parity.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 905,
+        "path": "test/wave5-redaction.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 976,
+        "path": "test/wave6-policy-proof.test.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 595,
+        "path": "test/wave6-proof.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 18,
+        "path": "tsconfig.docs.json"
+      },
+      {
+        "commits": 1,
+        "lines": 8,
+        "path": "tsconfig.examples.json"
+      },
+      {
+        "commits": 1,
+        "lines": 25,
+        "path": "tsconfig.json"
+      },
+      {
+        "commits": 2,
+        "lines": 8,
+        "path": "vitest.config.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 56,
+        "path": "vitest.stryker.config.ts"
+      }
+    ]
+  },
+  "confidence": {
+    "level": "low",
+    "reason": "fewer than 20 source files reach 10 revisions in the window"
+  },
+  "generatedAt": "2026-09-23T22:31:52.086Z",
+  "generatedFrom": {
+    "commit": "2fb8e756e5bddee9c7e55f728c46d90b9289478d"
+  },
+  "pairs": [
+    {
+      "a": ".github/workflows/release.yml",
+      "b": ".github/workflows/smoke-install.yml",
+      "either": 8,
+      "shared": 4,
+      "strength": 0.5
+    },
+    {
+      "a": "CHANGELOG.md",
+      "b": "README.md",
+      "either": 31,
+      "shared": 19,
+      "strength": 0.612903
+    },
+    {
+      "a": "README.es.md",
+      "b": "README.fr.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.es.md",
+      "b": "README.hi.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.es.md",
+      "b": "README.it.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.es.md",
+      "b": "README.ja.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.es.md",
+      "b": "README.pt-BR.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.es.md",
+      "b": "README.zh.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.fr.md",
+      "b": "README.hi.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.fr.md",
+      "b": "README.it.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.fr.md",
+      "b": "README.ja.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.fr.md",
+      "b": "README.pt-BR.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.fr.md",
+      "b": "README.zh.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.hi.md",
+      "b": "README.it.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.hi.md",
+      "b": "README.ja.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.hi.md",
+      "b": "README.pt-BR.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.hi.md",
+      "b": "README.zh.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.it.md",
+      "b": "README.ja.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.it.md",
+      "b": "README.pt-BR.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.it.md",
+      "b": "README.zh.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.ja.md",
+      "b": "README.pt-BR.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.ja.md",
+      "b": "README.zh.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "README.pt-BR.md",
+      "b": "README.zh.md",
+      "either": 5,
+      "shared": 5,
+      "strength": 1
+    },
+    {
+      "a": "docs/mcp.md",
+      "b": "docs/sdk.md",
+      "either": 7,
+      "shared": 4,
+      "strength": 0.571429
+    },
+    {
+      "a": "package-lock.json",
+      "b": "package.json",
+      "either": 13,
+      "shared": 10,
+      "strength": 0.769231
+    },
+    {
+      "a": "scripts/completeness-checks.mjs",
+      "b": "src/mcp/server.ts",
+      "either": 8,
+      "shared": 5,
+      "strength": 0.625
+    },
+    {
+      "a": "scripts/completeness-checks.mjs",
+      "b": "src/sdk/cluster-sdk.ts",
+      "either": 8,
+      "shared": 4,
+      "strength": 0.5
+    },
+    {
+      "a": "src/kernel/policy-enforced-kernel.ts",
+      "b": "src/mcp/server.ts",
+      "either": 9,
+      "shared": 5,
+      "strength": 0.555556
+    },
+    {
+      "a": "src/kernel/policy-enforced-kernel.ts",
+      "b": "src/sdk/cluster-sdk.ts",
+      "either": 8,
+      "shared": 5,
+      "strength": 0.625
+    },
+    {
+      "a": "src/mcp/server.ts",
+      "b": "src/sdk/cluster-sdk.ts",
+      "either": 7,
+      "shared": 6,
+      "strength": 0.857143
+    }
+  ],
+  "parameters": {
+    "appliedChangesetLimit": 50,
+    "changeset": 50,
+    "changesetFraction": 0.25,
+    "cohesionDrop": 0.2,
+    "couplingPopulation": "source",
+    "fallenShared": 3,
+    "floor": "fallen",
+    "floorHeld": false,
+    "floorTrigger": "revision-depth",
+    "headDate": "2026-09-07T22:54:04-04:00",
+    "inScopeFiles": 429,
+    "pinnedStart": null,
+    "priorFloor": null,
+    "qualifyingCommits": 72,
+    "qualifyingMinimum": 30,
+    "revisions": 5,
+    "shared": 10,
+    "sharedFloorUsed": 3,
+    "since": "2026-03-12T02:54:04.000Z",
+    "sourceExtensions": [
+      ".js",
+      ".mjs",
+      ".cjs",
+      ".jsx",
+      ".ts",
+      ".tsx",
+      ".mts",
+      ".cts",
+      ".py"
+    ],
+    "sourceFileReach": 20,
+    "sourceFileRise": 25,
+    "sourceFilesReachingStrongFloor": 2,
+    "strength": 0.5,
+    "windowDays": 180
+  },
+  "strengthDefinition": "strength is the shared qualifying commits divided by either. either is the number of qualifying commits that touch either file."
+}

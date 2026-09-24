@@ -12,7 +12,7 @@ A research team's evidence store — papers as artifacts, claims as canonical en
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22.12+
 - npm or pnpm
 - `@mcptoolshop/db-cluster` installed (`npm install @mcptoolshop/db-cluster` or local `npm link`)
 

@@ -108,14 +108,14 @@ db-cluster receipts
 
 ## 前提条件
 
-- Node.js 20+（`package.json`の`engines.node`によって強制されます）
+- Node.js 22.12+（`package.json`の`engines.node`によって強制されます）
 - npm
 
 ## 信頼モデル
 
 db-clusterは**ローカルで**実行されます。指定した作業ディレクトリにある`.db-cluster/`ディレクトリを読み書きし、`ingest`に渡されたアーティファクトを読み取ります。デフォルトでは**ネットワークへの送信は行われず、テレメトリも行われません**。オプションの送信接続は、`DB_CLUSTER_POSTGRES_URL`を設定した場合に、Postgresホストへの接続のみです。**db-clusterは、v1.0.0では、その接続に対してSSL/TLSを構成しません**。トランスポートはプレーンテキストであり、接続文字列で強制しない限り（例：`sslmode=require`、これは`pg`ドライバーが尊重します）、TLS終端プロキシ、またはプライベートネットワークを使用します。ドライバーによって管理されるTLS構成は、将来のリリースで計画されています。
 
-MCPサーバーツールは、ローカルストレージへの読み書きのみを行います。ネットワークにはアクセスせず、構造化された`AiErrorEnvelope`レスポンスには、スタックトレースやファイルシステムパスが漏洩することはありません。**MCPサーバーは、デフォルトで`ai-facing`トラストゾーンを使用し、リダクションが有効になっています。**そのため、デフォルトでは、成果物のコンテンツや機密性の高いエンティティ属性が境界で削除され、どのMCPツールも生の成果物バイトを返しません。特権的な（`internal` / `cluster-admin`）アクセスが必要なオペレーターは、環境フラグ（仮に`DB_CLUSTER_MCP_ALLOW_PRIVILEGED`）を通じて明示的にオプトインする必要があります（詳細は[`docs/mcp.md`](docs/mcp.md)を参照）。**MCP書き込みツールは、承認を強制します。**`cluster_commit_mutation`と`cluster_compensate_mutation`は、コマンドが`approved`ステータスでない限り、書き込みを拒否します。そのため、呼び出し元は最初に`cluster_approve_mutation`を呼び出す必要があり、拒否は部分的な書き込みではなく、構造化された`AiErrorEnvelope`として行われます。（信頼されたインプロセスSDKの呼び出し元は影響を受けません。これはMCPの表面でのみ適用されます。）破壊的なCLIコマンド（`restore`、`rebuild index`、`compensate`、`backup --force-overwrite`）には、明示的な`--yes`フラグと、TTYでのインタラクティブな確認が必要です。
+デフォルトでは、MCPサーバーツールはローカルストレージからデータを読み書きし、ネットワークにはアクセスしません。ただし、Postgresの標準ストレージは例外であり、これは`DB_CLUSTER_CANONICAL_BACKEND=postgres`で選択します。構造化された`AiErrorEnvelope`形式の応答は、スタックトレースやファイルシステムパスを外部に漏らすことはありません。**MCPサーバーは、デフォルトで`ai-facing`トラストゾーンを使用し、リダクションが有効になっています。**そのため、デフォルトでは、成果物のコンテンツや機密性の高いエンティティ属性が境界で削除され、どのMCPツールも生の成果物バイトを返しません。特権的な（`internal` / `cluster-admin`）アクセスが必要なオペレーターは、環境フラグ（仮に`DB_CLUSTER_MCP_ALLOW_PRIVILEGED`）を通じて明示的にオプトインする必要があります（詳細は[`docs/mcp.md`](docs/mcp.md)を参照）。**MCP書き込みツールは、承認を強制します。**`cluster_commit_mutation`と`cluster_compensate_mutation`は、コマンドが`approved`ステータスでない限り、書き込みを拒否します。そのため、呼び出し元は最初に`cluster_approve_mutation`を呼び出す必要があり、拒否は部分的な書き込みではなく、構造化された`AiErrorEnvelope`として行われます。（信頼されたインプロセスSDKの呼び出し元は影響を受けません。これはMCPの表面でのみ適用されます。）破壊的なCLIコマンド（`restore`、`rebuild index`、`compensate`）には、明示的な`--yes`フラグと、TTYでのインタラクティブな確認が必要です。
 
 完全な脅威モデル（アクセスされるデータ、アクセスされないデータ、必要な権限、表面ごとのアクセス制御、追跡される残存データ）は、[`SECURITY.md`](SECURITY.md)に記載されています。
 

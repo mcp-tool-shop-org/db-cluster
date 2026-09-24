@@ -64,6 +64,7 @@ export {
     StagedContentTamperedError,
     BufferSideChannelNotSupportedError,
     InvalidContentShapeError,
+    InvalidActorError,
 } from './errors.js';
 // KERNEL-C-006: PolicyEnforcedKernel + PolicyDeniedError live in
 // `policy-enforced-kernel.ts` but are part of the public kernel surface.

@@ -26,9 +26,11 @@ const ROOT = resolve(HERE, '..');
 describe('Wave B1-Amend CI/Docs regression — package.json fields', () => {
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 
-    it('CIDOCS-B-003: engines.node is set to >=20', () => {
+    it('CIDOCS-B-003: engines.node is set to >=22.12', () => {
+        // Raised from >=20 on 2026-09-24: Node 20 reached end-of-life on
+        // 2026-04-30, commander 15 requires 22.12, better-sqlite3 13 requires 22.
         expect(pkg.engines).toBeDefined();
-        expect(pkg.engines.node).toBe('>=20');
+        expect(pkg.engines.node).toBe('>=22.12');
     });
 
     it('CIDOCS-B-024: repository, bugs, homepage are present', () => {
@@ -46,18 +48,18 @@ describe('Wave B1-Amend CI/Docs regression — package.json fields', () => {
 });
 
 describe('Wave B1-Amend CI/Docs regression — README + quickstart Node version claims', () => {
-    it('README claims Node 20+, not Node 18+', () => {
+    it('README claims Node 22.12+, not an older floor', () => {
         const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
-        expect(readme).toContain('Node.js 20+');
-        // Make sure no "Node.js 18+" or "Node 18+" remains as a positive
-        // claim about supported versions.
-        expect(/Node\.?js\s+18\+/i.test(readme)).toBe(false);
+        expect(readme).toContain('Node.js 22.12+');
+        // Make sure no older floor ("Node.js 18+", "Node 20+") remains as a
+        // positive claim about supported versions.
+        expect(/Node\.?js\s+(18|20)\+/i.test(readme)).toBe(false);
     });
 
-    it('docs/quickstart.md claims Node 20+', () => {
+    it('docs/quickstart.md claims Node 22.12+', () => {
         const qs = readFileSync(join(ROOT, 'docs', 'quickstart.md'), 'utf8');
-        expect(qs).toContain('Node.js 20+');
-        expect(/Node\.?js\s+18\+/i.test(qs)).toBe(false);
+        expect(qs).toContain('Node.js 22.12+');
+        expect(/Node\.?js\s+(18|20)\+/i.test(qs)).toBe(false);
     });
 });
 
@@ -65,12 +67,18 @@ describe('Wave B1-Amend CI/Docs regression — CI workflows', () => {
     const ciYml = readFileSync(join(ROOT, '.github/workflows/ci.yml'), 'utf8');
     const rgYml = readFileSync(join(ROOT, '.github/workflows/release-gate.yml'), 'utf8');
 
-    it('CIDOCS-B-010: ci.yml matrix includes Node 24', () => {
-        expect(ciYml).toMatch(/node:\s*\[\s*20,\s*22,\s*24\s*\]/);
+    it('CIDOCS-B-010: ci.yml matrix is Node 22 and 24', () => {
+        // Node 20 left the matrix on 2026-09-24 (end-of-life; engines >=22.12).
+        expect(ciYml).toMatch(/node:\s*\[\s*22,\s*24\s*\]/);
     });
 
-    it('CIDOCS-B-010: ci.yml matrix includes macos-latest', () => {
-        expect(ciYml).toContain('macos-latest');
+    it('CIDOCS-B-010: ci.yml matrix is ubuntu-latest and windows-latest', () => {
+        // The macOS cells came out on 2026-09-07 (no darwin artifact ships; the
+        // studio rule forbids macos-latest unless requested). This used to
+        // assert `toContain('macos-latest')`, which a header comment kept
+        // satisfying after the matrix entry was gone, so it pins the matrix
+        // line itself now.
+        expect(ciYml).toMatch(/os:\s*\[\s*ubuntu-latest,\s*windows-latest\s*\]/);
     });
 
     it('CIDOCS-B-004 / B-015: ci.yml has workflow_dispatch trigger', () => {

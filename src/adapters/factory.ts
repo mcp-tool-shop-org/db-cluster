@@ -85,6 +85,84 @@ export interface ClusterConfig {
     postgresUrl?: string;
 }
 
+/**
+ * Raised when backend selection is misconfigured: an unknown backend name, or
+ * a Postgres canonical store with no connection URL. The factory fails closed
+ * rather than falling back to local stores, so a configuration that names a
+ * backend either gets it or stops.
+ *
+ * Adapter-layer error (extends Error, not ClusterError: src/adapters/ does not
+ * import the kernel hierarchy). Carries the same code / remediationHint /
+ * retryable fields, which the MCP boundary and the CLI exit-code map read.
+ */
+export class InvalidBackendConfigError extends Error {
+    public readonly code = 'INVALID_BACKEND_CONFIG';
+    public readonly remediationHint: string =
+        'Set DB_CLUSTER_CANONICAL_BACKEND to local, postgres or sqlite (unset means ' +
+        'local), and set DB_CLUSTER_POSTGRES_URL when it is postgres. Artifact, ' +
+        'index and ledger stores accept local or sqlite through the package API.';
+    public readonly retryable: boolean = false;
+    constructor(message: string) {
+        super(message);
+        this.name = 'InvalidBackendConfigError';
+    }
+}
+
+const CANONICAL_BACKENDS = ['local', 'postgres', 'sqlite'] as const;
+const LOCAL_OR_SQLITE = ['local', 'sqlite'] as const;
+
+/** Throw {@link InvalidBackendConfigError} for any backend name the factory does not build. */
+function assertKnownBackends(backends: ClusterConfig['backends']): void {
+    const check = (store: string, value: unknown, allowed: readonly string[]) => {
+        if (value !== undefined && !allowed.includes(value as string)) {
+            throw new InvalidBackendConfigError(
+                `Unknown ${store} backend ${JSON.stringify(value)}; expected one of ${allowed.join(', ')}.`,
+            );
+        }
+    };
+    check('canonical', backends?.canonical, CANONICAL_BACKENDS);
+    check('artifact', backends?.artifact, LOCAL_OR_SQLITE);
+    check('index', backends?.index, LOCAL_OR_SQLITE);
+    check('ledger', backends?.ledger, LOCAL_OR_SQLITE);
+}
+
+/**
+ * Read backend selection from the environment, validated. This is what the
+ * CLI and the MCP server use:
+ *
+ *  - `DB_CLUSTER_CANONICAL_BACKEND`: `local` (default when unset or blank),
+ *    `postgres`, or `sqlite`. Anything else throws.
+ *  - `DB_CLUSTER_POSTGRES_URL`: required when the canonical backend is
+ *    `postgres`.
+ *
+ * Only the canonical store is selectable this way; the artifact, index and
+ * ledger stores stay local. All-SQLite clusters are built through
+ * {@link createSafeCluster} / {@link createCluster} with `backends`.
+ *
+ * @throws InvalidBackendConfigError on an unknown backend or a missing URL.
+ */
+export function backendConfigFromEnv(rootDir: string, env: NodeJS.ProcessEnv = process.env): ClusterConfig {
+    const raw = env.DB_CLUSTER_CANONICAL_BACKEND?.trim();
+    const canonical = raw ? raw : 'local';
+    if (!(CANONICAL_BACKENDS as readonly string[]).includes(canonical)) {
+        throw new InvalidBackendConfigError(
+            `DB_CLUSTER_CANONICAL_BACKEND=${JSON.stringify(raw)} is not a canonical backend; ` +
+            `expected one of ${CANONICAL_BACKENDS.join(', ')}.`,
+        );
+    }
+    const postgresUrl = env.DB_CLUSTER_POSTGRES_URL?.trim() || undefined;
+    if (canonical === 'postgres' && !postgresUrl) {
+        throw new InvalidBackendConfigError(
+            'DB_CLUSTER_CANONICAL_BACKEND=postgres requires DB_CLUSTER_POSTGRES_URL to be set.',
+        );
+    }
+    return {
+        rootDir,
+        backends: { canonical: canonical as (typeof CANONICAL_BACKENDS)[number] },
+        ...(postgresUrl ? { postgresUrl } : {}),
+    };
+}
+
 export interface ClusterWithPool {
     stores: ClusterStores;
     /** Postgres pool — present when Postgres backend is used. Call pool.end() on shutdown. */
@@ -103,6 +181,7 @@ export interface ClusterWithPool {
  * Never silently falls back to local.
  */
 export function createCluster(config: ClusterConfig): ClusterWithPool {
+    assertKnownBackends(config.backends);
     const canonicalBackend = config.backends?.canonical ?? 'local';
     const artifactBackend = config.backends?.artifact ?? 'local';
     const indexBackend = config.backends?.index ?? 'local';
@@ -137,12 +216,15 @@ export function createCluster(config: ClusterConfig): ClusterWithPool {
     let canonical: ClusterStores['canonical'];
     if (canonicalBackend === 'postgres') {
         if (!config.postgresUrl) {
-            throw new Error(
+            throw new InvalidBackendConfigError(
                 'DB_CLUSTER_POSTGRES_URL is required when canonical backend is "postgres". ' +
                 'Set postgresUrl in config or DB_CLUSTER_POSTGRES_URL environment variable.',
             );
         }
-        pool = new Pool({ connectionString: config.postgresUrl });
+        // allowExitOnIdle: an idle pool must not hold a short-lived process
+        // (a CLI command) open until its clients time out. Long-lived hosts
+        // stay alive through their own handles.
+        pool = new Pool({ connectionString: config.postgresUrl, allowExitOnIdle: true });
         // EGRESS-001 / STORES-B-006: without an 'error' listener an idle-client
         // TCP drop crashes the process. Attach before any query can run.
         attachPoolErrorHandler(pool);
@@ -174,23 +256,12 @@ export function createCluster(config: ClusterConfig): ClusterWithPool {
 }
 
 /**
- * Create a cluster from environment variables.
+ * Create a cluster from environment variables ({@link backendConfigFromEnv}).
+ *
+ * @throws InvalidBackendConfigError on an unknown backend or a missing URL.
  */
 export function createClusterFromEnv(rootDir: string): ClusterWithPool {
-    const canonicalBackend = process.env.DB_CLUSTER_CANONICAL_BACKEND ?? 'local';
-    const postgresUrl = process.env.DB_CLUSTER_POSTGRES_URL;
-
-    if (canonicalBackend === 'postgres' && !postgresUrl) {
-        throw new Error(
-            'DB_CLUSTER_CANONICAL_BACKEND=postgres requires DB_CLUSTER_POSTGRES_URL to be set.',
-        );
-    }
-
-    return createCluster({
-        rootDir,
-        backends: { canonical: canonicalBackend as 'local' | 'postgres' | 'sqlite' },
-        postgresUrl,
-    });
+    return createCluster(backendConfigFromEnv(rootDir));
 }
 
 // ─── SAFE (policy-enforced) factory — KERNEL-001 ─────────────────────────────
@@ -291,7 +362,7 @@ const DEFAULT_SAFE_PRINCIPAL: Principal = {
  *   import { createSafeCluster } from '@mcptoolshop/db-cluster';
  *   const cluster = createSafeCluster({ rootDir: '.db-cluster' });
  *   const { entity } = await cluster.kernel.createEntity({
- *       kind: 'note', name: 'hello', attributes: {},
+ *       kind: 'note', name: 'hello', attributes: {}, actorId: 'operator',
  *   });
  *   const health = await cluster.doctor();
  */

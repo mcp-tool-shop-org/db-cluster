@@ -21,7 +21,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import {
     mkdtempSync,
     mkdirSync,
@@ -29,8 +29,9 @@ import {
     existsSync,
     readdirSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { LocalArtifactStore } from '../src/adapters/local/local-artifact-store.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
@@ -429,14 +430,39 @@ describe('Wave A3 — Stores regression nets', () => {
     // @ts-expect-error directive on the class header. Before promotion the
     // directive is "unused" → tsc fails with TS2578. After promotion the
     // directive matches the real "missing member" error → tsc passes.
+    //
+    // tsc runs under this node binary, not through `npx`, which resolved the
+    // bin through npm (and a .cmd shim on Windows) on every call. The path
+    // comes from typescript's package.json `bin` field: typescript@7 exports
+    // no deep paths, so `typescript/bin/tsc` would not resolve there. Each
+    // check still type-checks ~205 files, hence the explicit budget; under
+    // `npx` they took 3.3-5.8 s on the Windows CI cells and timed out
+    // against vitest's 5 s default.
+    //
+    // TypeScript 6+ refuses file arguments while a tsconfig.json sits in
+    // the working directory (TS5112) unless given --ignoreConfig, which
+    // 5.x rejects as unknown, so the flag follows the installed major.
+    // `--types node` names the @types package the contracts need
+    // (Buffer, node:crypto); TS 6+ no longer loads it by default.
 
     describe('STORES-R2-002 — import* hooks are contract-required', () => {
         const repoRoot = process.cwd();
+        const TSC_BUDGET_MS = 30_000;
+        const requireFromTest = createRequire(import.meta.url);
+        const tscPackageJson = requireFromTest.resolve('typescript/package.json');
+        const tscPackage = requireFromTest(tscPackageJson) as { version: string; bin: { tsc: string } };
+        const tscBin = join(dirname(tscPackageJson), tscPackage.bin.tsc);
+        const ignoreConfig = Number(tscPackage.version.split('.')[0]) >= 6 ? ['--ignoreConfig'] : [];
 
         const tscCheck = (fixturePath: string): { ok: boolean; output: string } => {
             try {
-                const out = execSync(
-                    `npx tsc --noEmit --strict --target es2022 --module nodenext --moduleResolution nodenext "${fixturePath}"`,
+                const out = execFileSync(
+                    process.execPath,
+                    [
+                        tscBin, ...ignoreConfig, '--noEmit', '--strict', '--target', 'es2022',
+                        '--module', 'nodenext', '--moduleResolution', 'nodenext',
+                        '--types', 'node', fixturePath,
+                    ],
                     { cwd: repoRoot, encoding: 'utf-8', stdio: 'pipe' },
                 );
                 return { ok: true, output: out };
@@ -458,28 +484,28 @@ describe('Wave A3 — Stores regression nets', () => {
             // → tsc exits 0. Pre-fix, the directive is unused → tsc exits
             // non-zero with TS2578.
             expect(result.ok, `tsc output:\n${result.output}`).toBe(true);
-        });
+        }, TSC_BUDGET_MS);
 
         it('ArtifactStore: a class without importSnapshot fails to compile', () => {
             const result = tscCheck(
                 join(repoRoot, 'test/fixtures/incomplete-artifact-store.fixture.ts'),
             );
             expect(result.ok, `tsc output:\n${result.output}`).toBe(true);
-        });
+        }, TSC_BUDGET_MS);
 
         it('LedgerStore: a class without importEvent fails to compile', () => {
             const result = tscCheck(
                 join(repoRoot, 'test/fixtures/incomplete-ledger-store-event.fixture.ts'),
             );
             expect(result.ok, `tsc output:\n${result.output}`).toBe(true);
-        });
+        }, TSC_BUDGET_MS);
 
         it('LedgerStore: a class without importReceipt fails to compile', () => {
             const result = tscCheck(
                 join(repoRoot, 'test/fixtures/incomplete-ledger-store-receipt.fixture.ts'),
             );
             expect(result.ok, `tsc output:\n${result.output}`).toBe(true);
-        });
+        }, TSC_BUDGET_MS);
     });
 
     // ─── STORES-R2-003 — verify() consumes mutation_orphaned events ──────

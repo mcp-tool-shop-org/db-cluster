@@ -1,6 +1,9 @@
 import { ClusterKernel } from '../kernel/cluster-kernel.js';
 import { ClusterResolver } from '../resolver/index.js';
-import { createLocalCluster } from '../adapters/local/index.js';
+import type { Pool } from 'pg';
+import { createCluster } from '../adapters/factory.js';
+import type { ClusterConfig } from '../adapters/factory.js';
+import type { SqliteDb } from '../adapters/sqlite/sqlite-db.js';
 import { evaluatePolicy, explainPolicyDecision, checkVisibility } from '../policy/policy-engine.js';
 import type { PolicyEngineOptions } from '../policy/policy-engine.js';
 import type { Policy, Principal, Capability, TrustZone, VisibilityRule, PolicyDecision } from '../types/policy.js';
@@ -38,6 +41,14 @@ export interface SDKOptions {
      * Has no effect when policies are not set (raw kernel path).
      */
     principal?: Principal;
+    /**
+     * Backend selection per store, as for `createCluster`. Omit for all-local
+     * stores, the default. The CLI and the MCP server fill it from
+     * `DB_CLUSTER_CANONICAL_BACKEND` through `backendConfigFromEnv`.
+     */
+    backends?: ClusterConfig['backends'];
+    /** Postgres connection URL; required when `backends.canonical` is `postgres`. */
+    postgresUrl?: string;
 }
 
 /**
@@ -147,6 +158,10 @@ export class ClusterSDK {
      * state.
      */
     private readonly policyEnforced: boolean;
+    /** Postgres pool, present when the canonical store is on Postgres. Released by {@link close}. */
+    readonly pool?: Pool;
+    /** SQLite connection, present when any store is on SQLite. Released by {@link close}. */
+    readonly sqliteDb?: SqliteDb;
 
     /**
      * Construct a ClusterSDK against a cluster directory.
@@ -172,11 +187,15 @@ export class ClusterSDK {
      *   - To opt into the trusted principal silently, pass
      *     `principal: ClusterSDK.INTERNAL_TRUSTED_PRINCIPAL` explicitly.
      *
-     * @param options Cluster directory + policy/principal configuration.
-     * @throws Will not throw on construction (errors deferred to first
-     *   kernel call). Malformed PolicyEnforcedKernel construction surfaces
-     *   the underlying TypeError; check {@link buildSDKOptions} for the
-     *   fail-closed shape used by the MCP boundary.
+     * @param options Cluster directory, backend selection, and
+     *   policy/principal configuration.
+     * @throws InvalidBackendConfigError for an unknown backend or a Postgres
+     *   canonical store without `postgresUrl`, and SqliteDriverUnavailableError
+     *   when a SQLite backend is selected but better-sqlite3 cannot load. Store
+     *   I/O errors are deferred to the first kernel call. Malformed
+     *   PolicyEnforcedKernel construction surfaces the underlying TypeError;
+     *   check {@link buildSDKOptions} for the fail-closed shape used by the
+     *   MCP boundary.
      *
      * @example
      * // Raw mode — no policies
@@ -192,7 +211,13 @@ export class ClusterSDK {
      * });
      */
     constructor(options: SDKOptions) {
-        const stores = createLocalCluster(options.clusterDir);
+        const { stores, pool, sqliteDb } = createCluster({
+            rootDir: options.clusterDir,
+            backends: options.backends,
+            postgresUrl: options.postgresUrl,
+        });
+        this.pool = pool;
+        this.sqliteDb = sqliteDb;
         this.resolver = new ClusterResolver(stores);
         this.visibilityRules = options.visibilityRules ?? [];
 
@@ -244,6 +269,18 @@ export class ClusterSDK {
             this.kernel = new ClusterKernel(stores, { dataDir: options.clusterDir });
             this.policyOptions = null;
             this.policyEnforced = false;
+        }
+    }
+
+    /**
+     * Release the backend connections this SDK opened: the SQLite handle
+     * (closed synchronously, which checkpoints its WAL) and the Postgres pool.
+     * A no-op for all-local stores. Safe to call more than once.
+     */
+    async close(): Promise<void> {
+        this.sqliteDb?.close();
+        if (this.pool && !this.pool.ended) {
+            await this.pool.end();
         }
     }
 
@@ -431,6 +468,11 @@ export class ClusterSDK {
      * boundary invariant, not a policy-gated one. The `default: never`
      * arm makes a future 6th ResolvedObject store type a compile error
      * rather than a silent raw-return regression.
+     *
+     * @throws ClusterUriError (`INVALID_CLUSTER_URI`) when the URI is
+     *         malformed or names an unknown store.
+     * @throws ResolveError (`RESOLVE_NOT_FOUND`) when the owner store holds
+     *         no object with that id.
      */
     async resolve(uri: string): Promise<{ store: string; object: unknown }> {
         const resolved = await this.resolver.resolve(uri);
@@ -471,8 +513,9 @@ export class ClusterSDK {
      * @param uri Cluster URI (`cluster://<store>/<id>`).
      * @param options Trace direction, depth, include flags.
      * @returns Navigable provenance graph.
-     * @throws NotFoundError when the URI does not resolve.
-     * @throws InvalidClusterUriError when URI is malformed.
+     * @throws ClusterUriError (`INVALID_CLUSTER_URI`) when the URI is
+     *         malformed or names an unknown store. A well-formed URI that
+     *         names no object does not throw: the graph reports it as a gap.
      *
      * @example
      * const graph = await sdk.traceObject('cluster://canonical/abc', {
@@ -497,7 +540,10 @@ export class ClusterSDK {
      *
      * @param uri Cluster URI to explain.
      * @returns Multi-line prose explanation.
-     * @throws NotFoundError when the URI does not resolve.
+     * @throws ClusterUriError (`INVALID_CLUSTER_URI`) when the URI is
+     *         malformed or names an unknown store. A well-formed URI that
+     *         names no object does not throw: the explanation says it was
+     *         not found.
      *
      * @example
      * const story = await sdk.why('cluster://canonical/abc');

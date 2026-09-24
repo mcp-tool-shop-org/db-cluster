@@ -19,7 +19,7 @@ import type { Command } from '../types/command.js';
 import type { Receipt } from '../types/receipt.js';
 import type { EvidenceBundle } from '../types/evidence-bundle.js';
 import type { ProvenanceGraph, TraceOptions, TraceSummary } from '../types/provenance-graph.js';
-import { proposeCommand, validateCommand, approveCommand, rejectCommand, markCommitted, markRejected, markCompensated, validTransitions } from './commands.js';
+import { proposeCommand, validateCommand, assertValidPayload, approveCommand, rejectCommand, markCommitted, markRejected, markCompensated, validTransitions } from './commands.js';
 import { recordProvenance, traceSubjectProvenance } from './provenance.js';
 import { emitReceipt } from './receipts.js';
 import {
@@ -32,6 +32,7 @@ import {
     ContentHashMismatchError,
     StagedContentTamperedError,
     InvalidStateTransitionError,
+    assertActor,
 } from './errors.js';
 import { redactErrorMessage } from '../policy/redactor.js';
 import { CommandQueue } from './command-queue.js';
@@ -449,6 +450,12 @@ export class ClusterKernel implements ClusterKernelInterface {
      *                Buffer, mimeType, actorId.
      * @returns Object with the stored `artifact`, its `indexRecord`,
      *          the `provenance` event, and the `receipt`.
+     * @throws {InvalidActorError} - `actorId` is missing or blank; nothing was written.
+     * @throws {CommandValidationFailedError} - `filename` is not a string;
+     *         nothing was written.
+     * @throws {InvalidContentShapeError} - `content` is missing, or is neither
+     *         a Buffer nor a string (a Buffer that went through JSON, for
+     *         example); nothing was written.
      * @throws {ReceiptFailedError} - the artifact + index mutations
      *         succeeded but the post-mutation ledger writes failed.
      *         A `mutation_orphaned` ledger event is recorded
@@ -469,6 +476,17 @@ export class ClusterKernel implements ClusterKernelInterface {
         provenance: ProvenanceEvent;
         receipt: Receipt;
     }> {
+        assertActor('actorId', input.actorId);
+        // 0. Validate before the first write, with the proposal path's rules.
+        // The bytes travel with this call, so content is required: a missing
+        // value is checked as null, which the shape check reports, instead of
+        // reaching the store and surfacing as a raw TypeError.
+        assertValidPayload(
+            'ingest_artifact',
+            'artifact',
+            { filename: input.filename, content: input.content ?? null },
+            input.actorId,
+        );
         // 1. Write artifact (truth mutation — once this returns, the store is dirty)
         const artifact = await this.stores.artifact.ingest({
             filename: input.filename,
@@ -544,6 +562,9 @@ export class ClusterKernel implements ClusterKernelInterface {
      *                actorId.
      * @returns Object with the stored `entity`, its `indexRecord`, the
      *          `provenance` event, and the `receipt`.
+     * @throws {InvalidActorError} - `actorId` is missing or blank; nothing was written.
+     * @throws {CommandValidationFailedError} - `kind` or `name` is missing or
+     *         empty; nothing was written.
      * @throws {ReceiptFailedError} - the canonical mutation succeeded
      *         but the post-mutation ledger writes failed.
      * @example
@@ -561,6 +582,11 @@ export class ClusterKernel implements ClusterKernelInterface {
         provenance: ProvenanceEvent;
         receipt: Receipt;
     }> {
+        assertActor('actorId', input.actorId);
+        // 0. Validate before the first write, with the proposal path's rules
+        // (create_entity needs kind and name). This used to happen only after
+        // the entity and its index record were stored.
+        assertValidPayload('create_entity', 'canonical', { kind: input.kind, name: input.name }, input.actorId);
         // 1. Write entity (truth mutation — canonical store is now dirty)
         const entity = await this.stores.canonical.create({
             kind: input.kind,
@@ -628,6 +654,7 @@ export class ClusterKernel implements ClusterKernelInterface {
      * @param input - {@link LinkEvidenceInput} — artifactId, entityId,
      *                actorId, optional detail bag.
      * @returns Object with the `provenance` event and the `receipt`.
+     * @throws {InvalidActorError} - `actorId` is missing or blank; nothing was written.
      * @throws {NotFoundError} - artifactId or entityId not in their
      *         respective owner stores (pre-mutation check).
      * @throws {ReceiptFailedError} - ledger write failed.
@@ -643,6 +670,7 @@ export class ClusterKernel implements ClusterKernelInterface {
         provenance: ProvenanceEvent;
         receipt: Receipt;
     }> {
+        assertActor('actorId', input.actorId);
         // Verify both exist before touching the ledger (pre-mutation, safe to throw)
         if (!(await this.stores.artifact.exists(input.artifactId))) {
             throw new NotFoundError('artifact', input.artifactId);
@@ -899,6 +927,7 @@ export class ClusterKernel implements ClusterKernelInterface {
      * @returns The proposed {@link Command} in 'proposed' status.
      *          Wrap with {@link withNextValidActions} to surface
      *          legal next moves.
+     * @throws {InvalidActorError} - `proposedBy` is missing or blank; nothing was written.
      * @throws {ContentHashMismatchError} - ingest_artifact propose with
      *         contentHash that doesn't match the supplied Buffer.
      * @example
@@ -912,6 +941,7 @@ export class ClusterKernel implements ClusterKernelInterface {
      *   await kernel.commitMutation(cmd.id, 'analyst:1');
      */
     async proposeMutation(input: ProposeMutationInput): Promise<Command> {
+        assertActor('proposedBy', input.proposedBy);
         let payload = input.payload;
         if (input.verb === 'ingest_artifact' && Buffer.isBuffer(payload.content)) {
             const stagingDir = this.getStagingDir();
@@ -973,6 +1003,7 @@ export class ClusterKernel implements ClusterKernelInterface {
      * @param actorId - Actor recording the commit.
      * @returns {@link CommitMutationResult} — committed command +
      *          receipt + {@link CommandLifecycleEnvelope.nextValidActions}.
+     * @throws {InvalidActorError} - `actorId` is missing or blank; nothing was written.
      * @throws {CommandNotFoundError} - id does not exist in queue.
      * @throws {CommandNotValidatedError} - command status is 'proposed'.
      * @throws {CommandAlreadyTerminalError} - command in 'committed' /
@@ -994,6 +1025,7 @@ export class ClusterKernel implements ClusterKernelInterface {
      *   }
      */
     async commitMutation(commandId: string, actorId: string): Promise<CommitMutationResult> {
+        assertActor('actorId', actorId);
         const command = this.getCommand(commandId);
         if (!command) {
             // KERNEL-C-005: distinct from "not validated" — the id doesn't
@@ -1416,6 +1448,7 @@ export class ClusterKernel implements ClusterKernelInterface {
      * @param approvedBy - Actor recording the approval.
      * @param note - Optional approval note (persisted on the command).
      * @returns The command in 'approved' status.
+     * @throws {InvalidActorError} - `approvedBy` is missing or blank; nothing was written.
      * @throws {NotFoundError} - id does not exist.
      * @throws {InvalidStateTransitionError} - command not in 'validated'
      *         status.
@@ -1423,6 +1456,7 @@ export class ClusterKernel implements ClusterKernelInterface {
      *   const approved = await kernel.approveMutation(cmd.id, 'admin', 'lgtm');
      */
     async approveMutation(commandId: string, approvedBy: string, note?: string): Promise<Command> {
+        assertActor('approvedBy', approvedBy);
         const command = this.getCommand(commandId);
         if (!command) throw new NotFoundError('command', commandId);
 
@@ -1453,6 +1487,7 @@ export class ClusterKernel implements ClusterKernelInterface {
      * @param rejectedBy - Actor recording the rejection.
      * @param reason - Why the command was rejected (persisted).
      * @returns The command in 'rejected' status.
+     * @throws {InvalidActorError} - `rejectedBy` is missing or blank; nothing was written.
      * @throws {NotFoundError} - id does not exist.
      * @throws {InvalidStateTransitionError} - command is in a terminal
      *         status (committed / rejected / compensated).
@@ -1460,6 +1495,7 @@ export class ClusterKernel implements ClusterKernelInterface {
      *   await kernel.rejectMutation(cmd.id, 'admin', 'duplicate proposal');
      */
     async rejectMutation(commandId: string, rejectedBy: string, reason: string): Promise<Command> {
+        assertActor('rejectedBy', rejectedBy);
         const command = this.getCommand(commandId);
         if (!command) throw new NotFoundError('command', commandId);
 
@@ -1499,6 +1535,10 @@ export class ClusterKernel implements ClusterKernelInterface {
      *                              and payload as audit context.
      * @returns Object with the new `compensatingCommand`, the original
      *          in 'compensated' status, and the `receipt`.
+     * @throws {InvalidActorError} - `compensatedBy` is missing or blank; nothing was written.
+     * @throws {CommandValidationFailedError} - the compensating command fails
+     *         its checks (`reason` is not a string, for example); nothing was
+     *         written.
      * @throws {NotFoundError} - originalCommandId does not exist.
      * @throws {InvalidStateTransitionError} - original is not in
      *         'committed' status.
@@ -1517,6 +1557,7 @@ export class ClusterKernel implements ClusterKernelInterface {
         reason: string,
         compensatingPayload?: Record<string, unknown>,
     ): Promise<{ compensatingCommand: Command; originalCommand: Command; receipt: Receipt }> {
+        assertActor('compensatedBy', compensatedBy);
         const original = this.getCommand(originalCommandId);
         if (!original) throw new NotFoundError('command', originalCommandId);
         if (original.status !== 'committed') {
@@ -1539,6 +1580,9 @@ export class ClusterKernel implements ClusterKernelInterface {
             compensatedBy,
         );
 
+        // Validate before any side effect, the staging sweep below included.
+        const validated = validateCommand(compensatingCmd);
+
         // KERNEL-B-007: belt-and-suspenders cleanup. A committed
         // ingest_artifact's staging file is normally deleted on successful
         // commit. If something pathological left it behind and the command
@@ -1547,8 +1591,7 @@ export class ClusterKernel implements ClusterKernelInterface {
             this.deleteStagingFile((original.payload as { contentHash?: unknown }).contentHash);
         }
 
-        // Fast-track: validate + commit the compensating command
-        const validated = validateCommand(compensatingCmd);
+        // Fast-track: commit the compensating command
         const committed = markCommitted(validated, compensatedBy);
 
         let provenance: ProvenanceEvent;
@@ -1691,8 +1734,10 @@ export class ClusterKernel implements ClusterKernelInterface {
      * Rebuild the index from owner stores (canonical, artifact, ledger).
      * Clears the entire index, then re-derives from source truth.
      * Returns the count of records rebuilt.
+     * @throws {InvalidActorError} - `actorId` is missing or blank; nothing was written.
      */
     async rebuildIndex(actorId: string): Promise<{ rebuilt: number; provenance: ProvenanceEvent; receipt: Receipt }> {
+        assertActor('actorId', actorId);
         const rebuilt = await this.performIndexRebuild();
 
         // Provenance + synthetic command persistence + receipt

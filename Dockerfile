@@ -11,13 +11,18 @@ WORKDIR /app
 # side effects, and `@ast-grep/cli` itself is pruned by the `npm prune` below
 # before anything reaches the runtime stage.
 #
-# NOTE (sqlite backend): `better-sqlite3` is an OPTIONAL dependency with a
-# native binding, and `--ignore-scripts` skips its prebuilt-binary install — so
-# the sqlite backend is NOT available in this image by design. The default
-# local (JSON) and postgres backends need no native build and work as-is. To
-# build an image WITH the sqlite backend, install build-base/python3 and run
-# `npm rebuild better-sqlite3` (musl prebuilts permitting) in the build stage;
-# the lazy driver load means this image otherwise runs fine without it.
+# NOTE (sqlite backend): the SQLite driver IS available in this image.
+# `better-sqlite3` is an OPTIONAL dependency, and since 13.x it ships prebuilt
+# Node-API binaries inside its npm package. `--ignore-scripts` keeps it and only
+# skips an implicit `node-gyp rebuild` that would fail here without a compiler;
+# the runtime loads prebuilds/linuxmusl-x64.node. Measured 2026-09-24 on
+# node:22-alpine (x86_64): SQLite 3.53.4, and a cluster with all four stores on
+# SQLite, written in one container and read back from a named volume in
+# another, with doctor and verify healthy. The bundled CLI and MCP server put
+# the canonical store on SQLite when DB_CLUSTER_CANONICAL_BACKEND=sqlite; the
+# artifact, index and ledger stores stay local. An all-SQLite cluster goes
+# through the package API,
+# `createSafeCluster({ rootDir, backends: { canonical: 'sqlite', ... } })`.
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 

@@ -13,7 +13,7 @@ Five working examples of the `ClusterSDK` (`db-cluster/sdk`) — the recommended
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22.12+
 - npm or pnpm
 - `@mcptoolshop/db-cluster` installed (`npm install @mcptoolshop/db-cluster` or local `npm link`)
 

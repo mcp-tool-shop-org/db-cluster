@@ -103,6 +103,7 @@ export {
     StagedContentTamperedError,
     BufferSideChannelNotSupportedError,
     InvalidContentShapeError,
+    InvalidActorError,
 } from './kernel/errors.js';
 export { PolicyDeniedError } from './kernel/policy-enforced-kernel.js';
 // Adapter integrity error (PROV-001) — thrown by the artifact store's
@@ -117,7 +118,7 @@ export { formatForUser, errorToAiEnvelope } from './policy/error-formatter.js';
 // The root exports ONLY the policed factory. The raw store factories
 // (createCluster / createClusterFromEnv / createLocalCluster) are NOT
 // re-exported here — they are reachable only via '@mcptoolshop/db-cluster/unsafe'.
-export { createSafeCluster } from './adapters/factory.js';
+export { createSafeCluster, InvalidBackendConfigError } from './adapters/factory.js';
 export type { SafeCluster, SafeClusterConfig, ClusterConfig, ClusterWithPool } from './adapters/factory.js';
 
 // --- Ops ---

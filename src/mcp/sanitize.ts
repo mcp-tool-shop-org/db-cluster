@@ -195,6 +195,9 @@ const BUILTIN_ERROR_CODES: Record<string, string> = {
     // failure with a bad payload collapses to INTERNAL_ERROR at the MCP
     // boundary, hiding the actionable validation-checks detail.
     CommandValidationFailedError: 'COMMAND_VALIDATION_FAILED',
+    // An unknown backend or a Postgres canonical store without a URL. The
+    // factory throws it instead of falling back to local stores.
+    InvalidBackendConfigError: 'INVALID_BACKEND_CONFIG',
 };
 
 /** Strip absolute filesystem paths from an error message. */
@@ -271,6 +274,14 @@ const TYPED_ERROR_ENRICHMENT: Record<string, ErrorEnrichment> = {
     INVALID_CONTENT_SHAPE: {
         retryable: false,
         remediation_hint: 'payload.content must be a Buffer instance or a string (contentHash reference). Re-propose with one of those shapes.',
+    },
+    INVALID_BACKEND_CONFIG: {
+        retryable: false,
+        remediation_hint: 'The server was started with an unknown DB_CLUSTER_CANONICAL_BACKEND, or with postgres but no DB_CLUSTER_POSTGRES_URL. Fix the server environment (local, postgres or sqlite) and restart it.',
+    },
+    INVALID_ACTOR: {
+        retryable: false,
+        remediation_hint: 'The actor field (actorId, proposedBy, approvedBy, rejectedBy or compensatedBy) must be a non-empty id. Re-issue the call naming who performs it.',
     },
     POLICY_DENIED: {
         retryable: false,
