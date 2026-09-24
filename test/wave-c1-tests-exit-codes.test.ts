@@ -356,6 +356,21 @@ describe('TESTS-C-004 — CLI live exit-code assertions per typed-error code', (
         }
     });
 
+    // ─── INVALID_BACKEND_CONFIG → 78 EX_CONFIG ────────────────────────────
+    it('INVALID_BACKEND_CONFIG exits 78 (EX_CONFIG) for an unknown canonical backend', () => {
+        const { dir } = initCluster('invalid-backend-config');
+        try {
+            const result = runCli(['stats'], {
+                cwd: dir,
+                env: { ...process.env, DB_CLUSTER_CANONICAL_BACKEND: 'mysql' },
+            });
+            expect(result.status).toBe(78);
+            expect(result.stderr).toMatch(/DB_CLUSTER_CANONICAL_BACKEND/);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
     // FAMILY-PROBE: scan typedErrorToExitCode source and confirm every code in
     // the map either has a live spawn test above OR is unreachable from CLI.
     it('FAMILY-PROBE: every typedErrorToExitCode code is either live-asserted or documented unreachable', () => {
@@ -373,6 +388,7 @@ describe('TESTS-C-004 — CLI live exit-code assertions per typed-error code', (
             'COMMAND_QUEUE_PERSISTENCE_LOST',
             'COMMAND_NOT_VALIDATED',
             'CONTENT_HASH_MISMATCH',
+            'INVALID_BACKEND_CONFIG',
         ]);
         // Codes that cannot be triggered from CLI through normal user paths
         // (kernel-internal failure modes only reachable via embedded SDK use,
