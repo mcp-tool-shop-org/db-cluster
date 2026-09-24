@@ -143,7 +143,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "root",
-      "qualifyingSourceCommits": 4,
+      "qualifyingSourceCommits": 5,
       "rebaseline": null
     },
     {
@@ -164,7 +164,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "scripts",
-      "qualifyingSourceCommits": 12,
+      "qualifyingSourceCommits": 13,
       "rebaseline": null
     },
     {
@@ -218,7 +218,7 @@
       "confidence": "full",
       "highWater": null,
       "name": "test",
-      "qualifyingSourceCommits": 40,
+      "qualifyingSourceCommits": 41,
       "rebaseline": null
     }
   ],
@@ -246,8 +246,8 @@
         "path": ".github/workflows/pages.yml"
       },
       {
-        "commits": 7,
-        "lines": 34,
+        "commits": 8,
+        "lines": 42,
         "path": ".github/workflows/release-gate.yml"
       },
       {
@@ -446,8 +446,8 @@
         "path": "SHIP_GATE.md"
       },
       {
-        "commits": 1,
-        "lines": 108,
+        "commits": 2,
+        "lines": 159,
         "path": "atlas/README.md"
       },
       {
@@ -456,18 +456,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 1,
-        "lines": 769,
+        "commits": 2,
+        "lines": 949,
         "path": "atlas/page.json"
       },
       {
-        "commits": 1,
-        "lines": 2652,
+        "commits": 2,
+        "lines": 3143,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 1,
-        "lines": 8232,
+        "commits": 2,
+        "lines": 9425,
         "path": "atlas/structure.json"
       },
       {
@@ -1106,6 +1106,11 @@
         "path": "scripts/smoke-install.mjs"
       },
       {
+        "commits": 1,
+        "lines": 122,
+        "path": "scripts/stryker-exclusions.mjs"
+      },
+      {
         "commits": 2,
         "lines": 35,
         "path": "site/astro.config.mjs"
@@ -1686,8 +1691,8 @@
         "path": "src/util/tmp-paths.ts"
       },
       {
-        "commits": 1,
-        "lines": 41,
+        "commits": 3,
+        "lines": 49,
         "path": "stryker.conf.json"
       },
       {
@@ -1781,8 +1786,8 @@
         "path": "swarm-stage-c-wave-c1-verifier-op-progress-OUTPUT.json"
       },
       {
-        "commits": 1,
-        "lines": 101,
+        "commits": 2,
+        "lines": 143,
         "path": "test/README.md"
       },
       {
@@ -1924,6 +1929,51 @@
         "commits": 2,
         "lines": 68,
         "path": "test/fixtures/incomplete-ledger-store-receipt.fixture.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 1,
+        "path": "test/fixtures/stryker-rule/backslash-read.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1,
+        "path": "test/fixtures/stryker-rule/chdir.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 3,
+        "path": "test/fixtures/stryker-rule/helper-read.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1,
+        "path": "test/fixtures/stryker-rule/imports-dist.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 4,
+        "path": "test/fixtures/stryker-rule/mentions-only.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1,
+        "path": "test/fixtures/stryker-rule/raw-read.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1,
+        "path": "test/fixtures/stryker-rule/spawns-dist.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1,
+        "path": "test/fixtures/stryker-rule/template-read.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1,
+        "path": "test/fixtures/stryker-rule/unmutated-read.txt"
       },
       {
         "commits": 2,
@@ -2092,6 +2142,16 @@
       },
       {
         "commits": 1,
+        "lines": 84,
+        "path": "test/stryker-exclusions.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 26,
+        "path": "test/support/source-text.ts"
+      },
+      {
+        "commits": 1,
         "lines": 307,
         "path": "test/typed-error-regression.test.ts"
       },
@@ -2136,8 +2196,8 @@
         "path": "test/wave-a3-tests-regression.test.ts"
       },
       {
-        "commits": 1,
-        "lines": 536,
+        "commits": 2,
+        "lines": 541,
         "path": "test/wave-a4-fixup-regression.test.ts"
       },
       {
@@ -2146,8 +2206,8 @@
         "path": "test/wave-a4-kernel-regression.test.ts"
       },
       {
-        "commits": 1,
-        "lines": 690,
+        "commits": 2,
+        "lines": 717,
         "path": "test/wave-a4-stores-regression.test.ts"
       },
       {
@@ -2166,8 +2226,8 @@
         "path": "test/wave-b1-cidocs-regression.test.ts"
       },
       {
-        "commits": 2,
-        "lines": 548,
+        "commits": 3,
+        "lines": 557,
         "path": "test/wave-b1-fixup-regression.test.ts"
       },
       {
@@ -2201,8 +2261,8 @@
         "path": "test/wave-c1-kernel-regression.test.ts"
       },
       {
-        "commits": 1,
-        "lines": 831,
+        "commits": 2,
+        "lines": 858,
         "path": "test/wave-c1-stores-regression.test.ts"
       },
       {
@@ -2226,8 +2286,8 @@
         "path": "test/wave-c1-tests-exit-codes.test.ts"
       },
       {
-        "commits": 1,
-        "lines": 217,
+        "commits": 2,
+        "lines": 223,
         "path": "test/wave-c1-tests-jsdoc-examples.test.ts"
       },
       {
@@ -2296,7 +2356,7 @@
         "path": "test/wave-s2a2-gating-regression.test.ts"
       },
       {
-        "commits": 1,
+        "commits": 2,
         "lines": 0,
         "path": "test/wave-s2a2-policy-regression.test.ts"
       },
@@ -2446,8 +2506,8 @@
         "path": "vitest.config.ts"
       },
       {
-        "commits": 4,
-        "lines": 56,
+        "commits": 5,
+        "lines": 120,
         "path": "vitest.stryker.config.ts"
       }
     ]
@@ -2456,11 +2516,18 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-09-24T17:13:46.014Z",
+  "generatedAt": "2026-09-24T18:14:29.725Z",
   "generatedFrom": {
-    "commit": "f1d79e07fa601bb910a9042bdbe200599d46e303"
+    "commit": "13748608a6d25c077bed3f9f599981d3af14b4d5"
   },
   "pairs": [
+    {
+      "a": ".github/workflows/release-gate.yml",
+      "b": ".github/workflows/smoke-install.yml",
+      "either": 7,
+      "shared": 4,
+      "strength": 0.571429
+    },
     {
       "a": ".github/workflows/release.yml",
       "b": ".github/workflows/smoke-install.yml",
@@ -2696,16 +2763,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-09-24T09:37:09-07:00",
-    "inScopeFiles": 453,
+    "headDate": "2026-09-24T13:47:28-04:00",
+    "inScopeFiles": 455,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 93,
+    "qualifyingCommits": 95,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-03-28T16:37:09.000Z",
+    "since": "2026-03-28T17:47:28.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

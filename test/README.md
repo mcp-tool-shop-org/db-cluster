@@ -103,6 +103,13 @@ should, or if a file would be excluded only for a raw source-text read,
 which would drop its other tests from the mutation run. The Release Gate
 workflow runs `npx stryker run --dryRunOnly` on every push to main.
 
+`npm run test:mutation` ends with `scripts/stryker-trust-check.mjs`, which
+fails the run when a mutant counted as Survived had covering tests but ran
+none. That is what Vitest 5 does to `@stryker-mutator/vitest-runner` 10.0.0
+(stryker-mutator/stryker-js#6210): the score collapses to single digits and
+Stryker still exits 0. Until a fixed runner ships, measure a full run with
+Vitest 4.1.x installed. The dry run is unaffected.
+
 ## What this directory does NOT contain
 
 - Mutation testing config — see `stryker.conf.json` and

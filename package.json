@@ -48,7 +48,7 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:mutation": "stryker run",
+    "test:mutation": "stryker run && node scripts/stryker-trust-check.mjs",
     "verify": "node scripts/release-gate.mjs",
     "lint": "tsc --noEmit && npm run lint:examples && npm run lint:typetests",
     "lint:examples": "tsc -p tsconfig.examples.json",

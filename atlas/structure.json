@@ -453,7 +453,7 @@
           "path": "docs/release-notes-v0.1.md"
         },
         {
-          "hash": "22e161da4a2651397479f4fa0d2de3c7fe59bd5647c5a1abbec3004136fdebe6",
+          "hash": "418011757b536ada2de34e05d966f38667407f87265bf9c5d9a8fd0578788914",
           "path": "docs/release-readiness.md"
         },
         {
@@ -722,11 +722,11 @@
           "path": "package-lock.json"
         },
         {
-          "hash": "630afef37ab92c5c7ff43795bfa5ff70c0fd355a3722561eb8394ab24a59b5c8",
+          "hash": "8d7f144f09b00f0aff0eaeaa9109fc246288b34d799d0c5af8d3584f984cbc28",
           "path": "package.json"
         },
         {
-          "hash": "4dbfc3313b48574eca3d14aff71058f3a7e3c96bdd0e18a32f19a4eb0606b8e7",
+          "hash": "a7c161043358185eaa348d8778fdaa6ec1da2b57349fd9d56575e1afabe440b8",
           "path": "stryker.conf.json"
         },
         {
@@ -1093,6 +1093,13 @@
           ],
           "hash": "a6ef1b98d60dc47377ce5e1c008a614abb60b5e5c1b18b45d57e35bfc217b601",
           "path": "scripts/stryker-exclusions.mjs"
+        },
+        {
+          "exports": [
+            "untrustedSurvivors"
+          ],
+          "hash": "3515e82dc8c1149005f7b757a5dda0f5a1f490883bb5a726726e332af9da3b60",
+          "path": "scripts/stryker-trust-check.mjs"
         }
       ],
       "globs": [
@@ -1103,7 +1110,7 @@
       "origin": "authored",
       "outsideWrites": 2,
       "role": "code",
-      "testedBy": 13,
+      "testedBy": 14,
       "unresolvedSites": 0
     },
     {
@@ -3104,7 +3111,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "81f7ab4cf2f43d81139d5d5b45fcbc73dda651039bf9c477c285685070f1a7ad",
+          "hash": "5f73d514b9cf30be0a28fe8e5a5f9c2d39a74cdcdd8e92c8981cc489630c44a4",
           "path": "test/README.md"
         },
         {
@@ -3757,6 +3764,13 @@
             "scripts/stryker-exclusions.mjs"
           ],
           "path": "test/stryker-exclusions.test.ts"
+        },
+        {
+          "hash": "c3163af2ad1635d0330fa38571faf55fcce3ba0f669657fb3042e000249daf45",
+          "importsFiles": [
+            "scripts/stryker-trust-check.mjs"
+          ],
+          "path": "test/stryker-trust-check.test.ts"
         },
         {
           "exports": [
@@ -4553,7 +4567,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 125
+          "files": 126
         },
         {
           "boundary": "dashboard",
@@ -4571,7 +4585,7 @@
             "file": "scripts/dashboard-snapshot.ts",
             "from": "test/dashboard-snapshot.test.ts"
           },
-          "files": 5
+          "files": 6
         }
       ],
       "readers": [],
@@ -4995,6 +5009,13 @@
           "job": "test",
           "matched": true,
           "path": "test/stryker-exclusions.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "test",
+          "matched": true,
+          "path": "test/stryker-trust-check.test.ts",
           "runKind": "executes",
           "via": "vitest vitest.config.ts"
         },
@@ -5461,7 +5482,7 @@
           "via": "vitest vitest.config.ts"
         }
       ],
-      "runsCount": 126,
+      "runsCount": 127,
       "secrets": [],
       "sends": {
         "deploysPages": false,
@@ -5831,7 +5852,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 125
+          "files": 126
         },
         {
           "boundary": "dashboard",
@@ -5849,7 +5870,7 @@
             "file": "scripts/dashboard-snapshot.ts",
             "from": "test/dashboard-snapshot.test.ts"
           },
-          "files": 5
+          "files": 6
         }
       ],
       "readers": [],
@@ -6273,6 +6294,13 @@
           "job": "release",
           "matched": true,
           "path": "test/stryker-exclusions.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "release",
+          "matched": true,
+          "path": "test/stryker-trust-check.test.ts",
           "runKind": "executes",
           "via": "vitest vitest.config.ts"
         },
@@ -6739,7 +6767,7 @@
           "via": "vitest vitest.config.ts"
         }
       ],
-      "runsCount": 126,
+      "runsCount": 127,
       "secrets": [
         "GITHUB_TOKEN"
       ],
@@ -7035,8 +7063,8 @@
     }
   ],
   "generatedFrom": {
-    "commit": "f1d79e07fa601bb910a9042bdbe200599d46e303",
-    "tracked": 448
+    "commit": "13748608a6d25c077bed3f9f599981d3af14b4d5",
+    "tracked": 450
   },
   "landings": [
     {
@@ -8650,6 +8678,6 @@
   "overlaps": [],
   "submodules": [],
   "symlinks": [],
-  "testFiles": 139,
+  "testFiles": 140,
   "unassigned": []
 }

@@ -2,7 +2,7 @@
     "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
     "_comment": "Stryker config targeting code paths exercised by Waves A1/A2/A3. See CHANGELOG.md Wave A3 for the rationale. Run via `npm run test:mutation`. KNOWN UPSTREAM BUG (stryker-mutator/stryker-js#6210): with Vitest 5, @stryker-mutator/vitest-runner 10.0.0 builds its per-test name filter with ' ' where Vitest 5 joins the suite chain with ' > ', so a non-static mutant runs zero tests and is reported Survived. coverageAnalysis 'all' plans the same filter; only 'off' avoids it, at hours per run. Measured 2026-09-24: 1368 of 1780 survivors ran zero tests. Until #6210 ships, trust a full run only if every Survived mutant has testsCompleted > 0; the dry run (the CI guard) is unaffected.",
     "packageManager": "npm",
-    "reporters": ["progress", "clear-text", "html"],
+    "reporters": ["progress", "clear-text", "html", "json"],
     "testRunner": "vitest",
     "vitest": {
         "configFile": "vitest.stryker.config.ts"

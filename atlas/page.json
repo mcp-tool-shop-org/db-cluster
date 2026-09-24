@@ -65,94 +65,38 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 19,
-      "changed": 219,
+      "added": 2,
+      "changed": 4,
       "moved": 0,
-      "parts": 13,
+      "parts": 4,
       "removed": 0
     },
     "items": [
       {
-        "kind": "import-added",
-        "sentence": "the repository root now imports scripts.",
-        "subjects": [
-          "root",
-          "scripts"
-        ]
-      },
-      {
         "kind": "door",
-        "sentence": "CI now also runs test/actor-required-regression.test.ts, test/backend-env-surfaces.test.ts, test/exit-code-tables-regression.test.ts and 4 more.",
+        "sentence": "CI now also runs test/stryker-trust-check.test.ts.",
         "subjects": [
           ".github/workflows/ci.yml",
-          "test/actor-required-regression.test.ts",
-          "test/backend-env-surfaces.test.ts",
-          "test/exit-code-tables-regression.test.ts",
-          "test/sqlite-driver-presence.test.ts",
-          "test/stryker-exclusions.test.ts",
-          "test/uri-errors-typed-regression.test.ts",
-          "test/validate-before-write-regression.test.ts"
+          "test/stryker-trust-check.test.ts"
         ]
       },
       {
         "kind": "door",
-        "sentence": "Deploy site to GitHub Pages now also starts on a pull request touching 2 paths.",
-        "subjects": [
-          ".github/workflows/pages.yml"
-        ]
-      },
-      {
-        "kind": "door",
-        "sentence": "Release now also runs test/actor-required-regression.test.ts, test/backend-env-surfaces.test.ts, test/exit-code-tables-regression.test.ts and 4 more.",
+        "sentence": "Release now also runs test/stryker-trust-check.test.ts.",
         "subjects": [
           ".github/workflows/release.yml",
-          "test/actor-required-regression.test.ts",
-          "test/backend-env-surfaces.test.ts",
-          "test/exit-code-tables-regression.test.ts",
-          "test/sqlite-driver-presence.test.ts",
-          "test/stryker-exclusions.test.ts",
-          "test/uri-errors-typed-regression.test.ts",
-          "test/validate-before-write-regression.test.ts"
+          "test/stryker-trust-check.test.ts"
         ]
-      },
-      {
-        "kind": "landing",
-        "sentence": "test/ is now read by scripts/stryker-exclusions.mjs.",
-        "subjects": [
-          "test/",
-          "scripts/stryker-exclusions.mjs"
-        ]
-      },
-      {
-        "kind": "landing",
-        "sentence": "test/wave-s2a1-contracts-regression.test.ts is now read by tsconfig.typetests.json.",
-        "subjects": [
-          "test/wave-s2a1-contracts-regression.test.ts",
-          "tsconfig.typetests.json"
-        ]
-      },
-      {
-        "kind": "landing",
-        "sentence": "tsconfig.json is now also read by tsconfig.typetests.json.",
-        "subjects": [
-          "tsconfig.json",
-          "tsconfig.typetests.json"
-        ]
-      },
-      {
-        "kind": "landing",
-        "sentence": "And 1 more new writer or reader of a place.",
-        "subjects": []
       },
       {
         "kind": "counts",
-        "sentence": "19 files added and 219 changed content, across 13 parts.",
+        "sentence": "2 files added and 4 changed content, across 4 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "2fb8e756e5bddee9c7e55f728c46d90b9289478d",
-      "generatedAt": "2026-09-23T22:31:52.086Z"
+      "commit": "f1d79e07fa601bb910a9042bdbe200599d46e303",
+      "generatedAt": "2026-09-24T17:13:46.014Z"
     },
     "unchanged": false
   },
@@ -223,9 +167,9 @@
     "Window: 180 days; a pair counts from 3 shared commits, since 2 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "f1d79e07fa601bb910a9042bdbe200599d46e303",
+  "commit": "13748608a6d25c077bed3f9f599981d3af14b4d5",
   "defaultBranch": "main",
-  "derived": "13 parts, mostly TypeScript (255 files). Work enters through 9 doors; the busiest is CI, which reaches 5 parts. It publishes to npm and a container image. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.",
+  "derived": "13 parts, mostly TypeScript (256 files). Work enters through 9 doors; the busiest is CI, which reaches 5 parts. It publishes to npm and a container image. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.",
   "doors": [
     {
       "checks": [
@@ -252,7 +196,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 125
+          "files": 126
         },
         {
           "boundary": "dashboard",
@@ -262,7 +206,7 @@
         {
           "boundary": "scripts",
           "depth": 1,
-          "files": 5
+          "files": 6
         }
       ],
       "runs": [
@@ -324,6 +268,7 @@
         "test/sql-injection.test.ts",
         "test/sqlite-driver-presence.test.ts",
         "test/stryker-exclusions.test.ts",
+        "test/stryker-trust-check.test.ts",
         "test/typed-error-regression.test.ts",
         "test/uri-errors-typed-regression.test.ts",
         "test/uri.test.ts",
@@ -391,7 +336,7 @@
         "test/wave6-policy-proof.test.ts",
         "test/wave6-proof.test.ts"
       ],
-      "runsCount": 124,
+      "runsCount": 125,
       "sends": [],
       "stages": [],
       "triggers": [
@@ -425,7 +370,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 125
+          "files": 126
         },
         {
           "boundary": "dashboard",
@@ -435,7 +380,7 @@
         {
           "boundary": "scripts",
           "depth": 1,
-          "files": 5
+          "files": 6
         }
       ],
       "runs": [
@@ -497,6 +442,7 @@
         "test/sql-injection.test.ts",
         "test/sqlite-driver-presence.test.ts",
         "test/stryker-exclusions.test.ts",
+        "test/stryker-trust-check.test.ts",
         "test/typed-error-regression.test.ts",
         "test/uri-errors-typed-regression.test.ts",
         "test/uri.test.ts",
@@ -564,7 +510,7 @@
         "test/wave6-policy-proof.test.ts",
         "test/wave6-proof.test.ts"
       ],
-      "runsCount": 124,
+      "runsCount": 125,
       "sends": [
         "publishes to npm",
         "creates a GitHub release"
@@ -801,7 +747,7 @@
     }
   ],
   "generated": [],
-  "generatedAt": "2026-09-24T17:13:46.014Z",
+  "generatedAt": "2026-09-24T18:14:29.725Z",
   "limits": [
     "1 import site could not be resolved.",
     "3 files use syntax the parser cannot read, so what they import is not known: 2 in test (a NUL character inside a string in 1 and other syntax in 1), 1 in src (an import type followed by `[]`).",
@@ -839,11 +785,11 @@
   ],
   "summary": null,
   "summaryFrom": null,
-  "testFiles": 139,
+  "testFiles": 140,
   "testedBy": {
     "dashboard": 3,
     "examples": 0,
-    "scripts": 13,
+    "scripts": 14,
     "src": 117
   },
   "unnamedWrites": 45,

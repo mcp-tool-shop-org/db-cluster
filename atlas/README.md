@@ -1,27 +1,21 @@
 # db-cluster: how it works
 
-Mapped at 2026-09-24 from commit f1d79e0.
+Mapped at 2026-09-24 from commit 1374860.
 
 ## What this is
 
-13 parts, mostly TypeScript (255 files). Work enters through 9 doors; the busiest is CI, which reaches 5 parts. It publishes to npm and a container image. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.
+13 parts, mostly TypeScript (256 files). Work enters through 9 doors; the busiest is CI, which reaches 5 parts. It publishes to npm and a container image. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.
 
-## What changed since 2026-09-23 (2fb8e75)
+## What changed since 2026-09-24 (f1d79e0)
 
-- the repository root now imports scripts.
-- CI now also runs test/actor-required-regression.test.ts, test/backend-env-surfaces.test.ts, test/exit-code-tables-regression.test.ts and 4 more.
-- Deploy site to GitHub Pages now also starts on a pull request touching 2 paths.
-- Release now also runs test/actor-required-regression.test.ts, test/backend-env-surfaces.test.ts, test/exit-code-tables-regression.test.ts and 4 more.
-- test/ is now read by scripts/stryker-exclusions.mjs.
-- test/wave-s2a1-contracts-regression.test.ts is now read by tsconfig.typetests.json.
-- tsconfig.json is now also read by tsconfig.typetests.json.
-- And 1 more new writer or reader of a place.
-- 19 files added and 219 changed content, across 13 parts.
+- CI now also runs test/stryker-trust-check.test.ts.
+- Release now also runs test/stryker-trust-check.test.ts.
+- 2 files added and 4 changed content, across 4 parts.
 
 ## What comes in
 
-1. **CI.** On a pull request; on a push; or by hand. Runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 121 more; checks examples/ and src/.
-2. **Release.** When a tag matching `v*` is pushed. Runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 121 more; checks examples/ and src/.
+1. **CI.** On a pull request; on a push; or by hand. Runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 122 more; checks examples/ and src/.
+2. **Release.** When a tag matching `v*` is pushed. Runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 122 more; checks examples/ and src/.
 3. **Release Gate.** On a push to main; when a tag matching `v*` is pushed; or by hand. Runs scripts/release-gate.mjs; checks src/.
 4. **Smoke Install.** On a pull request touching 1 path; when a tag matching `v*` is pushed; or by hand. Runs scripts/smoke-install.mjs; checks src/.
 5. **Deploy site to GitHub Pages.** On a pull request touching 2 paths; on a push to main touching 2 paths; or by hand. Runs site/astro.config.mjs and site/src/.
@@ -32,8 +26,8 @@ Mapped at 2026-09-24 from commit f1d79e0.
 
 ## What happens through CI
 
-1. The workflow runs 124 files in test; it checks examples/ in examples and src/ in src.
-2. That reaches dashboard (1 file) and scripts (5 files).
+1. The workflow runs 125 files in test; it checks examples/ in examples and src/ in src.
+2. That reaches dashboard (1 file) and scripts (6 files).
 
 ## Who reads the results
 
@@ -41,7 +35,7 @@ CI writes nothing this map can see.
 
 ## The other doors
 
-**Release** runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 121 more, checks examples/ and src/, reaches dashboard and scripts, publishes to npm, and creates a GitHub release.
+**Release** runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 122 more, checks examples/ and src/, reaches dashboard and scripts, publishes to npm, and creates a GitHub release.
 
 **Release Gate** runs scripts/release-gate.mjs and checks src/.
 
