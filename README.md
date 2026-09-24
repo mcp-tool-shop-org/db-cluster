@@ -146,7 +146,7 @@ unless the command is in `approved` status — the caller must first call
 `cluster_approve_mutation`, and the refusal is a structured `AiErrorEnvelope`,
 not a partial write. (Trusted in-process SDK callers are unaffected — this gate
 is MCP-surface only.) Destructive CLI commands (`restore`, `rebuild index`,
-`compensate`, `backup --force-overwrite`) require an explicit `--yes` flag plus
+`compensate`) require an explicit `--yes` flag plus
 an interactive confirmation on TTY.
 
 The full threat model — data touched, data NOT touched, permissions required,

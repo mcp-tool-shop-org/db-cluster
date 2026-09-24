@@ -135,7 +135,7 @@ a menos que o comando esteja no status `aprovado` — o chamador deve primeiro c
 `cluster_approve_mutation`, e a recusa é um `AiErrorEnvelope` estruturado,
 e não uma gravação parcial. (Os chamadores de SDK confiáveis no processo não são afetados — este portão
 é apenas na superfície do MCP.) Os comandos da CLI destrutivos (`restore`, `rebuild index`,
-`compensate`, `backup --force-overwrite`) exigem uma flag explícita `--yes` mais
+`compensate`) exigem uma flag explícita `--yes` mais
 uma confirmação interativa no TTY.
 
 O modelo de ameaças completo — dados acessados, dados NÃO acessados, permissões necessárias,

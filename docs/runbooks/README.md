@@ -51,7 +51,7 @@ Every typed-error class in the kernel + adapter hierarchy maps to a runbook (or 
 | `ClusterUriError` | `INVALID_CLUSTER_URI` | inline — check the URI shape `cluster://<store>/<id>` and the store name; CLI exit 65 |
 | `ResolveError` | `RESOLVE_NOT_FOUND` | inline — verify URI; the record may have been compensated; CLI exit 1 |
 | `CommandValidationFailedError` | `COMMAND_VALIDATION_FAILED` | inline — inspect `result.checks[]` and re-propose with corrected payload |
-| `BackupTargetExistsError` | `BACKUP_TARGET_EXISTS` | inline — pass `--force` or choose a different output path |
+| `BackupTargetExistsError` | `BACKUP_TARGET_EXISTS` | inline — pass `--force` or choose a different output path; CLI exit 73 |
 | Postgres unreachable | (no error code — surfaced via `doctor()`) | [postgres-unreachable.md](postgres-unreachable.md) |
 | Stale / orphan index records | (no error class — surfaced via `rebuild check`) | [index-stale.md](index-stale.md) |
 

@@ -68,12 +68,12 @@ Read-only. Pair with `rebuild index` to repair.
 ## Backup: `backup`
 
 ```bash
-npx db-cluster backup [-o <file>] [--force-overwrite] [--yes]
+npx db-cluster backup [-o <file>] [--force] [--yes]
 ```
 
 Exports cluster state as portable JSON: entities, artifacts (content base64-encoded + SHA-256 checksum), events, receipts. Backup is **content-complete** — restore reconstructs the cluster including raw artifact bytes.
 
-`--force-overwrite` (gated by `--yes`) replaces an existing backup file. Without it, `BackupTargetExistsError` is raised with a hint pointing to a freshly-timestamped filename.
+`--force` (or `--yes`) replaces an existing backup file. Without either, `backup` stops before reading the stores and exits 73 (`BACKUP_TARGET_EXISTS`), with a hint suggesting a timestamped filename.
 
 ## Restore: `restore`
 

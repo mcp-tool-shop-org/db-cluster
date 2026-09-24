@@ -387,6 +387,38 @@ describe('TESTS-C-004 — CLI live exit-code assertions per typed-error code', (
         });
     });
 
+    // ─── BACKUP_TARGET_EXISTS → 73 EX_CANTCREAT ────────────────────────────
+    // `backup -o` used to repeat the overwrite check itself, after walking
+    // every store, and exit 1. It now leaves the check to ops/backup.ts,
+    // which runs it first and throws the typed error.
+    describe('backup to an existing file', () => {
+        let dir: string;
+        let target: string;
+        beforeAll(() => {
+            ({ dir } = initCluster('backup-target-exists'));
+            target = join(dir, 'backup.json');
+        });
+        afterAll(() => {
+            rmSync(dir, { recursive: true, force: true });
+        });
+
+        it('BACKUP_TARGET_EXISTS exits 73 (EX_CANTCREAT) with `→ try:` and leaves the file alone', () => {
+            writeFileSync(target, 'keep me', 'utf-8');
+            const result = runCli(['backup', '-o', 'backup.json'], { cwd: dir });
+            expect(result.status).toBe(73);
+            expect(result.stderr).toMatch(/Backup target already exists: backup\.json/);
+            expect(result.stderr).toMatch(/→\s*try:.*--force/);
+            expect(readFileSync(target, 'utf-8')).toBe('keep me');
+        });
+
+        it('--yes overwrites it, as --force does', () => {
+            writeFileSync(target, 'replace me', 'utf-8');
+            const result = runCli(['backup', '-o', 'backup.json', '--yes'], { cwd: dir });
+            expect(result.status).toBe(0);
+            expect(JSON.parse(readFileSync(target, 'utf-8'))).toMatchObject({ version: 1 });
+        });
+    });
+
     // ─── COMMAND_VALIDATION_FAILED → 65 EX_DATAERR ────────────────────────
     // `entity create` used to store the entity and only then validate it,
     // so this exit came with an entity that no command or receipt recorded.
@@ -425,6 +457,7 @@ describe('TESTS-C-004 — CLI live exit-code assertions per typed-error code', (
             'INVALID_CLUSTER_URI',
             'RESOLVE_NOT_FOUND',
             'COMMAND_VALIDATION_FAILED',
+            'BACKUP_TARGET_EXISTS',
         ]);
         // Codes that cannot be triggered from CLI through normal user paths
         // (kernel-internal failure modes only reachable via embedded SDK use,
@@ -445,7 +478,6 @@ describe('TESTS-C-004 — CLI live exit-code assertions per typed-error code', (
             // are reachable through CLI but most via paths covered in
             // domain-specific test files (stores-regression for adapter
             // errors; kernel-regression for command lifecycle).
-            'BACKUP_TARGET_EXISTS', // covered in wave-c1-stores-regression.test.ts (backup overwrite guard)
             'INVALID_ROTATE_TIMESTAMP', // ledger rotate command; not exercised in this file
             'ROTATE_BOUNDARY_IN_FUTURE', // ledger rotate command; not exercised in this file
             'IMPORT_SNAPSHOT_NOT_SUPPORTED', // adapter-shape rejection; covered in stores tests
