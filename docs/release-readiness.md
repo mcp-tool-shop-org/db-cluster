@@ -173,12 +173,54 @@ Wave B1-Amend reinforces this with:
 
 ## Stryker mutation testing — current disposition
 
-Stryker is **shipped but not in CI**. The config files (`stryker.conf.json`,
-`vitest.stryker.config.ts`) and the `test:mutation` npm script remain in the
-repo as experimental scaffolding. The advertised "mutation testing on the
-test suite's discrimination power" claim from the Wave A3 CHANGELOG has been
-withdrawn in Wave B1-Amend per the v2 dogfood-swarm protocol's verifier-3
-substitution:
+Mutation testing runs, and CI notices when its setup breaks. Its score is not
+a release gate (`thresholds.break` is null).
+
+- `npm run test:mutation` mutates the files listed in `stryker.conf.json`
+  (`coverageAnalysis: 'perTest'`, `incremental: true`), then runs
+  `scripts/stryker-trust-check.mjs`, which fails the run if a mutant counted
+  as Survived ran no test.
+- Test files that cannot run in Stryker's sandbox are excluded by a rule,
+  `scripts/stryker-exclusions.mjs`, not a list; see `test/README.md`.
+- The Release Gate workflow runs `npx stryker run --dryRunOnly` on every push
+  to main, and `test/stryker-exclusions.test.ts` checks the exclusion rule on
+  every test run. Before this, the setup had been failing its dry run
+  unnoticed: its hand-kept exclusion list stopped at Wave A3.
+
+**Known upstream bug.** With Vitest 5, `@stryker-mutator/vitest-runner`
+10.0.0 selects a mutant's covering tests by a name Vitest 5 no longer
+matches ([stryker-mutator/stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210)).
+So most covered mutants run no test and are reported as Survived: on this
+repo a full run reports 8.96%, and `coverageAnalysis: 'all'` gives the
+identical result. The trust check turns that into a failed run. Until a fixed
+runner ships, measure with Vitest 4.1.x installed. The dry run is unaffected.
+
+**Score, measured 2026-09-24** on main's source at `f1d79e0`, with Vitest
+4.1.11 installed in a scratch worktree. One full run took 17 minutes on 14
+workers; the old `coverageAnalysis: 'off'` setting was estimated at 28 hours.
+
+- **32.86%** of all mutants, **41.81%** of mutants some test covers.
+- 839 killed, 1 timed out, 1169 survived.
+- 547 no test reaches. 871 were rejected by the TypeScript checker as
+  type-invalid, and do not count.
+- Eight verdicts, four survivors and four kills, were reproduced by hand on
+  the Vitest 5 suite.
+
+| File | Score | Of covered | Killed | Survived | No coverage |
+|---|---|---|---|---|---|
+| `src/adapters/local/local-canonical-store.ts` | 76.40 | 78.16 | 68 | 19 | 2 |
+| `src/kernel/command-queue.ts` | 65.67 | 77.19 | 44 | 13 | 10 |
+| `src/policy/redactor.ts` | 44.44 | 59.57 | 112 | 76 | 64 |
+| `src/ops/verify.ts` | 41.48 | 47.86 | 111 (+1 timeout) | 122 | 36 |
+| `src/ops/rebuild.ts` | 33.06 | 44.57 | 41 | 51 | 32 |
+| `src/mcp/server.ts` | 28.79 | 37.37 | 321 | 538 | 256 |
+| `src/sdk/cluster-sdk.ts` | 26.03 | 37.25 | 19 | 32 | 22 |
+| `src/kernel/policy-enforced-kernel.ts` | 24.25 | 33.87 | 105 | 205 | 123 |
+| `src/kernel/errors.ts` | 13.53 | 13.74 | 18 | 113 | 2 |
+
+The score is a baseline to improve against, not a gate. The Wave B1-Amend
+decision, the v2 dogfood-swarm protocol's verifier-3 substitution, still
+describes the standing gate:
 
 > The v2 dogfood-swarm protocol uses a 3-lens verifier ensemble (contract-
 > completeness / cross-boundary-information-flow / invariant-test-completeness)
@@ -189,23 +231,10 @@ substitution:
 > code. See the protocol at
 > `~/.claude/projects/F--AI/memory/dogfood-swarm.md`.
 
-The Stryker config files are kept (marked "experimental, not in CI" via a
-top-of-file comment in `vitest.stryker.config.ts`) so an operator who wants
-to run an ad-hoc mutation sweep on a single file still can:
-
-```sh
-npm run test:mutation  # runs against the file list in stryker.conf.json
-```
-
-The 28-hour-wall constraint at `coverageAnalysis: 'off'` makes this
-infeasible for routine CI; if the project decides to bring Stryker back into
-the standing gate, the recommended path is `incremental: true` with
-`coverageAnalysis: 'perTest'` per Stryker 7+ docs.
-
 ## What is NOT blocking release
 
 - Postgres not tested in CI (it's optional, documented as such)
 - Dashboard is reference/demo (documented, shipped intentionally)
 - repo-knowledge integration is internal (not exported)
 - No vector DB, no graph DB, no hosted service
-- Stryker mutation testing is experimental (above)
+- The mutation score, which has no threshold (above)

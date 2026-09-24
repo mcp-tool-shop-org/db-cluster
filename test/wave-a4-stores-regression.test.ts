@@ -36,6 +36,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LocalCanonicalStore } from '../src/adapters/local/local-canonical-store.js';
+import { sourceText } from './support/source-text.js';
 import { LocalLedgerStore } from '../src/adapters/local/local-ledger-store.js';
 import { LocalIndexStore } from '../src/adapters/local/local-index-store.js';
 import { LocalArtifactStore } from '../src/adapters/local/local-artifact-store.js';
@@ -84,23 +85,12 @@ describe('Wave A4 — Stores regression nets', () => {
             ).toBe(true);
         }
 
-        it('LocalCanonicalStore.persist uses a distinct tmp path each call', async () => {
+        it('LocalCanonicalStore.persist uses a distinct tmp path each call', async (ctx) => {
             const dir = mkdtempSync(join(tmpdir(), 'wave-a4-canonical-tmp-'));
             try {
                 const store = new LocalCanonicalStore(dir);
                 const filePath = join(dir, 'entities.json');
                 const fixedTmp = `${filePath}.tmp`;
-
-                // Source-level invariant: random tmp suffix in persist body.
-                const src = readFileSync(
-                    join(process.cwd(), 'src/adapters/local/local-canonical-store.ts'),
-                    'utf-8',
-                );
-                const persistStart = src.indexOf('private persist(');
-                expect(persistStart, 'persist() body not found').toBeGreaterThan(-1);
-                const persistEnd = src.indexOf('\n    }', persistStart) + 6;
-                const persistBlock = src.slice(persistStart, persistEnd);
-                assertUsesRandomTmpSuffix(persistBlock, 'LocalCanonicalStore.persist');
 
                 // Runtime: persist actually creates the file successfully —
                 // we exercise the path-uniqueness in spirit by running two
@@ -117,6 +107,19 @@ describe('Wave A4 — Stores regression nets', () => {
                 ).toEqual([]);
                 // The fixed-suffix tmp path must NOT exist (regression check).
                 expect(existsSync(fixedTmp)).toBe(false);
+
+                // Source-level invariant: random tmp suffix in persist body.
+                // Checked last: under Stryker the source is instrumented and
+                // sourceText skips the test, after the runtime checks above ran.
+                const src = sourceText(
+                    join(process.cwd(), 'src/adapters/local/local-canonical-store.ts'),
+                    ctx,
+                );
+                const persistStart = src.indexOf('private persist(');
+                expect(persistStart, 'persist() body not found').toBeGreaterThan(-1);
+                const persistEnd = src.indexOf('\n    }', persistStart) + 6;
+                const persistBlock = src.slice(persistStart, persistEnd);
+                assertUsesRandomTmpSuffix(persistBlock, 'LocalCanonicalStore.persist');
             } finally {
                 rmSync(dir, { recursive: true, force: true });
             }

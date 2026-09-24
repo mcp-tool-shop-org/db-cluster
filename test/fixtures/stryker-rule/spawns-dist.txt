@@ -1,0 +1,1 @@
+const CLI = join(ROOT, 'dist', 'cli.js');

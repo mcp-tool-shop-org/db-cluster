@@ -58,6 +58,7 @@ import { join, resolve } from 'node:path';
 import { ClusterSDK } from '../src/sdk/cluster-sdk.js';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
+import { sourceText } from './support/source-text.js';
 import { CommandQueue } from '../src/kernel/command-queue.js';
 import { backup, restore } from '../src/ops/backup.js';
 import { handleTool } from '../src/mcp/server.js';
@@ -370,8 +371,8 @@ describe('Wave A4 fix-up Item 4 — kernel staging tmp suffix matches sweep rege
 // ─── Item 5 — AGG-A4-3 (CommandQueue): random tmp suffix + orphan sweep ─────
 
 describe('Wave A4 fix-up Item 5 — CommandQueue.persist uses random tmp suffix', () => {
-    it('source-level: command-queue.ts persist body uses random tmp suffix (no fixed `.tmp` assignment)', () => {
-        const src = readFileSync(join(ROOT, 'src', 'kernel', 'command-queue.ts'), 'utf-8');
+    it('source-level: command-queue.ts persist body uses random tmp suffix (no fixed `.tmp` assignment)', (ctx) => {
+        const src = sourceText(join(ROOT, 'src', 'kernel', 'command-queue.ts'), ctx);
         // A random-suffix tmp path generator must be present (either an
         // imported helper or an inline buildRandomTmpPath function).
         expect(src).toMatch(/buildRandomTmpPath\s*\(/);

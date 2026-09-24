@@ -1,0 +1,3 @@
+it('reads through the helper', (ctx) => {
+    const src = sourceText(join(ROOT, 'src', 'kernel', 'target.ts'), ctx);
+});

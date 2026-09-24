@@ -76,11 +76,44 @@ npm run test:watch
 
 # Release-gate pipeline:
 node scripts/release-gate.mjs
+
+# Mutation testing (Stryker): the full run, or only its initial test pass:
+npm run test:mutation
+npx stryker run --dryRunOnly
 ```
+
+## Mutation testing (Stryker)
+
+Stryker runs the suite on a sandbox copy of the repo in which the files
+listed in `stryker.conf.json` (`mutate`) are instrumented, inside worker
+threads. Two consequences for test authors:
+
+- **Assertions about source text must read it with `sourceText()`**
+  (`test/support/source-text.ts`), passing the test context:
+  `it('...', (ctx) => { const src = sourceText(path, ctx); ... })`. Under
+  Stryker the text of a mutated file is Stryker's rewrite, so the helper
+  skips the test there. Everywhere else it returns the text unchanged.
+- **Test files that cannot run in the sandbox are excluded by a rule**,
+  `scripts/stryker-exclusions.mjs`: files that use the built package
+  (`dist/`), call `process.chdir()`, or read a mutated file as text other
+  than through `sourceText()`. Nothing needs listing by hand.
+
+`test/stryker-exclusions.test.ts` fails if the rule stops finding what it
+should, or if a file would be excluded only for a raw source-text read,
+which would drop its other tests from the mutation run. The Release Gate
+workflow runs `npx stryker run --dryRunOnly` on every push to main.
+
+`npm run test:mutation` ends with `scripts/stryker-trust-check.mjs`, which
+fails the run when a mutant counted as Survived had covering tests but ran
+none. That is what Vitest 5 does to `@stryker-mutator/vitest-runner` 10.0.0
+(stryker-mutator/stryker-js#6210): the score collapses to single digits and
+Stryker still exits 0. Until a fixed runner ships, measure a full run with
+Vitest 4.1.x installed. The dry run is unaffected.
 
 ## What this directory does NOT contain
 
-- Mutation testing config — see `stryker.config.json` at the repo root.
+- Mutation testing config — see `stryker.conf.json` and
+  `vitest.stryker.config.ts` at the repo root.
 - Doc-drift / completeness checks — see `scripts/doc-drift.mjs` and
   `scripts/completeness-checks.mjs`.
 - Dashboard JSX render tests — JSDOM is not configured (see
@@ -91,11 +124,13 @@ node scripts/release-gate.mjs
 The `release-gate.mjs` script runs:
 1. Build
 2. Tests (`npm test`)
-3. Package smoke
-4. Smoke install
-5. Doc drift
-6. Exports
+3. Package
+4. Fresh install smoke
+5. Docs drift
+6. Export paths exist in dist
 7. Completeness checks
-8. Doc drift typecheck
+8. Doc-drift typecheck
+9. JSDoc completeness
 
-The test pass is one of 8 hard gates. A regression here blocks release.
+The test pass is one of 9 hard gates. A regression here blocks release. The
+Release Gate workflow then runs the Stryker dry run described above.

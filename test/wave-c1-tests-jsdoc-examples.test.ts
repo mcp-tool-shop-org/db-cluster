@@ -35,6 +35,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { sourceText } from './support/source-text.js';
 import { join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -155,13 +156,12 @@ describe('TESTS-C-007 — JSDoc @example blocks structural smoke', () => {
         }
     });
 
-    it('FAMILY-PROBE: src/sdk/cluster-sdk.ts is the public SDK surface — examples land here', () => {
+    it('FAMILY-PROBE: src/sdk/cluster-sdk.ts is the public SDK surface — examples land here', (ctx) => {
         // The audit Theme 5 names SDK methods as the natural place for
         // @example blocks. This test does NOT yet hard-assert presence —
         // it ASSERTS the file exists + parses cleanly so subsequent waves
         // can add examples and the file-level smoke test catches drift.
-        const sdkPath = join(SRC_DIR, 'sdk', 'cluster-sdk.ts');
-        const source = readFileSync(sdkPath, 'utf-8');
+        const source = sourceText(join(SRC_DIR, 'sdk', 'cluster-sdk.ts'), ctx);
         // Count public methods (one of the exemplar methods has @example
         // in cluster-kernel-interface or similar — surface here).
         const publicMethodMatches = source.match(/^\s*(?:public\s+)?async\s+\w+\s*\(/gm);

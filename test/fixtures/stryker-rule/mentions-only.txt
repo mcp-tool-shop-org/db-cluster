@@ -1,0 +1,4 @@
+// spawns dist/cli.js and reads target.ts, but only in this comment
+describe('dist/cli.js and target.ts in a suite title', () => {
+    it('dist/cli.js in a test title', () => {});
+});

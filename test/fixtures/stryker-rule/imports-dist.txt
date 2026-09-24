@@ -1,0 +1,1 @@
+import { handleTool } from '../dist/mcp/server.js';
