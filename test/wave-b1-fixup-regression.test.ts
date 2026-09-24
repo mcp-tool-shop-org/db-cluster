@@ -82,6 +82,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
+import { sourceText } from './support/source-text.js';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { LocalLedgerStore } from '../src/adapters/local/local-ledger-store.js';
@@ -123,8 +124,8 @@ describe('AGG-B1-1a — trace-builder.ts JSDoc reflects post-fixup doctrine', ()
 });
 
 describe('AGG-B1-1b — PolicyEnforcedKernel re-renders labels via renderProvenanceLabel', () => {
-    it('traceObject body invokes renderProvenanceLabel (direct or via helper)', () => {
-        const src = readFileSync(resolve(process.cwd(), 'src/kernel/policy-enforced-kernel.ts'), 'utf-8');
+    it('traceObject body invokes renderProvenanceLabel (direct or via helper)', (ctx) => {
+        const src = sourceText(resolve(process.cwd(), 'src/kernel/policy-enforced-kernel.ts'), ctx);
         const fnStart = src.indexOf('async traceObject(');
         expect(fnStart).toBeGreaterThan(0);
         // Body extends to the next async method declaration or class close.
@@ -139,8 +140,8 @@ describe('AGG-B1-1b — PolicyEnforcedKernel re-renders labels via renderProvena
         // (we add `rerenderLabelsWithPolicy` for this fix).
         expect(body).toMatch(/renderProvenanceLabel|rerenderLabelsWithPolicy/);
     });
-    it('traceBundle body invokes renderProvenanceLabel (direct or via helper)', () => {
-        const src = readFileSync(resolve(process.cwd(), 'src/kernel/policy-enforced-kernel.ts'), 'utf-8');
+    it('traceBundle body invokes renderProvenanceLabel (direct or via helper)', (ctx) => {
+        const src = sourceText(resolve(process.cwd(), 'src/kernel/policy-enforced-kernel.ts'), ctx);
         const fnStart = src.indexOf('async traceBundle(');
         expect(fnStart).toBeGreaterThan(0);
         const nextDecl = Math.min(

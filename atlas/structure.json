@@ -9,31 +9,31 @@
       "externals": 0,
       "files": [
         {
-          "hash": "c9f83440758d52e5366a8df313df129ed55f23713bd849cf4a6f0c87b3ab3ee7",
+          "hash": "939f502fd9322395a341ac3775977a79620b337dd8c94a0acc5acffb7d4b28b2",
           "path": ".github/dependabot.yml"
         },
         {
-          "hash": "b0b0ceb66799bd29e0e5b4bc0f4470ffeb10d9169ab4816a03aa2f39fe73dff2",
+          "hash": "08c71a0cdcc0afca4270c27873889b7dd85621998e0b267fc44d9f0e17bea34f",
           "path": ".github/workflows/ci.yml"
         },
         {
-          "hash": "4c48901816853ea6a8ab3568d36fb4fbedb29f02d3135dc1d21739835db995a5",
+          "hash": "a89f999d97bfba1792762bc0bc7646aa8f4639718acc8a0a8be92c925093def8",
           "path": ".github/workflows/docker-publish.yml"
         },
         {
-          "hash": "8738eec6ce12bace4225ba1873d02c233920fef17c333b2a450842ac96564b18",
+          "hash": "d4bd44bff4c85d0eb190c4968abf8350f7532a26dc6d0272c26883f7d910bdcb",
           "path": ".github/workflows/pages.yml"
         },
         {
-          "hash": "25d7dfef4a73574c9d8a12fb0611d0b3acd9e5303539b33f4ea8b60d564210f8",
+          "hash": "3c4f753d17bde7898e473beaf1b30e9976936e121cd7944b7b02312382816ff7",
           "path": ".github/workflows/release-gate.yml"
         },
         {
-          "hash": "9ea6751d93cb789409cdc1cbe59084b4052ebe80bf238c5cde2418c2abdf4d02",
+          "hash": "dc46246a8db6591852a636985fed54ac938eed0bc0ac57e285a4ad3f530e781c",
           "path": ".github/workflows/release.yml"
         },
         {
-          "hash": "38a23802cec7013d11b8b5b5ee7f6a38d476929e1db028d16d69c0891e307da1",
+          "hash": "254bb184fd8e4bc5a54d5b122da1a0db18700d4ff2a8cdf77f2cd2551350b86f",
           "path": ".github/workflows/smoke-install.yml"
         }
       ],
@@ -56,27 +56,27 @@
       "externals": 0,
       "files": [
         {
-          "hash": "632437ee10bd0d576c59ba8652369bab9afa725ae1e34387d8d27359f5c0e5e1",
+          "hash": "dde5b1cf0bc89dd6056c452c2eb28901f8453a91a96752dace7935a8dee036e4",
           "path": ".stage-b-amend/agent-cidocs-report.md"
         },
         {
-          "hash": "63b678eb6deae54cd6b1ac2ae297a444498dc2785bc6d8e752ae62fb60e9078b",
+          "hash": "af54a3981087bb02bbd55f34e544dd141acb8da2b572b8305e789d8db5532313",
           "path": ".stage-b-amend/agent-fixup-report.md"
         },
         {
-          "hash": "d1188e814453b2944242accfd4e5634050fcc2461e9ac62521e4f49f9afbc005",
+          "hash": "fddc4aac200bf5697488b82f206342690b97ff53e5710458045388dc9adddee4",
           "path": ".stage-b-amend/agent-kernel-report.md"
         },
         {
-          "hash": "a7033964b9ebae4fa9029e03d065b103ec5ea295f66749c0e3c6fcae732a1ce8",
+          "hash": "1d2680d214ba5c344fcc221cc624734481c43630ee04658ae27e3545145029eb",
           "path": ".stage-b-amend/agent-stores-report.md"
         },
         {
-          "hash": "f7d5712b286b88bdec92258f5b40007b32280fc5473e1c49b3dc93fdc0059f88",
+          "hash": "5b6a7b062d461e6cf85afe9c20e06aacd77c6df99081833fcf52c61566bbedc4",
           "path": ".stage-b-amend/agent-surface-report.md"
         },
         {
-          "hash": "8685ffbb894bce7787c583535b1ce7ca8a62bc1c22474f96e4ed590a6aab66ff",
+          "hash": "0dade3b211fd59bb526be3c0efaf11f5f12ddddaa013c12b07bd8632d3557475",
           "path": ".stage-b-amend/agent-tests-report.md"
         }
       ],
@@ -99,23 +99,23 @@
       "externals": 0,
       "files": [
         {
-          "hash": "752fb87f74184ab0e1b1920d6ba2ce2f307fa5d15df5752421949dad7dcb9502",
+          "hash": "8d4e846e5c90951597cec608c0b559482f071f78463cf129662ff862c68ca02c",
           "path": ".stage-b-audit/agent-cidocs-findings.md"
         },
         {
-          "hash": "b3da25a4c80b551c37fd338dbd78b0fcb0f2d499cb358bdc644df1ebd9ce05f3",
+          "hash": "82a1c90dc4c5c23394f775e860fb65102c6ad226cd2560b29a11a0fc3fb850d1",
           "path": ".stage-b-audit/agent-kernel-findings.md"
         },
         {
-          "hash": "237540981f242da9d20ccc8f20d4b4349920b0c81e4943b44f6fab68d794abc7",
+          "hash": "689b738624fc796ed020df60e9c91bc1c51fa461a290feafbb4f9c1abda103a3",
           "path": ".stage-b-audit/agent-stores-findings.md"
         },
         {
-          "hash": "e373e3b7e263086c4cf329ae32df99c226ac24e093b1706014ce69d406697d8f",
+          "hash": "4c79b6e9cd4fbf88337b81e251627017101a0943ea506fe131d3480cd9ffaabc",
           "path": ".stage-b-audit/agent-surface-findings.md"
         },
         {
-          "hash": "5ddc4eb12315c45c643be3551a028f84757b07870c8785517317151d58cb659d",
+          "hash": "3ee3fcb556d69a7a91b9af9046d5c5c5619f55627bfe76e6a3e4d0e46609cc31",
           "path": ".stage-b-audit/agent-tests-findings.md"
         }
       ],
@@ -138,27 +138,27 @@
       "externals": 0,
       "files": [
         {
-          "hash": "0d0653e9bb17401c9ecda71099487af3681ebd14974ec98a569ebded58ddd491",
+          "hash": "b4d988237f143d78f53ec70f6ace470568f29ead962f0fab51e3e10782ca9ce4",
           "path": ".verifier-outputs/v1-contract-completeness.json"
         },
         {
-          "hash": "2f66dbd50b5e761b643f4e879abb89a0f621e9f32bc0ffb3e289284ebf9d0e3b",
+          "hash": "366f78b4780a8067e98d95d52072e838d1572b8072b1f308d139d9f40f9df957",
           "path": ".verifier-outputs/v1-wave-a4-contract-completeness.json"
         },
         {
-          "hash": "b6ce50178ff7db756106fd81461c6d99f55258a0beb0b2daf16da0c68057f5e0",
+          "hash": "4ea7bb6c0f744b738c3e2875f1ada653551638c104362e509836ce3c246bf7cb",
           "path": ".verifier-outputs/v2-cross-boundary.json"
         },
         {
-          "hash": "bd721e995dbc9eb13b29737b8ef3f8408fbc46016b90aa4fee9c16cff7df7660",
+          "hash": "7871ccd04beb055e99fa38f2efa067a15ba861355f899f919e061faa82be7adc",
           "path": ".verifier-outputs/v2-wave-a4-cross-boundary.json"
         },
         {
-          "hash": "acd010c8dc400ee6e6237705780349e1685beea30b285c5d09ef4fd031460710",
+          "hash": "d07e035bf620b166bfead4d005aea8c94c6dfd16ffb8c59121a5a254f9308242",
           "path": ".verifier-outputs/v3-invariant-test-completeness.json"
         },
         {
-          "hash": "bbbbc869013e400cf18a59979c052fbf47cfe0b6dfda904526f543e225cd6b41",
+          "hash": "e73a9cc2a7e6c92ef648d5420e58a138b7abbdcf4812a3b30b7a76c175f0f1a5",
           "path": ".verifier-outputs/v3-wave-a4-invariant-test-completeness.json"
         }
       ],
@@ -181,15 +181,15 @@
       "externals": 0,
       "files": [
         {
-          "hash": "df4af9cec1180e372027174b8349b53a91a7fe4f2c35229d22f8d38f2a47c4e3",
+          "hash": "e665c830659933757697f605308d378c88d1271c07c4938487d05132735acdbb",
           "path": ".verifier-outputs-b1/v1-wave-b1-resilience.json"
         },
         {
-          "hash": "6c99c4bd6cc6a036fb3ffd3ec047ab7490136c5460f563151d024c91cb452aa0",
+          "hash": "abfd1de956ef5f5449ca120aed09a33440a5acb4a9464740e5c82f77d3ee739d",
           "path": ".verifier-outputs-b1/v2-wave-b1-operational-visibility.json"
         },
         {
-          "hash": "c29e0c892ebc55cbb2c1d701613dd0cc219c971b4cd5c0099bbcd48ae20ada7a",
+          "hash": "47e4e9e1aaad0c612c66a9ed6bf855ebe31687fc6c0223d5619174d786e74244",
           "path": ".verifier-outputs-b1/v3-wave-b1-migration-safety.json"
         }
       ],
@@ -242,7 +242,7 @@
           "path": "dashboard/index.html"
         },
         {
-          "hash": "459bb0aabcb5a4159a62cfa03f78c60d1e4d90c83e37d7c27bd868fb9ed3e7a0",
+          "hash": "58c0080aff28275de17b2dec60ce44643c7f43ca2da7de72975288b95d23c725",
           "importsFiles": [
             "src/dashboard/dashboard-model.ts"
           ],
@@ -252,11 +252,11 @@
           "exports": [
             "applyRedaction"
           ],
-          "hash": "ac86e831f17519b7f2695ff243614c92708df14d0bb0377cd93e72da20a5f12e",
+          "hash": "f2f1436aec1ba37702979bf16c48c41779c44303c95b95090e1270c1f7d19e4b",
           "path": "dashboard/lib/apply-redaction.js"
         },
         {
-          "hash": "abf82306e60ca2c07b159b25bad8883685d3a19542e33087344c82807f3cba98",
+          "hash": "c57425e9f288f1b9ea501cfe6c7c87dad60af768aad7b5064ce114bde52aadca",
           "path": "dashboard/lib/state-boundary.jsx"
         },
         {
@@ -297,7 +297,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "67ebcbc3a7e29a68d1d2fc50e216329c363516ca68f96ffae784375d8d0359ac",
+          "hash": "009e13b15e61726a42bf108ac991e8571faf5177bb806ff4d107a6dbdaf98f16",
           "path": "docs/README.md"
         },
         {
@@ -305,7 +305,7 @@
           "path": "docs/architecture.md"
         },
         {
-          "hash": "3c767d3377020ced475af863191a564b5944f0e3cb1c51452dac5c1550de2850",
+          "hash": "711414a47b1b74a48e405084d79244f860e9b7ae456e429056bd1e0c08460139",
           "path": "docs/cli.md"
         },
         {
@@ -313,11 +313,11 @@
           "path": "docs/cluster-uris.md"
         },
         {
-          "hash": "a87991f8afdc69293476e211218d2ca3a805b074f7d61995cb684da4ba0bb9ed",
+          "hash": "ad8559e4b400c42f54fa18f39a6a49122113b06a8b8108e90064fdafe2a889b3",
           "path": "docs/handbook.md"
         },
         {
-          "hash": "c22440b2cd8ef611b925e486b4415d5ebf2dbd9f9ba7a7d103383a29bcfb925d",
+          "hash": "b08c08aa6fcb228d9459c6c31028a8e03fddabec99f269b1c858fce320fdb573",
           "path": "docs/mcp.md"
         },
         {
@@ -445,7 +445,7 @@
           "path": "docs/provenance-graphs.md"
         },
         {
-          "hash": "0df9aa37304030b9d1b98fd16f49d112c62592d37ac64343fd0b9b896e577cc7",
+          "hash": "ec9ad7beb65ff498fc03a7d7d234095e157ddf5e6f097c7ae625e694a3fbd1d5",
           "path": "docs/quickstart.md"
         },
         {
@@ -465,23 +465,23 @@
           "path": "docs/retrieval-bundles.md"
         },
         {
-          "hash": "933cebf2f954c546ebfd5f6767a8a9ef0f8fbb009b208672221eefbb61083518",
+          "hash": "b839cdc9b971bd4a1bf94dec5cc4808d57963469426893c1d2ae8e86290a7c5e",
           "path": "docs/runbooks/README.md"
         },
         {
-          "hash": "a51f03b71e8b359ceab68d6b266aa68af02d44faedb26280636f88c3a0e40080",
+          "hash": "de253da0e3ba3fb481b1a58ab0607aa12aa2d950acf481752db51f532312bdcd",
           "path": "docs/runbooks/corrupt-store.md"
         },
         {
-          "hash": "4fe3e392b1e6d9d9739376238b5c54438d344984668f7fd4efb515498235d880",
+          "hash": "92b506d3cc07724d4cf829d43682d8ca16beb54de79330bdfd12903a055189ec",
           "path": "docs/runbooks/index-stale.md"
         },
         {
-          "hash": "0382d35f06d0e2acdec50d2984c96011d81d2d49b4d8803c4f8a1ff49e102192",
+          "hash": "0b0f7586a76254720eae4774e320756119b0a7d0279d372e9d1627914923053f",
           "path": "docs/runbooks/orphan-mutations.md"
         },
         {
-          "hash": "6ddead15021136d197fd990bfdc6950fc913fc2562eb04c4c0b56d170556aac3",
+          "hash": "0e5a9e3ba81132d808bb428ecfb213ff31908293811dec99d233b8ccdbc76ee8",
           "path": "docs/runbooks/postgres-unreachable.md"
         },
         {
@@ -489,7 +489,7 @@
           "path": "docs/sdk.md"
         },
         {
-          "hash": "b5ea1a83a45f3db83d6e8e2fd2494059aa1c12c57dbf99e1b4fb910569946be7",
+          "hash": "0695fdf9dfbb6544e5d8c5fcfb47dff3d7a8313f2ced453fcf3f79793960cc52",
           "path": "docs/store-contracts.md"
         }
       ],
@@ -512,7 +512,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "91ba3f262ebf7e1a514cce91dc503f30235fcacf50ddd133074c5d27264823c1",
+          "hash": "da622a3d245da2d6498fb2fa056e8c70aa6eff9932fe3153b0dcf76b9afdd88d",
           "path": "examples/agent-safe-app-db/README.md"
         },
         {
@@ -544,7 +544,7 @@
           "path": "examples/mcp/tool-catalog.md"
         },
         {
-          "hash": "59dc090a7ea06cbaa3edead4699d8bb66f0dd2263f97ea74c12dd17b92d247b3",
+          "hash": "f926cafb60ce4361a2360eb6546a2d7d95f7f7d4c24e7710ec30910fd91a705f",
           "path": "examples/project-memory-cluster/README.md"
         },
         {
@@ -557,7 +557,7 @@
           "path": "examples/project-memory-cluster/index.ts"
         },
         {
-          "hash": "ef72c7b1fb8ca80f62bd07f7b2a1d3017ac7b1a7f619f235541dd52cceae673f",
+          "hash": "c7e871e85d7d92a85101aa647b328cf962c1075b330faf95b42dc1776f59c6da",
           "path": "examples/quickstart/README.md"
         },
         {
@@ -581,7 +581,7 @@
           "path": "examples/quickstart/expected-output/init.txt"
         },
         {
-          "hash": "a8dbf5889028b74a27e004bd8c5261ba84b44826074473dee81e4565377b5435",
+          "hash": "3dc196ec3f59fe5c40ed9b3c75b66742fb27543c8af87641c459a33e8562944b",
           "path": "examples/research-evidence-cluster/README.md"
         },
         {
@@ -594,7 +594,7 @@
           "path": "examples/research-evidence-cluster/index.ts"
         },
         {
-          "hash": "608a33571f219cb3b7978bbde969fac7e84161f1165e64e00482aa0b94771fd1",
+          "hash": "6db7883abcce4681be0f06aeddcd5f913c06da858317b6614b42c63a71368249",
           "path": "examples/sdk/README.md"
         },
         {
@@ -605,14 +605,14 @@
           "path": "examples/sdk/local-cluster.ts"
         },
         {
-          "hash": "ea0555137d37e3c2b5ecf51ce3f36c6829742832a4b5e860074eb5483bfd5e3b",
+          "hash": "82bc8d3ebc6e40cd2d8107326e59870686bd511d0d2f40ae6ba6d05d4223df62",
           "importsFiles": [
             "src/sdk/index.ts"
           ],
           "path": "examples/sdk/mutation-lifecycle.ts"
         },
         {
-          "hash": "739e62c6847a01a5697e7065b05b3a3727170835a11733e3ce7a3933bbc29607",
+          "hash": "53d894df2d9f081542e6ff79b53b5de9d0845988614ab357184ddd6923d79a1f",
           "importsFiles": [
             "src/policy/index.ts",
             "src/sdk/index.ts"
@@ -646,15 +646,15 @@
       "externals": 0,
       "files": [
         {
-          "hash": "f25856d0ffb786ee2b880572d37f0a69df9e50792261446b8d889d106e10a89b",
+          "hash": "e4272f0cb385e2ed0ba7c615288f67ae169a3c1505f43bee51c630dfb2e4a0ca",
           "path": ".gitignore"
         },
         {
-          "hash": "af45762b6e42654668ba3aa7d93eb0bab88ba2ec71d1125c33b1a86452ac3161",
+          "hash": "697de840fe1726e0ae6e1857e22e738bacfb5acd90dac1624b05cf09df18a210",
           "path": "CHANGELOG.md"
         },
         {
-          "hash": "f58d8d0c02b19bdd87f75006eb4b9f15ffd7ede3adaa6ff0c0425a4d7933236f",
+          "hash": "6c6f9fad26205e9d19139b1e21b4918039e1e20848b4333e7d44c552e0fe1b57",
           "path": "Dockerfile"
         },
         {
@@ -662,35 +662,35 @@
           "path": "LICENSE"
         },
         {
-          "hash": "6bf0338aed9c2ccaced83f935a9af8d9bcbeeba3cbc0c965dfd32475d2a29c42",
+          "hash": "25cb3bd92860604bf909d73e8e1d87183b3667beb785fdd778809eb3f5e0be80",
           "path": "README.es.md"
         },
         {
-          "hash": "57a42ea0432649f951486ebda5ba5673eacfb3a6f971e016850696a7d612ab5c",
+          "hash": "0526c16349730bffe67bb62d323abe991fe555150a191303b905af8d38b6b99e",
           "path": "README.fr.md"
         },
         {
-          "hash": "4385c6fd692a2b13a76e46b5abe7e576183710b5ac90f248580b229a5845aaea",
+          "hash": "4498cd0052c08107b8f29011183a96aec47407c400fa94696afaa1da137f4aad",
           "path": "README.hi.md"
         },
         {
-          "hash": "14ca60c20c193fbf76c877553fa53358e616071d87c19322dbf4c399e4f9044a",
+          "hash": "8bfd60269c9639fb3316155329bfbddef7cb0ece528a4b88bb60bd649e191fc0",
           "path": "README.it.md"
         },
         {
-          "hash": "6827e0fd8a57aecbd71572de05fe7376f22143129125df2302a096bb819a980b",
+          "hash": "7c421e6ecb13d7680ced5bd42169128a0bd941b785f40f3c61791d0a54f064ca",
           "path": "README.ja.md"
         },
         {
-          "hash": "24168cc659ee7636d268cafda1d0c860964cef8b55124c4d64085887290fb264",
+          "hash": "133de119289d38c89375768a894288340c6a4f3ac1221afcb8d9766818264409",
           "path": "README.md"
         },
         {
-          "hash": "9f82c6acffb07de746e926482c69b6f45c2e50e9c8c3bd26a866ae44cfee152e",
+          "hash": "cced799cdc308ccd522e72b8ad84c24ce801cad1676681efcf6da2694798458c",
           "path": "README.pt-BR.md"
         },
         {
-          "hash": "5586b5304296954361fd7686166411936422ffbf8d75e045a73e2d1747f6e31d",
+          "hash": "af93aa93599b2857e24721fc682b584f5949a995cf5e4471068b1e3da9e3884d",
           "path": "README.zh.md"
         },
         {
@@ -698,43 +698,43 @@
           "path": "SCORECARD.md"
         },
         {
-          "hash": "2c5f4a73299415817b3b5d87650d0e090c996fbb856d14295ad5c288496d5f21",
+          "hash": "80cf9f424b28ab4829be65475c111e658d196ca91295512fd5e2a6e29f6b52be",
           "path": "SECURITY.md"
         },
         {
-          "hash": "0a1c181dd556d3673ef40a40cb6fe4116dc48740e5b7b402ab34178cfe964a43",
+          "hash": "5ad31ae40e2dd33c00cb979bf409406cda63626a5b7ab08039b6a56f6857eb50",
           "path": "SHIP_GATE.md"
         },
         {
-          "hash": "80cfd57e1fd61c31c3dbeb742d3ba8de9a7668e51ebcb7159cd109dbdc580081",
+          "hash": "a95bebe049c5f49f01ddaffdf92fa87d4091fad6b87c97e0e21fea22fd6de3e7",
           "path": "db-cluster-feature-pass-FEAT-S1.appendix.json"
         },
         {
-          "hash": "37cc75bf8b1fe059107831fd013ffd092e7b34a5b2f1a08b67b3175b86aecf97",
+          "hash": "852047600d40ccbeeee65f017a07eb4049d4b99ec9b1c537f56ba8ffcf23cbb6",
           "path": "db-cluster-feature-pass-FEAT-S1.domains.json"
         },
         {
-          "hash": "caec818a4db261a3ba2b04f7945fa5f05d62b042df59fca966744151858f6dbd",
+          "hash": "bc8a2c06bc13954df521adc50ad766d5cbb813bc9662a7ca1b2f79fff17c289b",
           "path": "db-cluster-feature-pass-FEAT-S1.md"
         },
         {
-          "hash": "e9f43fde223b27e96c54fb61c3781f4bf38520352cf97c7c266dd19c41c9fd0a",
+          "hash": "8edfe0e19fe3668bd70b2ac75f78fb0a5c9e60e255d14d2eb6f36d539ba93b4d",
           "path": "package-lock.json"
         },
         {
-          "hash": "f406949c811f0090315b7babb288a42eb1936af35697d88d71372428aa676efa",
+          "hash": "630afef37ab92c5c7ff43795bfa5ff70c0fd355a3722561eb8394ab24a59b5c8",
           "path": "package.json"
         },
         {
-          "hash": "5876bec9f3c029db41f699638c049b516471265192ef9f64b637989014980f49",
+          "hash": "4dbfc3313b48574eca3d14aff71058f3a7e3c96bdd0e18a32f19a4eb0606b8e7",
           "path": "stryker.conf.json"
         },
         {
-          "hash": "d36d08d5cef3c316fde39248598a400daffd0796a454cf56d5cfe589642a49ff",
+          "hash": "64c130af7557e3951981097d9f90de82c31756b0a2e16bab30d82179e30154a7",
           "path": "swarm-stage-a-amend-20260527-004737Z.md"
         },
         {
-          "hash": "90fe44336996a7ca6ac5ed28309eb0eff4babf32364db1b1e89f1307f51df9ff",
+          "hash": "7b00dab07854267bae6dd58123de1487f81f704d650976c7f14d6cf3d1c327c8",
           "path": "swarm-stage-a-amend-a2-20260527-025742Z.md"
         },
         {
@@ -746,11 +746,11 @@
           "path": "swarm-stage-a-amend-a4-20260527-112600Z.md"
         },
         {
-          "hash": "6b11875251a0f291f0cfff8f87942d170130bca8b947ccbc00b4f126b92be7d2",
+          "hash": "35e66ef61638f2c82fa82ba0a7966073823cc3fc9d758a8a4673febca5dedb53",
           "path": "swarm-stage-a-audit-20260526-225638Z.md"
         },
         {
-          "hash": "40effe435f9a50b018de9518525e9fa7a243aaf4556c2bf5879adbf589ebdfc1",
+          "hash": "d7a15cec7a72e60937de4b77905ef0b27a51e2cef1432fe1833067e4672d02ee",
           "path": "swarm-stage-a-reaudit-20260527-013038Z.md"
         },
         {
@@ -758,67 +758,74 @@
           "path": "swarm-stage-a-reaudit2-20260527-033921Z.md"
         },
         {
-          "hash": "57bec4971ca10bb7e922731818eaccdcfcdd1ec41563a71c409cada2d57150da",
+          "hash": "cdf5617614ab4b9ced381c7033c4870a8d06c5bc6a6ba0dcff951e37533dc4c0",
           "path": "swarm-stage-a-wave-a3-verifier-aggregate-1779861998.md"
         },
         {
-          "hash": "2f4846f934571fb10c1cf58624ad6fb927efcedfd6e63f7bffa50c27f5aefdb6",
+          "hash": "290d3c17d1e1abccc75e81f17a5a1d8423cdce3e24981fd4f980964412582af2",
           "path": "swarm-stage-a-wave-a4-verifier-aggregate-1779881160.md"
         },
         {
-          "hash": "0adfd34f3e34486660414d34cd4613d9f0ec8e0152c683fb173bc2588e59ced8",
+          "hash": "e0cb12cab70916ab1550da4994a297b796ccc1cae83b8afcceb9f986f3c6ead8",
           "path": "swarm-stage-b-amend-1-20260527-130000Z.md"
         },
         {
-          "hash": "5916e1ddf715bd9a2261289678fcbef48d240940dbc3954c307fcc2814dca451",
+          "hash": "7857a54bb870434f2ce487e0ef544d802887130149f0a80fa241aeef1b837fc8",
           "path": "swarm-stage-b-audit-1-20260527-091803Z.md"
         },
         {
-          "hash": "e7110c368775dc7842434acb21201a2cf923f24c03f9fecd68eb9c2468aa5657",
+          "hash": "699b12fdfb8c0afa53e273951d7b937486051362e85bea0a244df9f57f19f40c",
           "path": "swarm-stage-b-wave-b1-verifier-aggregate-1779884900.md"
         },
         {
-          "hash": "90afa3d411a5e2f95ce237e6f2ba62efa0ea05a3a86e565042e9fb979411d2ca",
+          "hash": "f1a6a284032852784f2c358b24b27c9c1dfdc77bd64ce9a2045b99ea32e1dda4",
           "path": "swarm-stage-c-amend-1-20260527-170000Z.md"
         },
         {
-          "hash": "3cc3b75c02d9c74640a4c0bb8e9c0ebd0239a2fa426ce8b1e7133b98577c484d",
+          "hash": "8516aebec1e561fd06111aec6b7a1c41024804dafe3a5a28569103ec5cdb47d7",
           "path": "swarm-stage-c-audit-1-1779892297.md"
         },
         {
-          "hash": "82ac3530be3b50bd0d556e4ca267d156c0c8fc791389093b601163d4e9b38cf0",
+          "hash": "fb5ba616b9b9fff26ec11104b43f3f71bf86a94c055242e89a2dace4bace417e",
           "path": "swarm-stage-c-wave-c1-verifier-actionability-OUTPUT.json"
         },
         {
-          "hash": "9b3f3700912be0175ba76f2fff0026c5ca81e4faa68d90bbe1fdc1b733ec9a95",
+          "hash": "a78e6506cffcc6805d273b9d4451d7206e38c12ee303b20b37c6569ddb3f41d4",
           "path": "swarm-stage-c-wave-c1-verifier-aggregate-1779897954.md"
         },
         {
-          "hash": "8a852a416635c62766c1903d48be7feec0490a6d1bba734827c78577fb652d2a",
+          "hash": "564e6e8f0b6b36ab270174f642c8c3af1d3c4dcc3e48029ae71062d5eee2ca04",
           "path": "swarm-stage-c-wave-c1-verifier-edge-state-OUTPUT.json"
         },
         {
-          "hash": "4d41f66dbdcb886ece4fd99c67b463a555fbf4f81d1bd68fb1a6dee474fe74f7",
+          "hash": "2789ceed81f2564de6c30a25490773438ec6f0a827422d9c920a1f797d0567fd",
           "path": "swarm-stage-c-wave-c1-verifier-op-progress-OUTPUT.json"
         },
         {
-          "hash": "b0a04c17acf1c575333bc0aa65a93fa68da8562cefc86101ec887df51ab1024d",
+          "hash": "a126d35bcdc637964edf37896858605c17dcfddf57ae5e5f523ca7bca7689495",
           "path": "tsconfig.docs.json"
         },
         {
-          "hash": "253db186b75f9642554e2f67b03deac2ab5e1af42735d5d06d8ab8cecbeadd04",
+          "hash": "12b22ab5376aea675cf43211f0c57e8fc209c129fc24a23790c7aa06b817b647",
           "path": "tsconfig.examples.json"
         },
         {
-          "hash": "c5f1d2914fb0c640467481d9b8fc2c471db81e6290de94b1b6eec0c5154460ec",
+          "hash": "541ee9c24147f22f7e73a949484ab84b7164bcd7712f6b37838eb1a673607bca",
           "path": "tsconfig.json"
+        },
+        {
+          "hash": "b2d73157094407b526e32828512ece67e89002a9d49d152a0bac2d4084529654",
+          "path": "tsconfig.typetests.json"
         },
         {
           "hash": "ad65a6f4da757fccb076f49f3b0393e616cd25a77a92906bad8ea9bff66c99f3",
           "path": "vitest.config.ts"
         },
         {
-          "hash": "7a000760df8bdc4001ef9068e34e51920f433989ba5e944d398e86d443530edf",
+          "hash": "0a7655d4fce5ae4b83611561d9cd37f0f6ef79e9c575c22a5902c76f45548e18",
+          "importsFiles": [
+            "scripts/stryker-exclusions.mjs"
+          ],
           "path": "vitest.stryker.config.ts"
         }
       ],
@@ -845,23 +852,23 @@
           "path": "scripts/checks/R1-kernel-underscore-access.yml"
         },
         {
-          "hash": "ccb2d19099ab545152053969dcc789030e9e0139547360b65247874f0a4e78a1",
+          "hash": "1ad26899d5fb155c27a91f17924fed1a48d9a4934b9c679ed18f5bb687a41f5d",
           "path": "scripts/checks/R10-path-scrub-regex-outside-redactor.yml"
         },
         {
-          "hash": "aaf2c5d844c2f5c42b7e2bb18e67a2c0c924716a5878aabc19e334d249708100",
+          "hash": "a2531ca9b35d43f58be79da69deef135a958ceaeaeeeb42bbb187a9e5d78dfdf",
           "path": "scripts/checks/R11-snippet-without-integrity-read.yml"
         },
         {
-          "hash": "96585aa9d01bc43d7e7bf3001832c5b3cdfb828196c8ae000a3ca48e74689562",
+          "hash": "ef0894e8bcd25449618934672d62c19fb203756ab24d577c4e4fb25844d0f219",
           "path": "scripts/checks/R12-retrieval-without-ranking.yml"
         },
         {
-          "hash": "a6f5d0882399ebb2e17f0e3d72b6efbe5db9dc7d9677823e31520775e4bae67d",
+          "hash": "31361c97efe34956caa6f37323e8286c26c81106223a590fcfd5259c5a066b1c",
           "path": "scripts/checks/R13-version-read-without-per-element-redaction.yml"
         },
         {
-          "hash": "1c003813472364ee38ff93262e3ddc1ad53f8d15ca0faf32de779d209b687860",
+          "hash": "1de44c70ae898abda2c5a0884cef493ea2f718eb9dae40fe80d5e40e5616032e",
           "path": "scripts/checks/R14-mcp-refusal-returned-not-thrown.yml"
         },
         {
@@ -881,26 +888,26 @@
           "path": "scripts/checks/R5-optional-import-contract-method.yml"
         },
         {
-          "hash": "04fa5f69222d2f295fbce914f4a9974825e7c90f8cf8692b45a3e52152f08963",
+          "hash": "ce2370a0c66f02343df49c97b692ca196b5188ab8b0ebc9dd682de1d702d1007",
           "path": "scripts/checks/R6-content-read-without-hash-check.yml"
         },
         {
-          "hash": "170e44e0205a6aabfb4341ba5fcc8b5bd5f42c8aafcb6bcf22ffe4cb2d45c330",
+          "hash": "786ceb1a8892dec2e7c71e1eb04e5fae9d208047552ff54daa09c7e2c76bf927",
           "path": "scripts/checks/R7-update-mutation-without-previous.yml"
         },
         {
-          "hash": "223061ad32f90f966e481fa00d99d3162b8bcaec504563ce96d37e94eb9b2e14",
+          "hash": "a2e6abb89999ca2dd0495accf897682c7e31cae1c4fbd2d0f7d587868b4380d4",
           "path": "scripts/checks/R8-ledger-append-without-integrity-stamp.yml"
         },
         {
-          "hash": "648e38eccba2feb3d1fd2420b1ec937617c11010f8f638288b83f18373909cb4",
+          "hash": "1178e57f7242088d4965c876bfa35b1365d34d42b09e3fe48cb5c62653621247",
           "path": "scripts/checks/R9-sdk-artifact-without-sanitize.yml"
         },
         {
           "exports": [
             "scrub"
           ],
-          "hash": "d16b459218184bd0b568a3d168487d9befb9ddfe5cf882f21a4756f72d2bab1f",
+          "hash": "6e1243ff6210585cf2c8ae8a0680e8007c440571b10a6987ab09d1f13573527e",
           "path": "scripts/checks/fixtures/r10-bad.ts"
         },
         {
@@ -908,25 +915,25 @@
             "scrub",
             "scrubError"
           ],
-          "hash": "44964718d949d6ca7a2a0cf9a5c1bf90e99fa967f91434f8819264e7906a0e77",
+          "hash": "6707f34b4c3549e6590a633d79154ff33689320a9da6a593f0ee314609dfe12d",
           "importsFiles": [
             "src/policy/redactor.ts"
           ],
           "path": "scripts/checks/fixtures/r10-good.ts"
         },
         {
-          "hash": "d99df4e8c289e4b9cc45abf0d570ad0004c838f981026bfe665cacc7e3d27bb2",
+          "hash": "8fecb0f9ddb4de747a2849b34bcd7e9cf2b3189ac2cf962b885fe0f10a00b3f0",
           "path": "scripts/checks/fixtures/r9-bad.ts"
         },
         {
-          "hash": "c54e5c0750ec15673b5fc4b1c2572a61357ccf4c2fefa0b250ac4d5a6e26c7ba",
+          "hash": "0ae2bab29d01b14c152fec9562ac109866023d0b4e114705378b3f77b1327fbc",
           "path": "scripts/checks/fixtures/r9-good.ts"
         },
         {
           "exports": [
             "runSqlSafetyScan"
           ],
-          "hash": "4ba144d9358ca4e35afc835b8240dfcdb2bdac87352b4811b377788bec37ecdd",
+          "hash": "796de910db4556c6df484296d058f3fe5a939e325759a83c9e4155ae3c052846",
           "path": "scripts/checks/sqlite-sql-safety.mjs"
         },
         {
@@ -952,7 +959,7 @@
           "path": "scripts/dashboard-snapshot.ts"
         },
         {
-          "hash": "61a616593c58d1f9396387470b94ec096ebabaf56b4958670d37c9698e8a0a25",
+          "hash": "f3e913eacfd790a9e412006a8ce73a2ad559ff9d5d20a787d622b707a6ad32ed",
           "path": "scripts/doc-drift.mjs"
         },
         {
@@ -1026,7 +1033,7 @@
           "path": "scripts/dogfood-update.ts"
         },
         {
-          "hash": "52a8451993fee81d4cb5345b6251d8eec0827ca404ba8bfd093decb0593bd74e",
+          "hash": "3dd8597595648564d6589147300ca29efa66c633d31299da8adc391672394ea7",
           "path": "scripts/jsdoc-gate.mjs"
         },
         {
@@ -1079,6 +1086,13 @@
           "hash": "f39f7c78cb1b72137ea15e7375ac6e1f74179590bbe9e997ee3e52c3b08a6bbe",
           "path": "scripts/smoke-install.mjs",
           "sequences": []
+        },
+        {
+          "exports": [
+            "strykerExclusions"
+          ],
+          "hash": "a6ef1b98d60dc47377ce5e1c008a614abb60b5e5c1b18b45d57e35bfc217b601",
+          "path": "scripts/stryker-exclusions.mjs"
         }
       ],
       "globs": [
@@ -1089,7 +1103,7 @@
       "origin": "authored",
       "outsideWrites": 2,
       "role": "code",
-      "testedBy": 12,
+      "testedBy": 13,
       "unresolvedSites": 0
     },
     {
@@ -1101,51 +1115,51 @@
       "externals": 0,
       "files": [
         {
-          "hash": "8c803974ef0f6f4949b41dedcae547cf6a11f0e9eed8550ef86fa00bbe85d363",
+          "hash": "e148a74a550e8462d9bb4fd977e468371b29ef71f3921a8fb00293f948efdfc0",
           "path": "site/astro.config.mjs"
         },
         {
-          "hash": "7c0e11bccf6f52954bf715c01291e8e3270b99105f677738e1f7e988061697cb",
+          "hash": "b5578baf42cab82e5e7b451b6992cb929aeb6ff8d02d8e11ab690e6f67fea144",
           "path": "site/package-lock.json"
         },
         {
-          "hash": "fd021eaddc67d487e9261348121a0607915923c7083ccf806fa4019a77254c39",
+          "hash": "0fe0343f8ddb0628d954129b02a72b3b2c8f8f884b1380c5567403c4f55942f8",
           "path": "site/package.json"
         },
         {
-          "hash": "ec030f2e4bf6dc57eaca075d390c228b3212cf29db267e32ef92e110de1acdcc",
+          "hash": "ee756dfba4122d2acc94a39b2555d9f200fff56a87a8c0b10f9cd01df26a8b62",
           "path": "site/src/content.config.ts"
         },
         {
-          "hash": "a9b117e4b5a10c722f18f24a2bea3f40c1a4967c0d35385c66cb4ee2e71fef25",
+          "hash": "27ed70ba26afc3892aadf8a8c2a099958c1cdf2496471e0e0f129310b060b6a5",
           "path": "site/src/content/docs/handbook/architecture.md"
         },
         {
-          "hash": "1c28bccb786570ba23bec20af8804ada87e42ebaabc20edc6f0a9777e3af605a",
+          "hash": "65d184997371e2c2218a2917dd73f44fe7ec481d55572c254368113eb2d1d905",
           "path": "site/src/content/docs/handbook/cli.md"
         },
         {
-          "hash": "7869848541be1842059829aa533300b68981b31d2e2672b7dc7cd865a38e200c",
+          "hash": "dd0277a0c5fa329658342f5ff62e8a5a73c7353a532e37009f4f6d3fb457dcd8",
           "path": "site/src/content/docs/handbook/getting-started.md"
         },
         {
-          "hash": "91ec41ac7b1bce32dc6e54b367f2418c117c6d25236b87dfe0aeccdefe72e1cd",
+          "hash": "f7b3ba8e51f0265e1ff41e5683a6569d8f16ce3b23d8c5548fb506fefc6f768e",
           "path": "site/src/content/docs/handbook/index.md"
         },
         {
-          "hash": "243cecc09324228e9c78b93260268d9b3a54bd5ef82cb9a2d9de562f0fb7895c",
+          "hash": "17b1640fdb5501dd55e6a8287326b6a63805ffe17f61cec01bf302f58609476b",
           "path": "site/src/content/docs/handbook/mcp.md"
         },
         {
-          "hash": "09b8eea8529e03d116b170d6b49504261dc84d9f8aa35e5ca3b9a492eb4f6dbb",
+          "hash": "8fa081c08c86db767e7182c587fa5fbe8a06dbc6db1f954cd3677c96e7b2e42c",
           "path": "site/src/content/docs/handbook/operations.md"
         },
         {
-          "hash": "97b10add15ed6a65b2536cd2055eb6b0fa94b082d7a2e09eb91cbf68d1bae882",
+          "hash": "bbae254841708c15596bdc5d0f216c280160dc9e4111e348c83494642df48f95",
           "path": "site/src/content/docs/handbook/policy-and-redaction.md"
         },
         {
-          "hash": "14ee26f37f53879e62bacebd13f538eb838c66cb20e196ab9d9f9234ccb9a2ca",
+          "hash": "30be196f454219202de43e4d5bd620a2e102683577977798ef978111dc5daa67",
           "path": "site/src/content/docs/handbook/sdk.md"
         },
         {
@@ -1153,7 +1167,7 @@
           "path": "site/src/pages/index.astro"
         },
         {
-          "hash": "e27cadb953ec47f8ef48a624cc699518714e6e517518e9a1938644e26aca4f86",
+          "hash": "9107b5c968640545985a14b1a34a04fe11647cea5c01c68470ef9205124d457f",
           "path": "site/src/site-config.ts"
         },
         {
@@ -1161,7 +1175,7 @@
           "path": "site/src/styles/global.css"
         },
         {
-          "hash": "9699457f0a7a31093d48944cabb11812852f0ce480732986b04896d53d29c4ca",
+          "hash": "b17173f07c0db8b532533b5de48035355a12d9582f0918d75b12214b07d53a17",
           "path": "site/src/styles/starlight-custom.css"
         },
         {
@@ -1180,10 +1194,10 @@
       "unresolvedSites": 0
     },
     {
-      "dynamicReads": 46,
+      "dynamicReads": 45,
       "dynamicSpawns": 0,
       "dynamicSpawnsInTests": 0,
-      "dynamicWrites": 44,
+      "dynamicWrites": 43,
       "entryPoints": [
         "src/cli.ts",
         "src/index.ts",
@@ -1192,12 +1206,15 @@
       "externals": 0,
       "files": [
         {
+          "entry": "createCluster",
+          "entryRule": 4,
           "exports": [
+            "backendConfigFromEnv",
             "createCluster",
             "createClusterFromEnv",
             "createSafeCluster"
           ],
-          "hash": "1c9c0ee1d8ede62ea85dd8677c577702907042481e079ac30b3394c95d748671",
+          "hash": "74f693b96ceb41240591a0335bb22b1cf1abace734da3d93c99f018902081008",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/adapters/local/local-artifact-store.ts",
@@ -1220,7 +1237,110 @@
             "src/types/health.ts",
             "src/types/policy.ts"
           ],
-          "path": "src/adapters/factory.ts"
+          "path": "src/adapters/factory.ts",
+          "sequences": [
+            {
+              "calls": [
+                {
+                  "line": 66,
+                  "name": "on",
+                  "target": null
+                }
+              ],
+              "exported": false,
+              "invokedAtTopLevel": false,
+              "isDefaultExport": false,
+              "name": "attachPoolErrorHandler"
+            },
+            {
+              "calls": [
+                {
+                  "line": 199,
+                  "name": "createLocalCluster",
+                  "target": {
+                    "file": "src/adapters/local/index.ts"
+                  }
+                },
+                {
+                  "line": 210,
+                  "name": "open",
+                  "target": {
+                    "file": "src/adapters/sqlite/sqlite-db.ts"
+                  }
+                },
+                {
+                  "line": 66,
+                  "name": "on",
+                  "target": null,
+                  "via": "attachPoolErrorHandler"
+                }
+              ],
+              "exported": true,
+              "invokedAtTopLevel": false,
+              "isDefaultExport": false,
+              "name": "createCluster"
+            },
+            {
+              "calls": [
+                {
+                  "line": 199,
+                  "name": "createLocalCluster",
+                  "target": {
+                    "file": "src/adapters/local/index.ts"
+                  },
+                  "via": "createCluster"
+                },
+                {
+                  "line": 210,
+                  "name": "open",
+                  "target": {
+                    "file": "src/adapters/sqlite/sqlite-db.ts"
+                  },
+                  "via": "createCluster"
+                },
+                {
+                  "line": 66,
+                  "name": "on",
+                  "target": null,
+                  "via": "attachPoolErrorHandler"
+                }
+              ],
+              "exported": true,
+              "invokedAtTopLevel": false,
+              "isDefaultExport": false,
+              "name": "createClusterFromEnv"
+            },
+            {
+              "calls": [
+                {
+                  "line": 199,
+                  "name": "createLocalCluster",
+                  "target": {
+                    "file": "src/adapters/local/index.ts"
+                  },
+                  "via": "createCluster"
+                },
+                {
+                  "line": 210,
+                  "name": "open",
+                  "target": {
+                    "file": "src/adapters/sqlite/sqlite-db.ts"
+                  },
+                  "via": "createCluster"
+                },
+                {
+                  "line": 66,
+                  "name": "on",
+                  "target": null,
+                  "via": "attachPoolErrorHandler"
+                }
+              ],
+              "exported": true,
+              "invokedAtTopLevel": false,
+              "isDefaultExport": false,
+              "name": "createSafeCluster"
+            }
+          ]
         },
         {
           "exports": [
@@ -1255,7 +1375,7 @@
           "path": "src/adapters/local/local-artifact-store.ts"
         },
         {
-          "hash": "85a167436e3c2a557b2b1355d136a85401b38adb2c0c67db5497b8d1a9bb7c59",
+          "hash": "f5367d468033f73489a7534c3382dfefbb910746aa7183ef78ec736a29032d6d",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/local/tmp-cleanup.ts",
@@ -1292,7 +1412,7 @@
             "cleanupOrphanTmpFiles",
             "sweepContentDirOrphans"
           ],
-          "hash": "576f89241278e2b79a1952fe76ffd93a869731efb2ea46c02707dd0f5b2405c9",
+          "hash": "743ea4a47a8e342e02e86227dc3ae99f6597de48432a9e6a6f357d97eab9c94a",
           "importsFiles": [
             "src/util/tmp-paths.ts"
           ],
@@ -1322,14 +1442,14 @@
             "down",
             "up"
           ],
-          "hash": "49680a5c7e0a7ec343cfbf014962165196d2d8236f525ab4a1e97dfeb96f73ac",
+          "hash": "0369ac83c2578a6ff9b9180c570c1d63d11db1b7909d2eec949bbf0f7ba86485",
           "importsFiles": [
             "src/adapters/postgres/schema.ts"
           ],
           "path": "src/adapters/postgres/migrations/002_add_entity_version.ts"
         },
         {
-          "hash": "fc4b2beec9805bc56a30400103498c2578d58b16e093d81e05546cf86180c2d2",
+          "hash": "cc6c701380b82f7e08a16a74b3bde8e8672bdb5a7e6ecdd74666e732751962e2",
           "importsFiles": [
             "src/adapters/postgres/migrations/001_create_canonical_entities.ts",
             "src/adapters/postgres/migrations/002_add_entity_version.ts",
@@ -1347,14 +1467,14 @@
           "path": "src/adapters/postgres/schema.ts"
         },
         {
-          "hash": "025bf88aa0ddafdf7b2a759fa6c9d2d8766e4fa6ae4bfc6bb57719a3195cc7e1",
+          "hash": "2a62b922406860a09549cea5d908a9e5d0f80ef611df2c24ebd59e9bfc7aff81",
           "importsFiles": [
             "src/adapters/local/errors.ts"
           ],
           "path": "src/adapters/sqlite/errors.ts"
         },
         {
-          "hash": "b1d8da1de515d491ab84f458cfb7dbeede6726c7f87efe43dce1923aac2c0dd8",
+          "hash": "dbad4a9abd8279655259b4bbb9e18288e79111f04cdf93834f51d23165be2350",
           "importsFiles": [
             "src/adapters/sqlite/errors.ts",
             "src/adapters/sqlite/schema.ts",
@@ -1370,14 +1490,14 @@
           "exports": [
             "up"
           ],
-          "hash": "6ed0338957d9674cfaa9b67eed2b3e900b6265c2e5e4eb652a159faadeb3f206",
+          "hash": "9d5cc8a7ff784c1736e9fbf6bebc608a9c5fd864d5de12f33ae5a062fb902047",
           "importsFiles": [
             "src/adapters/sqlite/schema.ts"
           ],
           "path": "src/adapters/sqlite/migrations/001_init.ts"
         },
         {
-          "hash": "302db563bf0b7c52245eeca29b83b868b7adb79ac0470d7550bc18585fde7833",
+          "hash": "478259ddf961a914b5114a3ae57cb74417fbdf633e0cdf2f6eef359e3f271580",
           "importsFiles": [
             "src/adapters/sqlite/migrations/001_init.ts"
           ],
@@ -1387,11 +1507,11 @@
           "exports": [
             "getRequiredTables"
           ],
-          "hash": "7669f841b84e546984695ec510585f2ebef3a7e53204b2b17df856ef262c2f98",
+          "hash": "4d628bb3fecec844d9eefd555feb7bf6f953c111cafa922c9e7be5a1d87be85e",
           "path": "src/adapters/sqlite/schema.ts"
         },
         {
-          "hash": "aeee092dc990df7d9dccb9c1b220ff3fa0fd5605d1a100e7385e80c8098afe6b",
+          "hash": "322497c7fbc3db886f4c476e96b42f352cbec119febec77da738f7b368b106d5",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/sqlite/schema.ts",
@@ -1402,7 +1522,7 @@
           "path": "src/adapters/sqlite/sqlite-artifact-store.ts"
         },
         {
-          "hash": "25b0c7e8ca5d9a2457f5d2214971ce8950ed299f37c6077c98e4d8e426ecdb3a",
+          "hash": "475a76a789f25ac413992cafbefbf6af10d49bc5c8ae51d8c962c6ec82b09fd3",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/sqlite/schema.ts",
@@ -1413,7 +1533,7 @@
           "path": "src/adapters/sqlite/sqlite-canonical-store.ts"
         },
         {
-          "hash": "4187c0e41f04beb098a243351b334520de6c8a4128ef4bf9e59882412dfb922c",
+          "hash": "1993a0cc09910d1bacda8db2239a58ab4c385f9cb98af928b45c5865ed517f49",
           "importsFiles": [
             "src/adapters/sqlite/errors.ts",
             "src/adapters/sqlite/migrations/index.ts",
@@ -1422,7 +1542,7 @@
           "path": "src/adapters/sqlite/sqlite-db.ts"
         },
         {
-          "hash": "4473afced5f21b5a863f783091e75ba2c80730bca9528d506d438570026b5ac7",
+          "hash": "1d6d71addc7828111938e0f7119f778d0da7517e8798f92a517740987d6f906c",
           "importsFiles": [
             "src/adapters/sqlite/schema.ts",
             "src/adapters/sqlite/sqlite-db.ts",
@@ -1432,7 +1552,7 @@
           "path": "src/adapters/sqlite/sqlite-index-store.ts"
         },
         {
-          "hash": "806990b81793b62128a986903db12809f45deb067dfeb058095e098586bc25dc",
+          "hash": "944d4f8a6af0651c913447eac1d0fe8781ea618ee04d3d687aa5c125aefe0aa1",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/sqlite/schema.ts",
@@ -1454,9 +1574,9 @@
             "resolveClusterDir",
             "typedErrorToExitCode"
           ],
-          "hash": "93f6d5ecf624d8d1e4f1dbcbe1f080c1f0c2dcbaa3dcd7d442e136c7f3797491",
+          "hash": "8f8bb108f9ca8aae3b57a97a3670f43a0d605511b8c45499e9bf5658e8316df1",
           "importsFiles": [
-            "src/adapters/local/index.ts",
+            "src/adapters/factory.ts",
             "src/adapters/postgres/postgres-canonical-store.ts",
             "src/cli/color-output.ts",
             "src/kernel/cluster-kernel.ts",
@@ -1486,7 +1606,7 @@
             {
               "calls": [
                 {
-                  "line": 269,
+                  "line": 279,
                   "name": "validatePolicyConfig",
                   "target": {
                     "file": "src/mcp/config-validator.ts"
@@ -1501,14 +1621,67 @@
             {
               "calls": [
                 {
-                  "line": 295,
-                  "name": "createLocalCluster",
+                  "line": 309,
+                  "name": "backendConfigFromEnv",
                   "target": {
-                    "file": "src/adapters/local/index.ts"
+                    "file": "src/adapters/factory.ts"
                   }
                 },
                 {
-                  "line": 269,
+                  "line": 309,
+                  "name": "createCluster",
+                  "target": {
+                    "file": "src/adapters/factory.ts"
+                  }
+                }
+              ],
+              "exported": false,
+              "invokedAtTopLevel": true,
+              "isDefaultExport": false,
+              "name": "openStores"
+            },
+            {
+              "calls": [
+                {
+                  "line": 309,
+                  "name": "backendConfigFromEnv",
+                  "target": {
+                    "file": "src/adapters/factory.ts"
+                  },
+                  "via": "openStores"
+                },
+                {
+                  "inner": [
+                    {
+                      "line": 199,
+                      "name": "createLocalCluster",
+                      "target": {
+                        "file": "src/adapters/local/index.ts"
+                      }
+                    },
+                    {
+                      "line": 210,
+                      "name": "open",
+                      "target": {
+                        "file": "src/adapters/sqlite/sqlite-db.ts"
+                      }
+                    },
+                    {
+                      "line": 66,
+                      "name": "on",
+                      "target": null,
+                      "via": "attachPoolErrorHandler"
+                    }
+                  ],
+                  "line": 309,
+                  "name": "createCluster",
+                  "target": {
+                    "file": "src/adapters/factory.ts"
+                  },
+                  "via": "openStores"
+                },
+                {
+                  "line": 279,
                   "name": "validatePolicyConfig",
                   "target": {
                     "file": "src/mcp/config-validator.ts"
@@ -1524,7 +1697,7 @@
             {
               "calls": [
                 {
-                  "line": 554,
+                  "line": 581,
                   "name": "redactErrorMessage",
                   "target": {
                     "file": "src/policy/redactor.ts"
@@ -1539,14 +1712,14 @@
             {
               "calls": [
                 {
-                  "line": 586,
+                  "line": 613,
                   "name": "formatForUser",
                   "target": {
                     "file": "src/policy/error-formatter.ts"
                   }
                 },
                 {
-                  "line": 554,
+                  "line": 581,
                   "name": "redactErrorMessage",
                   "target": {
                     "file": "src/policy/redactor.ts"
@@ -1562,15 +1735,23 @@
             {
               "calls": [
                 {
-                  "line": 992,
-                  "name": "createLocalCluster",
+                  "line": 309,
+                  "name": "backendConfigFromEnv",
                   "target": {
-                    "file": "src/adapters/local/index.ts"
+                    "file": "src/adapters/factory.ts"
                   },
-                  "via": "takeAutoSnapshot"
+                  "via": "openStores"
                 },
                 {
-                  "line": 1007,
+                  "line": 309,
+                  "name": "createCluster",
+                  "target": {
+                    "file": "src/adapters/factory.ts"
+                  },
+                  "via": "openStores"
+                },
+                {
+                  "line": 1038,
                   "name": "backup",
                   "target": {
                     "file": "src/ops/backup.ts"
@@ -1586,14 +1767,23 @@
             {
               "calls": [
                 {
-                  "line": 992,
-                  "name": "createLocalCluster",
+                  "line": 309,
+                  "name": "backendConfigFromEnv",
                   "target": {
-                    "file": "src/adapters/local/index.ts"
-                  }
+                    "file": "src/adapters/factory.ts"
+                  },
+                  "via": "openStores"
                 },
                 {
-                  "line": 1007,
+                  "line": 309,
+                  "name": "createCluster",
+                  "target": {
+                    "file": "src/adapters/factory.ts"
+                  },
+                  "via": "openStores"
+                },
+                {
+                  "line": 1038,
                   "name": "backup",
                   "target": {
                     "file": "src/ops/backup.ts"
@@ -1608,7 +1798,7 @@
             {
               "calls": [
                 {
-                  "line": 269,
+                  "line": 279,
                   "name": "validatePolicyConfig",
                   "target": {
                     "file": "src/mcp/config-validator.ts"
@@ -1629,7 +1819,7 @@
             "isCliColorEnabled",
             "setCliColorEnabled"
           ],
-          "hash": "9c106c4fde59685ef4263f92333fe50a203213f928d6f3842b05227deb215900",
+          "hash": "a1f7a517747ae90864c9e6f1a03d3a67c8479cc32373a94bcb95da4d41f25623",
           "path": "src/cli/color-output.ts"
         },
         {
@@ -1710,7 +1900,7 @@
           "path": "src/dashboard/ops-model.ts"
         },
         {
-          "hash": "a1860e93d0e471464776988fb2422ffd726008112ce76735cd153cd73415edd9",
+          "hash": "6bcee9b68af56b6e034118e1c8951892a6d3cf8e885ba11630995b3990dc2655",
           "importsFiles": [
             "src/adapters/factory.ts",
             "src/adapters/local/errors.ts",
@@ -1739,7 +1929,7 @@
           "exports": [
             "rankByBM25"
           ],
-          "hash": "125b162c5d86ef77e9171a0d1d7f0af2be923ff38eaf8ba716b4620c895fb27f",
+          "hash": "52ad499cbeb623d1cdca045d24c74d96d73c83bef9e426c5e7fcce9c61b0fd00",
           "importsFiles": [
             "src/indexing/tokenizer.ts"
           ],
@@ -1823,7 +2013,7 @@
           "path": "src/kernel/cluster-kernel-interface.ts"
         },
         {
-          "hash": "0309d83ba34e20dc529fdcc50ecdd1d2dbcf910e69373660ec171b219950f045",
+          "hash": "bb099f82d00dfe276bc4ac2620e00981f5a2a1a9d294395377bf1c4b5939c9bd",
           "parseError": true,
           "path": "src/kernel/cluster-kernel.ts",
           "unreadSyntax": "import-type-array"
@@ -1839,6 +2029,7 @@
         {
           "exports": [
             "approveCommand",
+            "assertValidPayload",
             "isValidTransition",
             "markCommitted",
             "markCompensated",
@@ -1848,7 +2039,7 @@
             "validTransitions",
             "validateCommand"
           ],
-          "hash": "c875b5e7761932f02b579975860fbf8ff00abb86bbed34be769daa59a4c23055",
+          "hash": "da126e6f830da74243813d75d080c15a87ff99aa8f8b0d51d604f348a5914a66",
           "importsFiles": [
             "src/kernel/errors.ts",
             "src/types/command.ts"
@@ -1856,11 +2047,14 @@
           "path": "src/kernel/commands.ts"
         },
         {
-          "hash": "655422ca9da70f59ff24157502172393ea645794aac85ac9d128b87b1e7f945f",
+          "exports": [
+            "assertActor"
+          ],
+          "hash": "185fa00fdd53f6b3243b8555417243329d9b1ab89f7a1e556ceaeba547acd3d4",
           "path": "src/kernel/errors.ts"
         },
         {
-          "hash": "761bf65001f2e30a49e07a518ec0ef8e31625926ae216c57885d9c77c01ab36d",
+          "hash": "18c3f69bafdc28a719fd0079d6635f949d751f9fb28086c0aef8ab72f0136aa8",
           "importsFiles": [
             "src/kernel/cluster-kernel-interface.ts",
             "src/kernel/cluster-kernel.ts",
@@ -1926,7 +2120,7 @@
             "validatePolicyConfig",
             "validatePrincipal"
           ],
-          "hash": "4129d5e402642da71198a603ad0109c96f1ed3ab467481f971409bcb5e852a92",
+          "hash": "faab190f716c6f89ed6fbb87f30a00773cf20afb77c4a02a1a7ecea323261d91",
           "importsFiles": [
             "src/types/policy.ts"
           ],
@@ -1949,7 +2143,7 @@
             "sanitizeEntityForOutput",
             "sanitizeReceiptForOutput"
           ],
-          "hash": "f76c8976aec8e2aece130fcfe86555e029a021464c6ea3f39b713f768d5517d0",
+          "hash": "91e0449a4e9f661cf8f416ff7ee99bc34c9fa1d63abf2efa35f8670013690877",
           "importsFiles": [
             "src/kernel/errors.ts",
             "src/policy/error-formatter.ts",
@@ -1964,7 +2158,7 @@
             {
               "calls": [
                 {
-                  "line": 202,
+                  "line": 205,
                   "name": "PATH_REGEX",
                   "passed": true,
                   "target": {
@@ -1980,14 +2174,14 @@
             {
               "calls": [
                 {
-                  "line": 437,
+                  "line": 448,
                   "name": "errorToAiEnvelope",
                   "target": {
                     "file": "src/policy/error-formatter.ts"
                   }
                 },
                 {
-                  "line": 202,
+                  "line": 205,
                   "name": "PATH_REGEX",
                   "passed": true,
                   "target": {
@@ -2011,8 +2205,9 @@
             "handleTool",
             "mcpCommitGateActive"
           ],
-          "hash": "138f16b7db3f8fa8c5ebe610b675557f1bd6a56e1634021ab72fb0dfcf93690e",
+          "hash": "af2aea30d398e17a669af33d62a593e45e3a89bdc7b51f84a72863bde255142d",
           "importsFiles": [
+            "src/adapters/factory.ts",
             "src/mcp/config-validator.ts",
             "src/mcp/sanitize.ts",
             "src/policy/approval-gate-denied-error.ts",
@@ -2027,21 +2222,28 @@
             {
               "calls": [
                 {
-                  "line": 205,
+                  "line": 199,
+                  "name": "backendConfigFromEnv",
+                  "target": {
+                    "file": "src/adapters/factory.ts"
+                  }
+                },
+                {
+                  "line": 211,
                   "name": "validatePrincipal",
                   "target": {
                     "file": "src/mcp/config-validator.ts"
                   }
                 },
                 {
-                  "line": 280,
+                  "line": 286,
                   "name": "validatePolicyConfig",
                   "target": {
                     "file": "src/mcp/config-validator.ts"
                   }
                 },
                 {
-                  "line": 288,
+                  "line": 294,
                   "name": "validatePrincipal",
                   "target": {
                     "file": "src/mcp/config-validator.ts"
@@ -2056,7 +2258,15 @@
             {
               "calls": [
                 {
-                  "line": 205,
+                  "line": 199,
+                  "name": "backendConfigFromEnv",
+                  "target": {
+                    "file": "src/adapters/factory.ts"
+                  },
+                  "via": "buildSDKOptions"
+                },
+                {
+                  "line": 211,
                   "name": "validatePrincipal",
                   "target": {
                     "file": "src/mcp/config-validator.ts"
@@ -2064,7 +2274,7 @@
                   "via": "buildSDKOptions"
                 },
                 {
-                  "line": 280,
+                  "line": 286,
                   "name": "validatePolicyConfig",
                   "target": {
                     "file": "src/mcp/config-validator.ts"
@@ -2072,7 +2282,7 @@
                   "via": "buildSDKOptions"
                 },
                 {
-                  "line": 288,
+                  "line": 294,
                   "name": "validatePrincipal",
                   "target": {
                     "file": "src/mcp/config-validator.ts"
@@ -2088,7 +2298,15 @@
             {
               "calls": [
                 {
-                  "line": 205,
+                  "line": 199,
+                  "name": "backendConfigFromEnv",
+                  "target": {
+                    "file": "src/adapters/factory.ts"
+                  },
+                  "via": "buildSDKOptions"
+                },
+                {
+                  "line": 211,
                   "name": "validatePrincipal",
                   "target": {
                     "file": "src/mcp/config-validator.ts"
@@ -2096,7 +2314,7 @@
                   "via": "buildSDKOptions"
                 },
                 {
-                  "line": 280,
+                  "line": 286,
                   "name": "validatePolicyConfig",
                   "target": {
                     "file": "src/mcp/config-validator.ts"
@@ -2104,7 +2322,7 @@
                   "via": "buildSDKOptions"
                 },
                 {
-                  "line": 288,
+                  "line": 294,
                   "name": "validatePrincipal",
                   "target": {
                     "file": "src/mcp/config-validator.ts"
@@ -2112,132 +2330,127 @@
                   "via": "buildSDKOptions"
                 },
                 {
-                  "line": 721,
+                  "line": 727,
                   "name": "findSources",
                   "target": null
                 },
                 {
-                  "line": 774,
+                  "line": 780,
                   "name": "sanitizeIndexRecordForOutput",
                   "target": {
                     "file": "src/policy/store-output-sanitizers.ts"
                   }
                 },
                 {
-                  "line": 779,
+                  "line": 785,
                   "name": "sanitizeEntityForOutput",
                   "target": {
                     "file": "src/mcp/sanitize.ts"
                   }
                 },
                 {
-                  "line": 783,
+                  "line": 789,
                   "name": "sanitizeArtifactForOutput",
                   "target": {
                     "file": "src/mcp/sanitize.ts"
                   }
                 },
                 {
-                  "line": 790,
+                  "line": 796,
                   "name": "retrieveBundle",
                   "target": null
                 },
                 {
-                  "line": 805,
+                  "line": 811,
                   "name": "sanitizeEntityForOutput",
                   "target": {
                     "file": "src/mcp/sanitize.ts"
                   }
                 },
                 {
-                  "line": 814,
+                  "line": 820,
                   "name": "sanitizeArtifactForOutput",
                   "target": {
                     "file": "src/mcp/sanitize.ts"
                   }
                 },
                 {
-                  "line": 827,
+                  "line": 833,
                   "name": "retrieveBundle",
                   "target": null
                 },
                 {
-                  "line": 828,
+                  "line": 834,
                   "name": "explainRetrieval",
                   "target": null
                 },
                 {
-                  "line": 836,
+                  "line": 842,
                   "name": "resolve",
                   "target": null
                 },
                 {
-                  "line": 856,
+                  "line": 862,
                   "name": "sanitizeArtifactForOutput",
                   "target": {
                     "file": "src/mcp/sanitize.ts"
                   }
                 },
                 {
-                  "line": 858,
+                  "line": 864,
                   "name": "sanitizeEntityForOutput",
                   "target": {
                     "file": "src/mcp/sanitize.ts"
                   }
                 },
                 {
-                  "line": 860,
+                  "line": 866,
                   "name": "sanitizeReceiptForOutput",
                   "target": {
                     "file": "src/mcp/sanitize.ts"
                   }
                 },
                 {
-                  "line": 862,
+                  "line": 868,
                   "name": "sanitizeProvenanceEventForOutput",
                   "target": {
                     "file": "src/policy/store-output-sanitizers.ts"
                   }
                 },
                 {
-                  "line": 864,
+                  "line": 870,
                   "name": "sanitizeIndexRecordForOutput",
                   "target": {
                     "file": "src/policy/store-output-sanitizers.ts"
                   }
                 },
                 {
-                  "line": 875,
+                  "line": 881,
                   "name": "traceObject",
                   "target": null
                 },
                 {
-                  "line": 887,
+                  "line": 893,
                   "name": "sanitizeProvenanceGraphForOutput",
                   "target": {
                     "file": "src/policy/store-output-sanitizers.ts"
                   }
                 },
                 {
-                  "line": 901,
+                  "line": 907,
                   "name": "traceObject",
                   "target": null
                 },
                 {
-                  "line": 909,
+                  "line": 915,
                   "name": "sanitizeProvenanceGraphForOutput",
                   "target": {
                     "file": "src/policy/store-output-sanitizers.ts"
                   }
                 },
                 {
-                  "line": 942,
+                  "line": 948,
                   "name": "proposeMutation",
-                  "target": null
-                },
-                {
-                  "line": 961,
-                  "name": "validateMutation",
                   "target": null
                 }
               ],
@@ -2298,7 +2511,7 @@
           "exports": [
             "doctor"
           ],
-          "hash": "91de1ebec79e9555f01c614e22d9ecbd32a933cb377a378699e4a2ae900ac434",
+          "hash": "303ba26486097d95bd48cdf2c527d61f645bdbd43d1731505a309b8e952e8c1f",
           "importsFiles": [
             "src/adapters/postgres/schema.ts",
             "src/contracts/index.ts",
@@ -2336,7 +2549,7 @@
             "checkReceiptsProvenanceValid",
             "sha256Hex"
           ],
-          "hash": "022c90683fcb714e176234c4d90a710ea8297c5c9c8e33b5c063af6455ad586e",
+          "hash": "e67154158b5ea51f35bde76510da356fcd45a65ee6ae8d4f556d8a64e4cc0f7f",
           "importsFiles": [
             "src/contracts/index.ts",
             "src/types/command.ts",
@@ -2350,7 +2563,7 @@
             "checkMigrationStatus",
             "verifySchema"
           ],
-          "hash": "ed19f3a7646f9b140a3c21f8b595679a6fecea8c4021270e0e96ce8f3fe7f1c7",
+          "hash": "888473409ed3ded1b86fb61dfde24926a4cd31cc1a817fcfb48035704384cec9",
           "importsFiles": [
             "src/adapters/postgres/schema.ts",
             "src/policy/redactor.ts"
@@ -2361,7 +2574,7 @@
           "exports": [
             "checkProvenance"
           ],
-          "hash": "653e36c381828f0d27ebc3c7d9d272142e7a1ddcde1c0f735ba9b63e60e2393d",
+          "hash": "be2746e5d4fb07cc4b417709b43eb488ed25721495d77c7a75e792e6fa67aa97",
           "importsFiles": [
             "src/contracts/index.ts",
             "src/types/health.ts",
@@ -2387,7 +2600,7 @@
           "exports": [
             "checkReceipts"
           ],
-          "hash": "1f6f0f9d4af7d9abc91689caee9fbcf468d7913e58d69e5884fd8b1ab1e44bcb",
+          "hash": "ac4f2494dd2aa3c00a731b0a380fea87eeb6e800c00ae741808b68e296c49a6d",
           "importsFiles": [
             "src/contracts/index.ts",
             "src/types/health.ts",
@@ -2400,7 +2613,7 @@
           "exports": [
             "verify"
           ],
-          "hash": "80241c76d6274680edb04d18ee685c84cd76437ed7edb0de714cd5f7def72d4c",
+          "hash": "a1fe6cf4e12e8b2e632d602eed8ac73d7880b33137af8dcb12087993d14d9304",
           "importsFiles": [
             "src/contracts/index.ts",
             "src/ops/health.ts",
@@ -2411,7 +2624,7 @@
           "path": "src/ops/verify.ts"
         },
         {
-          "hash": "141f97d55a4fabdb2bcea6f0cef8ceef96749f3d222e823d5e174bf1db135c26",
+          "hash": "25eec2c5bd11be1ec40443a15eb464443fcbce61fd8c3fcd503c93bc635c51d9",
           "importsFiles": [
             "src/kernel/errors.ts"
           ],
@@ -2659,7 +2872,7 @@
           "path": "src/provenance/trace-builder.ts"
         },
         {
-          "hash": "e916d09b7b4bc8f14ebd9b06bd9d98595c59570736b7d3e56b58a465aa995103",
+          "hash": "f90df8efde2678ca1b099dbf583657976a7d8972b3f6c3818d7a661e77f94365",
           "importsFiles": [
             "src/contracts/index.ts",
             "src/types/artifact.ts",
@@ -2701,9 +2914,10 @@
           "path": "src/retrieval/retrieval-planner.ts"
         },
         {
-          "hash": "a33d5d85cb33be65c62e50219f396aca822471beba4788a0fccb3f710b68cd56",
+          "hash": "55a3e4ae2afe2a5a665c37dc2d455ca57f2c0e2299a5478a853c417a43081371",
           "importsFiles": [
-            "src/adapters/local/index.ts",
+            "src/adapters/factory.ts",
+            "src/adapters/sqlite/sqlite-db.ts",
             "src/kernel/cluster-kernel.ts",
             "src/kernel/policy-enforced-kernel.ts",
             "src/mcp/sanitize.ts",
@@ -2732,7 +2946,7 @@
           "path": "src/sdk/index.ts"
         },
         {
-          "hash": "a24d59ec8aeb76e5c3e08bf775323d14347d8aa865e88c43ba300c506f577237",
+          "hash": "f2d28e149a523b9dfb49a77e42e26bffcf6c2294eaaa4312f02b9415145bd15a",
           "importsFiles": [
             "src/kernel/errors.ts",
             "src/types/command.ts"
@@ -2748,7 +2962,7 @@
           "path": "src/types/command.ts"
         },
         {
-          "hash": "afc5a7c360c5305e6f34ecb162069150332700b13747277d1b7e1712b2a81d18",
+          "hash": "ab08caea30f3b84e0cb6f65e27be2bc6fe1391b49d26c502695e2077e864aba3",
           "importsFiles": [
             "src/types/ai-envelope.ts",
             "src/types/redaction.ts"
@@ -2800,7 +3014,7 @@
             "canonicalSerialize",
             "computeIntegrityHash"
           ],
-          "hash": "7537382bdb8582a6da70ce81ab5b5d98cf2181c9dc4e4aacc3a096ef7a821ac9",
+          "hash": "9a358785c3e52793dafe7a2cc265d4df1958ceb40c3deaba602e5e7874c7c50b",
           "path": "src/types/integrity.ts"
         },
         {
@@ -2808,7 +3022,7 @@
             "decodeCursor",
             "encodeCursor"
           ],
-          "hash": "c942215a49360ed721348a9386d535f5764353a37c7fab9e63fc2952146013fb",
+          "hash": "0dbc3b481368c12bc9f83d39a7af4e941e54e357a7fe8ecdc632a0d38d85a3d7",
           "path": "src/types/page.ts"
         },
         {
@@ -2836,7 +3050,7 @@
           "path": "src/types/redaction.ts"
         },
         {
-          "hash": "53b6ba17d1f32faae158458efeb3891877419e53d25e876199c3990f82a71792",
+          "hash": "567d308d26a1ecc5f4add6da2dcd3e22b683e8a7e30b98e3f3ebd95450d39b52",
           "importsFiles": [
             "src/adapters/factory.ts",
             "src/adapters/local/index.ts"
@@ -2850,7 +3064,7 @@
             "parseClusterUri",
             "uriForObject"
           ],
-          "hash": "6d2988e5cab112885a7c9e91697c493663ec1ebb414db18170919d84e88b825f",
+          "hash": "4e8f02fee0f72c45a19c9afd94429e7fc3900352e7211c7492742055b3aa96d3",
           "path": "src/uri/cluster-uri.ts"
         },
         {
@@ -2866,7 +3080,7 @@
             "cleanupOrphanTmpFiles",
             "sweepContentDirOrphans"
           ],
-          "hash": "ed661902f94443eaba09321a82a7019d459172816da9f109a86a86283769128b",
+          "hash": "9125159d4d6154aa82957908efa7b5db9e0e277e588698fa69eb1dad8875add0",
           "path": "src/util/tmp-paths.ts"
         }
       ],
@@ -2878,20 +3092,34 @@
       "origin": "authored",
       "outsideReads": 1,
       "role": "code",
-      "testedBy": 112,
+      "testedBy": 117,
       "unresolvedSites": 0
     },
     {
       "dynamicReads": 0,
-      "dynamicSpawns": 72,
-      "dynamicSpawnsInTests": 72,
+      "dynamicSpawns": 74,
+      "dynamicSpawnsInTests": 74,
       "dynamicWrites": 0,
       "entryPoints": [],
       "externals": 0,
       "files": [
         {
-          "hash": "1ee075019edc65a97cdfe3f3edc1350ca69bc196f88be331a3765027e51ab30e",
+          "hash": "81f7ab4cf2f43d81139d5d5b45fcbc73dda651039bf9c477c285685070f1a7ad",
           "path": "test/README.md"
+        },
+        {
+          "hash": "c05772c2488a123ea7e428b077886f2097d6314173b791271b3b5ae31f3c586f",
+          "importsFiles": [
+            "src/adapters/factory.ts",
+            "src/adapters/sqlite/sqlite-db.ts",
+            "src/contracts/index.ts",
+            "src/kernel/cluster-kernel.ts",
+            "src/mcp/sanitize.ts",
+            "src/mcp/server.ts",
+            "src/ops/verify.ts",
+            "src/sdk/cluster-sdk.ts"
+          ],
+          "path": "test/actor-required-regression.test.ts"
         },
         {
           "hash": "8c24e60ca77b2fb3a418a0b462db46e435f04c056c4595b943efdbd68e2fe603",
@@ -2900,6 +3128,13 @@
             "src/contracts/index.ts"
           ],
           "path": "test/adapters.test.ts"
+        },
+        {
+          "hash": "e2717089e37561b2822a860272ecd3bc1121fa12b794bf441d9272d0e11f47e8",
+          "importsFiles": [
+            "src/adapters/factory.ts"
+          ],
+          "path": "test/backend-env-surfaces.test.ts"
         },
         {
           "hash": "9db58ee97d378f57627f01398291b25474928de06b67fe41c0d56a48816dfd9e",
@@ -3011,7 +3246,7 @@
           "path": "test/dashboard-snapshot.test.ts"
         },
         {
-          "hash": "0c13762946c73e99a636c9b377dde751c594ae672740f66bdc31e06a35dc48ac",
+          "hash": "bb1f9dd4bb7ec94a2899d6127c56a850e4c121a833c13a00ddfa4e34577f728a",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/contracts/index.ts",
@@ -3078,6 +3313,10 @@
           "path": "test/dogfood-trace.test.ts"
         },
         {
+          "hash": "24b2d8df618e8893e25f545fa5eb98f445c1af1bfdfe6497705939bf3f21ff49",
+          "path": "test/exit-code-tables-regression.test.ts"
+        },
+        {
           "hash": "c0f22e043a5cf6ebf60799ad71486346170e157d710cfd0eddde21c1596a8ec3",
           "importsFiles": [
             "src/adapters/local/index.ts",
@@ -3088,38 +3327,68 @@
           "path": "test/explain.test.ts"
         },
         {
-          "hash": "790853c812148df6f36166fa27c8e628a2e9593b86ded32340a28b6730ea01dc",
+          "hash": "14ce245c2a6ef2555c7af0374adfcf2a62a0730f8ceb41a4f72ae22d3c80dc5d",
           "importsFiles": [
-            "src/contracts/artifact-store.ts",
-            "src/types/artifact.ts"
+            "src/contracts/artifact-store.ts"
           ],
           "path": "test/fixtures/incomplete-artifact-store.fixture.ts"
         },
         {
-          "hash": "d41adfc992f3a7dcc05e02ace58c3850b3bded89d1dc57ea071ebca1bbc6aa14",
+          "hash": "2c454ad85c94ea041257c54e27f0c300a654be65e382b022cc41bb2cd0c95d6b",
           "importsFiles": [
-            "src/contracts/canonical-store.ts",
-            "src/types/entity.ts"
+            "src/contracts/canonical-store.ts"
           ],
           "path": "test/fixtures/incomplete-canonical-store.fixture.ts"
         },
         {
-          "hash": "0a06e737c13c98956e8fb6988d37399540d33755a281b47202e76b48f02e0640",
+          "hash": "661cbe9fb42f98d8c1ede5cfbf916728c10f37318ea9afdb11e72e20ec35ef05",
           "importsFiles": [
-            "src/contracts/ledger-store.ts",
-            "src/types/provenance-event.ts",
-            "src/types/receipt.ts"
+            "src/contracts/ledger-store.ts"
           ],
           "path": "test/fixtures/incomplete-ledger-store-event.fixture.ts"
         },
         {
-          "hash": "01b0b4de48a7b4e66b0940b4c5e9da0e0b79bd6ef79a83331a2fa82a6045cd1c",
+          "hash": "de351645824a450ff4dd48f2d0c4c7b648c04ed82a21abc98a8c584e59ee1e5a",
           "importsFiles": [
-            "src/contracts/ledger-store.ts",
-            "src/types/provenance-event.ts",
-            "src/types/receipt.ts"
+            "src/contracts/ledger-store.ts"
           ],
           "path": "test/fixtures/incomplete-ledger-store-receipt.fixture.ts"
+        },
+        {
+          "hash": "a8e69030c87cac0534a2cdb5820bf80f41e739b5abc171c506606e0de4130085",
+          "path": "test/fixtures/stryker-rule/backslash-read.txt"
+        },
+        {
+          "hash": "bb73a479cc15fbfede66dd3f2fe268726e879916684d4206fabb8c796daf3b7b",
+          "path": "test/fixtures/stryker-rule/chdir.txt"
+        },
+        {
+          "hash": "5b68d744f9c748da6e176cc5a60a3a8da692768365ed9e1dbb3edf7f4ae309f7",
+          "path": "test/fixtures/stryker-rule/helper-read.txt"
+        },
+        {
+          "hash": "5d4e7808b1353eba73b7d36abb4ec9dcd4af4aa1dc259b600d5cc0165ebb7470",
+          "path": "test/fixtures/stryker-rule/imports-dist.txt"
+        },
+        {
+          "hash": "390f577aafa6fcc8aec8ce56f18605996e543bda717ff5479eab5c85ec74beac",
+          "path": "test/fixtures/stryker-rule/mentions-only.txt"
+        },
+        {
+          "hash": "d75d7d087eeee3646db16c08533cd7746224a93cdf260fc29a386fb69d6994e5",
+          "path": "test/fixtures/stryker-rule/raw-read.txt"
+        },
+        {
+          "hash": "ed206729c05bc00f2702ff72ae4c47b0ab62a1f4a91e0c6fea11f2827cea1a94",
+          "path": "test/fixtures/stryker-rule/spawns-dist.txt"
+        },
+        {
+          "hash": "8019edef3a0a1400fd0dd516da7d9029c72250fa8e08106abd732d0b56704887",
+          "path": "test/fixtures/stryker-rule/template-read.txt"
+        },
+        {
+          "hash": "ab2e3beb0ad988a0b2ddc057ab1ce3e587a2cabf13ef3341a8dc5441f33614d3",
+          "path": "test/fixtures/stryker-rule/unmutated-read.txt"
         },
         {
           "hash": "1f9ba99545a4a9399c435a4786954a002068c9e771be3567b182efa8635e9084",
@@ -3142,7 +3411,7 @@
           "path": "test/kernel.test.ts"
         },
         {
-          "hash": "1ef0584151194783ba980b5d15dfe7e361ea59dfde07abf2e48b420d93630c99",
+          "hash": "33d88f2fe4a59bc5c4861a028d4212155059b358359bf5b614d4739519c690e5",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/local/index.ts",
@@ -3222,7 +3491,7 @@
           "path": "test/phase14-proof.test.ts"
         },
         {
-          "hash": "0e14334daad4abc83ae0326a4b86f302517e01664a10fa24faeab08806361a59",
+          "hash": "de8a6b6e634b38ccb7ee3441db61409aa4ee18b109deb077992ad587d10de6fb",
           "importsFiles": [
             "src/index.ts",
             "src/mcp/index.ts",
@@ -3293,7 +3562,7 @@
           "path": "test/phase8-proof.test.ts"
         },
         {
-          "hash": "b92d777b561a984bd5b14bddd3ed124d77dee928afcc19872152166222b26857",
+          "hash": "8dae1c9fde1f0ee02f7e67b14442f928b6ad40f9865ee56c1e87d9c5eca2cf79",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/contracts/index.ts",
@@ -3468,12 +3737,33 @@
           "path": "test/retrieval.test.ts"
         },
         {
-          "hash": "4eb9772800348f5dc829d41653959b96b58460e28953ccfae3e31e4dd6988fc2",
+          "hash": "fe5d1c52989ec057e017d4aa46e2d1e9d348a3d21d3d9c9ad1aabe908c1fd1a3",
           "importsFiles": [
             "src/adapters/postgres/postgres-canonical-store.ts",
             "src/adapters/postgres/schema.ts"
           ],
           "path": "test/sql-injection.test.ts"
+        },
+        {
+          "hash": "07a73f0a0565cc794f20571c1deb1b9b96dfd84ae7d699e3268797385f0c494a",
+          "importsFiles": [
+            "src/adapters/sqlite/sqlite-db.ts"
+          ],
+          "path": "test/sqlite-driver-presence.test.ts"
+        },
+        {
+          "hash": "9f76fc0d6337509cdc8ded7ee24703a1541d39f7198f9cc0f57657db5e4478f4",
+          "importsFiles": [
+            "scripts/stryker-exclusions.mjs"
+          ],
+          "path": "test/stryker-exclusions.test.ts"
+        },
+        {
+          "exports": [
+            "sourceText"
+          ],
+          "hash": "10d239630874758a4cb79e12d435e69bc4925e9ce48f5240adf3191fe0c8e699",
+          "path": "test/support/source-text.ts"
         },
         {
           "hash": "daa57e921a1dcaee717d939e09639dd1cd8caf8e91a292a9f70058efaa477556",
@@ -3493,11 +3783,32 @@
           "path": "test/typed-error-regression.test.ts"
         },
         {
+          "hash": "d5f4f71dfc1ffdbf24947d7b0714ba11b03a1502eeaed8edcca587be2367a6dd",
+          "importsFiles": [
+            "src/adapters/local/index.ts",
+            "src/mcp/sanitize.ts",
+            "src/resolver/index.ts",
+            "src/uri/cluster-uri.ts"
+          ],
+          "path": "test/uri-errors-typed-regression.test.ts"
+        },
+        {
           "hash": "32e8d6627681618da8c0cc2219416a33980256df202ef790c5ffdd8a5fb9930e",
           "importsFiles": [
             "src/uri/index.ts"
           ],
           "path": "test/uri.test.ts"
+        },
+        {
+          "hash": "955cf7844ba02b98013dad35e02fe6abcefd109a24d52a2bff9a75ae81f0a3f9",
+          "importsFiles": [
+            "src/adapters/factory.ts",
+            "src/adapters/sqlite/sqlite-db.ts",
+            "src/contracts/index.ts",
+            "src/kernel/cluster-kernel.ts",
+            "src/ops/verify.ts"
+          ],
+          "path": "test/validate-before-write-regression.test.ts"
         },
         {
           "hash": "91d1426b9c1d8410b1d4bf3699638a01054cc1c23675ea76d6f56f478b91cacd",
@@ -3522,7 +3833,7 @@
           "path": "test/wave-a3-kernel-regression.test.ts"
         },
         {
-          "hash": "4317ef37d5011bc74276a75c989432dfa05f78a8916b9f63f07a3f37d68484e0",
+          "hash": "f8998d204984dfa1e531f0e484a617aef242a2c2aade186c6b3c6bff06646739",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/adapters/local/local-artifact-store.ts",
@@ -3563,7 +3874,7 @@
           "path": "test/wave-a3-tests-regression.test.ts"
         },
         {
-          "hash": "7820bb5d4e401fcd2efdd07041a081b1c9903d48e9ba3f5b33c6e0be06ba35c5",
+          "hash": "a91e68cec1f00a4beba03593f28fda6565e6af84f82b3e0517aee6aa2961b682",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/local/index.ts",
@@ -3575,7 +3886,8 @@
             "src/ops/errors.ts",
             "src/resolver/cluster-resolver.ts",
             "src/sdk/cluster-sdk.ts",
-            "src/uri/cluster-uri.ts"
+            "src/uri/cluster-uri.ts",
+            "test/support/source-text.ts"
           ],
           "path": "test/wave-a4-fixup-regression.test.ts"
         },
@@ -3586,19 +3898,20 @@
           "unreadSyntax": "nul-character"
         },
         {
-          "hash": "cc45b68d95ec72f8cb9952cc1352130b0c577c180c985e4e9bcf6b2f163b546b",
+          "hash": "c20a6c8e0529ad431ca6d6a9d527f1285c19daa570f94ecd6de4ccb7d9cc45d3",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/local/local-artifact-store.ts",
             "src/adapters/local/local-canonical-store.ts",
             "src/adapters/local/local-index-store.ts",
             "src/adapters/local/local-ledger-store.ts",
-            "src/types/provenance-event.ts"
+            "src/types/provenance-event.ts",
+            "test/support/source-text.ts"
           ],
           "path": "test/wave-a4-stores-regression.test.ts"
         },
         {
-          "hash": "587683328ec2328cec8392cc169217540754ffb7c5029dce96a50d5a1057f608",
+          "hash": "a454a9c6b69a649a7ce236bd4896bc934a53f975b301cc28cca32d49c2e77807",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/kernel/cluster-kernel.ts",
@@ -3610,18 +3923,18 @@
           "path": "test/wave-a4-surface-regression.test.ts"
         },
         {
-          "hash": "4baa986b1d3295a58346af4aa593de95efdd988e6102e0598c78718a903a0c35",
+          "hash": "62cf589a9f42e4cff95d8f6dea8a3cfa4cc1633e688fc18c8edaf9a9c3153ee9",
           "path": "test/wave-a4-tests-regression.test.ts"
         },
         {
-          "hash": "6acaec0f89cc13a5bb8b25acea33466ec41feb47bf4033c56953582881cad9b0",
+          "hash": "c006e63697cf6a31f392a044b3e29a04403be032eaeffa510a4621418fefbb01",
           "importsFiles": [
             "src/util/tmp-paths.ts"
           ],
           "path": "test/wave-b1-cidocs-regression.test.ts"
         },
         {
-          "hash": "cc62fadd0e9cde84e79679e3e0f3810292af5b33acb2b54293042e9f1d22118e",
+          "hash": "12b76c49ac0ba798b6376c732e55e6c1bf7c6026c00a128e6e692a65ca4bd90a",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/local/index.ts",
@@ -3629,12 +3942,13 @@
             "src/kernel/policy-enforced-kernel.ts",
             "src/mcp/config-validator.ts",
             "src/mcp/sanitize.ts",
-            "src/util/tmp-paths.ts"
+            "src/util/tmp-paths.ts",
+            "test/support/source-text.ts"
           ],
           "path": "test/wave-b1-fixup-regression.test.ts"
         },
         {
-          "hash": "d16dab4b1851a5a3d89fc9f4657ab2418cbb66a8bc08e31b11cd3f2e95e45bc0",
+          "hash": "3f29fd8171e0d7f76e446594e4443425df6a7dff38463095b24a461ea1be4a0a",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/kernel/cluster-kernel.ts",
@@ -3654,7 +3968,7 @@
           "path": "test/wave-b1-kernel-regression.test.ts"
         },
         {
-          "hash": "1d3405ea2fae6ff27333c2f81dc393011d502bede6fda8dec69cf466cdb86afe",
+          "hash": "dd3323e47bd213cdc1e1921d8d667ffaf38e428e197fd2e5f70ecc03425c2e76",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/local/index.ts",
@@ -3672,7 +3986,7 @@
           "path": "test/wave-b1-stores-regression.test.ts"
         },
         {
-          "hash": "584e0ddf6b23b0b24d3cf2e21a0e6e99976c2492cc724bb27406d85a2128b896",
+          "hash": "b180a45f61289bd0c2cbdb9786eaf75e083ab15cff67539f860db092e93e0ef3",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/dashboard/ops-model.ts",
@@ -3682,11 +3996,11 @@
           "path": "test/wave-b1-surface-regression.test.ts"
         },
         {
-          "hash": "42bbc2eaba67e347259191b854c8f5d2c50ac9a13345e643e3632d93e8081d0e",
+          "hash": "da0a97cbd1b1e5265ec25069d3bb2e7c15407faff1e2338e5491d252517de9d8",
           "path": "test/wave-c1-cidocs-regression.test.ts"
         },
         {
-          "hash": "13180d1f1a76284886d67fa284804aefa494ecc92c399e55397ba7e0fc349507",
+          "hash": "27043828be48cdb470001b06e7e3a3785d26db5b8f340600a575f5abf5f9e548",
           "importsFiles": [
             "src/kernel/commands.ts",
             "src/kernel/errors.ts",
@@ -3697,7 +4011,7 @@
           "path": "test/wave-c1-fixup-regression.test.ts"
         },
         {
-          "hash": "bb107cd88e0bc093fb024b223b74815e61f639ff6a4bac951a9a1ecff886bd14",
+          "hash": "b2aa0e9829da80c8ecfebd7f7dedfa4012484fada4d70510260424d252d64238",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/kernel/index.ts",
@@ -3711,7 +4025,7 @@
           "path": "test/wave-c1-kernel-regression.test.ts"
         },
         {
-          "hash": "fad1ca761c4274268f996de592a34f3b13ea64d0b0b43ea9a7c52927534b58c9",
+          "hash": "3e860f1a35489b8290f85ec3555f67c36bf080b9ab588b469c264ee331d781fd",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/local/index.ts",
@@ -3720,12 +4034,13 @@
             "src/ops/doctor.ts",
             "src/ops/errors.ts",
             "src/ops/rebuild.ts",
-            "src/ops/verify.ts"
+            "src/ops/verify.ts",
+            "test/support/source-text.ts"
           ],
           "path": "test/wave-c1-stores-regression.test.ts"
         },
         {
-          "hash": "b92cc7157e4b910f47904cd9fc2a1ab6489d6845801a9b87656b6845d4f6e93b",
+          "hash": "2295b56a95afcf33783a598f733a475665ee878ddd3cbd7658f9e7f75e52ece2",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/dashboard/ops-model.ts",
@@ -3739,7 +4054,7 @@
           "path": "test/wave-c1-surface-regression.test.ts"
         },
         {
-          "hash": "38b3d13136b192ccf08d77a75136e167dc644a2cbc9845aa0f19716bf75fa1f4",
+          "hash": "82977db91b8be322ac4662a97d9e240556d0f34d7249a0126693907fa76e2946",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/kernel/cluster-kernel.ts",
@@ -3748,7 +4063,7 @@
           "path": "test/wave-c1-tests-cli-snapshots.test.ts"
         },
         {
-          "hash": "2b4e0ff0430d5907d5fa7eabd1c080fcf345ba6204ba0f85cab37a0359d5b97c",
+          "hash": "b9665b8d44c8abf5bc741688b69ef81a37709f998599af62f8bf1988f37c0bd3",
           "importsFiles": [
             "dashboard/lib/apply-redaction.js",
             "src/adapters/local/index.ts",
@@ -3759,7 +4074,7 @@
           "path": "test/wave-c1-tests-dashboard-render.test.ts"
         },
         {
-          "hash": "bf4b2e57d3398f3e7fcf2753b798fe40b195b114107a894fa4728ff02ec1eb91",
+          "hash": "75a762043261323112924aa1fb306aea4ca926e9274cd7743304bb3797c42f6e",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/kernel/cluster-kernel.ts",
@@ -3768,11 +4083,14 @@
           "path": "test/wave-c1-tests-exit-codes.test.ts"
         },
         {
-          "hash": "9072c1e2aa9ed7376d2203933cfc3342338efb659e9de5cd73e970675dc1ef0d",
+          "hash": "00e488b46356a2afc5a801d5a77ca409c27c43e2a45d51db423afc92ddec1294",
+          "importsFiles": [
+            "test/support/source-text.ts"
+          ],
           "path": "test/wave-c1-tests-jsdoc-examples.test.ts"
         },
         {
-          "hash": "af8a88abc7b7f756a2c5e984a8503ed9c6fea51140afe2ba3e51180d6ccd444b",
+          "hash": "9988d1b3f273b26dd35a4fa59305db977945cea11eb33106b0aa387b14dd46f6",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/kernel/cluster-kernel.ts",
@@ -3783,14 +4101,14 @@
           "path": "test/wave-c1-tests-mcp-envelope.test.ts"
         },
         {
-          "hash": "313dd91c1638d6393c04e9bffb67c6471b92791b4023a08c4ae55eed7a5d1d13",
+          "hash": "beefba797c5ab395acfc35524f7b89c1319108604e98e6f6a24dd3a329ce24a7",
           "importsFiles": [
             "src/cli/color-output.ts"
           ],
           "path": "test/wave-phase-10-cli-color.test.ts"
         },
         {
-          "hash": "185b555d4cf372e965949bc6ba12107a1b8d8d3dad4eb422d3f7f99ec4b0e5bf",
+          "hash": "e1b64c6a1cb3d2a5ba82e5362892b38f9df19a726301e2f7638136cbdb6efcf1",
           "importsFiles": [
             "src/contracts/canonical-store.ts",
             "src/types/entity.ts",
@@ -3801,7 +4119,7 @@
           "path": "test/wave-s2a1-contracts-regression.test.ts"
         },
         {
-          "hash": "7cbdf78ba728aac17777a90d6c07ea0a0db7c5c03eabb6ec47579d757b00a2e7",
+          "hash": "96d4060e9d42eb30c1ee08d201968833c777706fe56d979421c93d48c235d39a",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/contracts/index.ts",
@@ -3818,7 +4136,7 @@
           "path": "test/wave-s2a1-fixup-ops-regression.test.ts"
         },
         {
-          "hash": "c8c75bb90a263934577e61010de7615841de7c88c0369313d8f3b3d87206d374",
+          "hash": "595ec08130ddd9c3dc86ddcf3d2ec6debcca15f78685365982b312cf7061d263",
           "importsFiles": [
             "src/adapters/factory.ts",
             "src/index.ts",
@@ -3827,7 +4145,7 @@
           "path": "test/wave-s2a1-fixup-wiring-regression.test.ts"
         },
         {
-          "hash": "0efc9a8eb8a1958df830fb9b0de288243755f59c875462af950eded2e4d0cd9c",
+          "hash": "3d1fc5c4a4556d0c29a1dc0d044d1e94e804f515c46688437b17ee9ab96bdfc8",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/kernel/cluster-kernel.ts",
@@ -3838,7 +4156,7 @@
           "path": "test/wave-s2a1-kernel-regression.test.ts"
         },
         {
-          "hash": "61667c0bcf3c4b3346ca292080790a2eb8d91bce04437564ced514a1e087ca06",
+          "hash": "ffb4efdd64f907ba7105968862be2f280cbebb7990e4ecfd294ad9d34324ac31",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/local/local-artifact-store.ts",
@@ -3849,7 +4167,7 @@
           "path": "test/wave-s2a1-local-adapters-regression.test.ts"
         },
         {
-          "hash": "2012ec1f0c93650dfc80835295833a935788d99dc3326def76245589977df914",
+          "hash": "9e2fc244071abab9ab966cdf20dcea053a75e0261f20ed84b5264c7f8fc2480d",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/contracts/index.ts",
@@ -3868,7 +4186,7 @@
           "path": "test/wave-s2a1-ops-regression.test.ts"
         },
         {
-          "hash": "122702b0a6e374b438110b0489298a62dea96cd8f98dec503936a6d8d35e022b",
+          "hash": "e69e03ed252a8b6f264f2c096e9d6d415e2242cc1ab5aa5e7e7f6e0c3eefb871",
           "importsFiles": [
             "src/adapters/local/local-canonical-store.ts",
             "src/adapters/postgres/postgres-canonical-store.ts",
@@ -3879,7 +4197,7 @@
           "path": "test/wave-s2a1-surface-regression.test.ts"
         },
         {
-          "hash": "f5df7e5168c7fc7ae7bc8b341de7db7e0f18c4481720763a1995edaf1fd85ae5",
+          "hash": "813135ab804db5aefee3c21767d57f28862abbd1993ccdab44a10b8355fd8280",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/cli.ts",
@@ -3890,7 +4208,7 @@
           "path": "test/wave-s2a2-cli-ops-regression.test.ts"
         },
         {
-          "hash": "3c6031713fd122c6b616d452c9ed79970c70b8f9d6df38d1708296e133435eed",
+          "hash": "43b3fb38ac0ff56fd835c86aec63460c204a8e6fa743e99e1f2ff7a82514e89f",
           "path": "test/wave-s2a2-docs-regression.test.ts"
         },
         {
@@ -3908,11 +4226,11 @@
           "path": "test/wave-s2a2-fixup-regression.test.ts"
         },
         {
-          "hash": "da051449f94c2c10921953d4eccd0805f84a16856584fac3445b4e0a74dc0002",
+          "hash": "f27bbd94f10228aa1826da6f7d87f7ba6b341118a9cef59a6c5b768afaf9782c",
           "path": "test/wave-s2a2-gating-regression.test.ts"
         },
         {
-          "hash": "4dc4bbdcec558b5656c01e92af86f110e32719c036d6aaa18671b44cb27cbd14",
+          "hash": "3469b67f9966cd5b30f83088d59e4a0cc43cdcc264c931423bba434058bc90f1",
           "parseError": true,
           "path": "test/wave-s2a2-policy-regression.test.ts"
         },
@@ -3928,7 +4246,7 @@
           "path": "test/wave-s2a2-surfaces-regression.test.ts"
         },
         {
-          "hash": "5a70dd74df00407906d402c8d35905ef5b0fd3ded7563e9d2340d96a3ba9f338",
+          "hash": "36a23fdfdc7e2ff4a6a2b299af7c5bb971b2338e01e10fd0ce28ce95fbe56027",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/contracts/index.ts",
@@ -3939,14 +4257,14 @@
           "path": "test/wave-v1-callsite-regression.test.ts"
         },
         {
-          "hash": "7b4e0770e6a37a01c44e20e9fe0403433dbfff234d2785b200ce7f348172025b",
+          "hash": "7faccbd0cac3c433c4ed8a0d1ce5afa1ad3bf2ef87e1c96190772f72d785983a",
           "importsFiles": [
             "src/indexing/bm25.ts"
           ],
           "path": "test/wave-v1-ranker-regression.test.ts"
         },
         {
-          "hash": "5f4396008dca14b3eb856834181245bf596f6cd235b729e77b289d033a68d9d7",
+          "hash": "15beefbae857b8192ee0e5d0b6824eb92ef8571347d5bf66bbaba3173eddfc91",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/contracts/index.ts",
@@ -3956,18 +4274,18 @@
           "path": "test/wave-v1-retrieval-regression.test.ts"
         },
         {
-          "hash": "0e97f009f0073535143abac9ddd03a4349f2b6b0a36817daf340f3e07e98a55b",
+          "hash": "24cc8554f77a0001b5b45f0dfaa7bfdd66cc8cae88d2a5e12d7637e9b7e0a688",
           "importsFiles": [
             "src/adapters/local/local-index-store.ts"
           ],
           "path": "test/wave-v1-store-regression.test.ts"
         },
         {
-          "hash": "458700fa2b91bf04ae6ef667f4cc63af3f5d05f1b5bbc1bf406d983ae8dd99a7",
+          "hash": "5507ce32ae1d0637948d67c1c170cb9313463aa5524460f38fff39bb64bc7079",
           "path": "test/wave-v1-tests-regression.test.ts"
         },
         {
-          "hash": "74e03a93e2ac22ad16975d3852b2f0290aaf9060461eda145aec2e0a0da111ef",
+          "hash": "a9bebfb9da5bee2152fcfa35b31d7664c94d4c0941669d30246e1015a965ead3",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/contracts/index.ts",
@@ -3976,7 +4294,7 @@
           "path": "test/wave-v2-kernel-reads.test.ts"
         },
         {
-          "hash": "c6607c42ac925a6bd9a983b30425bbb6d87bff05fe9227b7e433b5a551648603",
+          "hash": "08ebb881f9518e44884fbeb8e8ca61952d57099d384cf9e54e08796bd9a6052c",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/kernel/cluster-kernel.ts",
@@ -3987,7 +4305,7 @@
           "path": "test/wave-v2-mcp-cli.test.ts"
         },
         {
-          "hash": "3c31752b643834eeca808ca8813ef82382da4383d582070112047dba0b50a826",
+          "hash": "012007f9807e6840cce8004f88c4206e1c21112d7c7bbb40c0daa611d14b1719",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/kernel/cluster-kernel.ts",
@@ -3997,7 +4315,7 @@
           "path": "test/wave-v2-policy-versions.test.ts"
         },
         {
-          "hash": "d67bbdba423188bd67be5ff4f469124ccda506c1f3b25e3f2a8cfe2ad29d6b1c",
+          "hash": "d609b81925b547a3f2fde29e630f78421a617a3d2c0cba25a5c87ba480c79a8c",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/kernel/cluster-kernel.ts",
@@ -4006,14 +4324,14 @@
           "path": "test/wave-v2-sdk.test.ts"
         },
         {
-          "hash": "eae1d5049f0f31e933d88d48cd1c161fa3dc566091320345508f9e90a2499092",
+          "hash": "5b2ceb1010c18ba67e2da09dff8ac11f7f6e4ed320eb07cd4f5ca6891e6d20ec",
           "importsFiles": [
             "src/types/page.ts"
           ],
           "path": "test/wave-v2-tests-regression.test.ts"
         },
         {
-          "hash": "eae7f26011f7d699e1ca3767b0e8107d699490e4713d5ae027cdf6e6018d0e29",
+          "hash": "8828083d2681f708292d2e04e7670240c178690c80714573703b92a2b3779016",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/local/index.ts",
@@ -4025,7 +4343,7 @@
           "path": "test/wave-v3-cross-adapter-integrity.test.ts"
         },
         {
-          "hash": "d7688a2a75ab0f09d018b46726e3a9cd15ca50d0309882a6f598d4928500d318",
+          "hash": "895bdf2f740d5c49b9c2b315d26e2e68ccdf574449cf7479efd1c86ae3633faf",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/sqlite/schema.ts",
@@ -4038,7 +4356,7 @@
           "path": "test/wave-v3-sqlite-canonical-artifact.test.ts"
         },
         {
-          "hash": "1b28fc92b6186fb8ea002f7196a11a617522ff24d8bebf34c5f51c58c8d49b19",
+          "hash": "fcda922f96b338f290e8ec57cf893d1c1f551a1432d37624244e8bd8889905f9",
           "importsFiles": [
             "src/adapters/sqlite/errors.ts",
             "src/adapters/sqlite/schema.ts",
@@ -4047,7 +4365,7 @@
           "path": "test/wave-v3-sqlite-foundation.test.ts"
         },
         {
-          "hash": "1b7fea28d857c22c761db8da4054b2b2a32867305c1750bb1e7b919d742a4b19",
+          "hash": "6743041be72e4cb58cceba4d11cceeeacd06711c1af6de96ca7db47ea6fc4d38",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/adapters/sqlite/index.ts",
@@ -4056,7 +4374,7 @@
           "path": "test/wave-v3-sqlite-hardening.test.ts"
         },
         {
-          "hash": "1f7fd7851e91f00470e4e0977e1000b9a64e2f29524ed271a6abbbda97baf82b",
+          "hash": "bb7d33eddba78a26999cbf5370297ec682c91755efc0d8c98c17abf5c87120b5",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/sqlite/schema.ts",
@@ -4069,7 +4387,7 @@
           "path": "test/wave-v3-sqlite-index-ledger.test.ts"
         },
         {
-          "hash": "58967b2b88ce108f300c49f2fe93af4b1d4325a13b6311b36dc984f7aa391e08",
+          "hash": "8c9b9ca0cd0d843748c9ecd373dc33671c9e476282d7718156aa2e0789ee702b",
           "importsFiles": [
             "src/adapters/local/errors.ts",
             "src/adapters/local/index.ts",
@@ -4086,7 +4404,7 @@
           "path": "test/wave-v3-sqlite-parity.test.ts"
         },
         {
-          "hash": "aa9708238b523f560a4f537a4eac985f2bdfb4ccf218644341baebe7bddb3fc8",
+          "hash": "ae6f08b7ebd1d9bb624b0379944e888f01c365a3e7fef02d359ec023d0e00323",
           "importsFiles": [
             "src/cli.ts",
             "src/kernel/errors.ts"
@@ -4094,7 +4412,7 @@
           "path": "test/wave-v4-cli-exit-codes.test.ts"
         },
         {
-          "hash": "d64bd898e8bbb96927c1d9ad3d8f82fa09758ed0b905ac8d4aac59ac1f2701f7",
+          "hash": "885b7a22b71e1e039bd174c9956f0c470bbdb750264b35a07fabde153c96262e",
           "importsFiles": [
             "src/mcp/server.ts",
             "src/sdk/cluster-sdk.ts"
@@ -4102,7 +4420,7 @@
           "path": "test/wave-v4-mcp-gate-iserror.test.ts"
         },
         {
-          "hash": "57000bcccdab850769c551ca60f1a8d1bf48fe83cb15082b6f6a6828769e3125",
+          "hash": "7d509640f07008210f95d3fcc189049bc1c3eb1214a3f26f454f180298ba0840",
           "importsFiles": [
             "src/adapters/local/index.ts",
             "src/contracts/index.ts",
@@ -4174,22 +4492,32 @@
       "commands": [
         {
           "job": "test",
-          "step": "2",
-          "text": "npm ci"
+          "step": "Atlas check",
+          "text": "npx --yes @dogfood-lab/atlas@1.15.0 check"
         },
         {
           "job": "test",
           "step": "3",
-          "text": "npm run build"
+          "text": "npm ci --ignore-scripts"
         },
         {
           "job": "test",
           "step": "4",
-          "text": "npm run lint"
+          "text": "npm rebuild @ast-grep/cli"
         },
         {
           "job": "test",
           "step": "5",
+          "text": "npm run build"
+        },
+        {
+          "job": "test",
+          "step": "6",
+          "text": "npm run lint"
+        },
+        {
+          "job": "test",
+          "step": "7",
           "text": "npm test"
         }
       ],
@@ -4200,6 +4528,10 @@
         {
           "job": "test",
           "path": "tsconfig.examples.json"
+        },
+        {
+          "job": "test",
+          "path": "tsconfig.typetests.json"
         }
       ],
       "name": "CI",
@@ -4221,7 +4553,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 117
+          "files": 125
         },
         {
           "boundary": "dashboard",
@@ -4239,7 +4571,7 @@
             "file": "scripts/dashboard-snapshot.ts",
             "from": "test/dashboard-snapshot.test.ts"
           },
-          "files": 4
+          "files": 5
         }
       ],
       "readers": [],
@@ -4263,7 +4595,21 @@
         {
           "job": "test",
           "matched": true,
+          "path": "test/actor-required-regression.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "test",
+          "matched": true,
           "path": "test/adapters.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "test",
+          "matched": true,
+          "path": "test/backend-env-surfaces.test.ts",
           "runKind": "executes",
           "via": "vitest vitest.config.ts"
         },
@@ -4397,6 +4743,13 @@
           "job": "test",
           "matched": true,
           "path": "test/dogfood-trace.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "test",
+          "matched": true,
+          "path": "test/exit-code-tables-regression.test.ts",
           "runKind": "executes",
           "via": "vitest vitest.config.ts"
         },
@@ -4634,6 +4987,20 @@
         {
           "job": "test",
           "matched": true,
+          "path": "test/sqlite-driver-presence.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "test",
+          "matched": true,
+          "path": "test/stryker-exclusions.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "test",
+          "matched": true,
           "path": "test/typed-error-regression.test.ts",
           "runKind": "executes",
           "via": "vitest vitest.config.ts"
@@ -4641,7 +5008,21 @@
         {
           "job": "test",
           "matched": true,
+          "path": "test/uri-errors-typed-regression.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "test",
+          "matched": true,
           "path": "test/uri.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "test",
+          "matched": true,
+          "path": "test/validate-before-write-regression.test.ts",
           "runKind": "executes",
           "via": "vitest vitest.config.ts"
         },
@@ -4832,7 +5213,7 @@
           "matched": true,
           "path": "test/wave-s2a1-contracts-regression.test.ts",
           "runKind": "executes",
-          "via": "vitest vitest.config.ts"
+          "via": "tsc tsconfig.typetests.json"
         },
         {
           "job": "test",
@@ -5080,7 +5461,7 @@
           "via": "vitest vitest.config.ts"
         }
       ],
-      "runsCount": 119,
+      "runsCount": 126,
       "secrets": [],
       "sends": {
         "deploysPages": false,
@@ -5242,6 +5623,16 @@
           "branches": [
             "main"
           ],
+          "event": "pull_request",
+          "paths": [
+            ".github/workflows/pages.yml",
+            "site/**"
+          ]
+        },
+        {
+          "branches": [
+            "main"
+          ],
           "event": "push",
           "paths": [
             ".github/workflows/pages.yml",
@@ -5277,6 +5668,11 @@
           "job": "gate",
           "step": "4",
           "text": "node scripts/release-gate.mjs"
+        },
+        {
+          "job": "gate",
+          "step": "Stryker dry run (the mutation setup still runs)",
+          "text": "npx stryker run --dryRunOnly"
         }
       ],
       "elsewhere": [],
@@ -5409,6 +5805,10 @@
         {
           "job": "release",
           "path": "tsconfig.examples.json"
+        },
+        {
+          "job": "release",
+          "path": "tsconfig.typetests.json"
         }
       ],
       "name": "Release",
@@ -5431,7 +5831,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 117
+          "files": 125
         },
         {
           "boundary": "dashboard",
@@ -5449,7 +5849,7 @@
             "file": "scripts/dashboard-snapshot.ts",
             "from": "test/dashboard-snapshot.test.ts"
           },
-          "files": 4
+          "files": 5
         }
       ],
       "readers": [],
@@ -5473,7 +5873,21 @@
         {
           "job": "release",
           "matched": true,
+          "path": "test/actor-required-regression.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "release",
+          "matched": true,
           "path": "test/adapters.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "release",
+          "matched": true,
+          "path": "test/backend-env-surfaces.test.ts",
           "runKind": "executes",
           "via": "vitest vitest.config.ts"
         },
@@ -5607,6 +6021,13 @@
           "job": "release",
           "matched": true,
           "path": "test/dogfood-trace.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "release",
+          "matched": true,
+          "path": "test/exit-code-tables-regression.test.ts",
           "runKind": "executes",
           "via": "vitest vitest.config.ts"
         },
@@ -5844,6 +6265,20 @@
         {
           "job": "release",
           "matched": true,
+          "path": "test/sqlite-driver-presence.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "release",
+          "matched": true,
+          "path": "test/stryker-exclusions.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "release",
+          "matched": true,
           "path": "test/typed-error-regression.test.ts",
           "runKind": "executes",
           "via": "vitest vitest.config.ts"
@@ -5851,7 +6286,21 @@
         {
           "job": "release",
           "matched": true,
+          "path": "test/uri-errors-typed-regression.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "release",
+          "matched": true,
           "path": "test/uri.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "release",
+          "matched": true,
+          "path": "test/validate-before-write-regression.test.ts",
           "runKind": "executes",
           "via": "vitest vitest.config.ts"
         },
@@ -6042,7 +6491,7 @@
           "matched": true,
           "path": "test/wave-s2a1-contracts-regression.test.ts",
           "runKind": "executes",
-          "via": "vitest vitest.config.ts"
+          "via": "tsc tsconfig.typetests.json"
         },
         {
           "job": "release",
@@ -6290,7 +6739,7 @@
           "via": "vitest vitest.config.ts"
         }
       ],
-      "runsCount": 119,
+      "runsCount": 126,
       "secrets": [
         "GITHUB_TOKEN"
       ],
@@ -6475,7 +6924,7 @@
         {
           "boundary": "src",
           "depth": 0,
-          "files": 62
+          "files": 73
         }
       ],
       "readers": [],
@@ -6517,7 +6966,7 @@
         {
           "boundary": "src",
           "depth": 0,
-          "files": 45
+          "files": 71
         }
       ],
       "readers": [],
@@ -6557,6 +7006,11 @@
       "to": "src"
     },
     {
+      "from": "root",
+      "kind": "file",
+      "to": "scripts"
+    },
+    {
       "from": "scripts",
       "kind": "file",
       "to": "src"
@@ -6581,8 +7035,8 @@
     }
   ],
   "generatedFrom": {
-    "commit": "2fb8e756e5bddee9c7e55f728c46d90b9289478d",
-    "tracked": 429
+    "commit": "f1d79e07fa601bb910a9042bdbe200599d46e303",
+    "tracked": 448
   },
   "landings": [
     {
@@ -7905,23 +8359,28 @@
     {
       "readers": [
         {
-          "by": "vitest.stryker.config.ts",
-          "call": "literal",
-          "confidence": "ast"
+          "by": "scripts/stryker-exclusions.mjs",
+          "call": "readFileSync",
+          "confidence": "weak"
         }
       ],
-      "target": "test/cli-docs.test.ts",
+      "target": "stryker.conf.json",
       "writers": []
     },
     {
       "readers": [
         {
-          "by": "vitest.stryker.config.ts",
-          "call": "literal",
+          "by": "scripts/stryker-exclusions.mjs",
+          "call": "readFileSync",
+          "confidence": "ast"
+        },
+        {
+          "by": "scripts/stryker-exclusions.mjs",
+          "call": "readdirSync",
           "confidence": "ast"
         }
       ],
-      "target": "test/cli.test.ts",
+      "target": "test",
       "writers": []
     },
     {
@@ -7987,50 +8446,6 @@
     {
       "readers": [
         {
-          "by": "vitest.stryker.config.ts",
-          "call": "literal",
-          "confidence": "ast"
-        }
-      ],
-      "target": "test/install-smoke.test.ts",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "vitest.stryker.config.ts",
-          "call": "literal",
-          "confidence": "ast"
-        }
-      ],
-      "target": "test/phase10-proof.test.ts",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "vitest.stryker.config.ts",
-          "call": "literal",
-          "confidence": "ast"
-        }
-      ],
-      "target": "test/phase15-proof.test.ts",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "vitest.stryker.config.ts",
-          "call": "literal",
-          "confidence": "ast"
-        }
-      ],
-      "target": "test/policy-surface.test.ts",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
           "by": ".verifier-outputs/v3-invariant-test-completeness.json",
           "call": "literal",
           "confidence": "text"
@@ -8061,11 +8476,6 @@
           "by": ".verifier-outputs/v3-invariant-test-completeness.json",
           "call": "literal",
           "confidence": "text"
-        },
-        {
-          "by": "vitest.stryker.config.ts",
-          "call": "literal",
-          "confidence": "ast"
         }
       ],
       "target": "test/wave-a3-stores-regression.test.ts",
@@ -8077,11 +8487,6 @@
           "by": ".verifier-outputs/v3-invariant-test-completeness.json",
           "call": "literal",
           "confidence": "text"
-        },
-        {
-          "by": "vitest.stryker.config.ts",
-          "call": "literal",
-          "confidence": "ast"
         }
       ],
       "target": "test/wave-a3-surface-regression.test.ts",
@@ -8093,11 +8498,6 @@
           "by": ".verifier-outputs/v3-invariant-test-completeness.json",
           "call": "literal",
           "confidence": "text"
-        },
-        {
-          "by": "vitest.stryker.config.ts",
-          "call": "literal",
-          "confidence": "ast"
         }
       ],
       "target": "test/wave-a3-tests-regression.test.ts",
@@ -8150,14 +8550,20 @@
     {
       "readers": [
         {
+          "by": "tsconfig.typetests.json",
+          "call": "literal",
+          "confidence": "text"
+        }
+      ],
+      "target": "test/wave-s2a1-contracts-regression.test.ts",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
           "by": ".verifier-outputs/v1-wave-a4-contract-completeness.json",
           "call": "literal",
           "confidence": "text"
-        },
-        {
-          "by": "vitest.stryker.config.ts",
-          "call": "literal",
-          "confidence": "ast"
         }
       ],
       "target": "test/wave6-proof.test.ts",
@@ -8207,9 +8613,26 @@
           "by": "tsconfig.examples.json",
           "call": "literal",
           "confidence": "text"
+        },
+        {
+          "by": "tsconfig.typetests.json",
+          "call": "literal",
+          "confidence": "text"
         }
       ],
       "target": "tsconfig.json",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": ".github/workflows/ci.yml"
+        },
+        {
+          "by": ".github/workflows/release.yml"
+        }
+      ],
+      "target": "tsconfig.typetests.json",
       "writers": []
     },
     {
@@ -8227,6 +8650,6 @@
   "overlaps": [],
   "submodules": [],
   "symlinks": [],
-  "testFiles": 122,
+  "testFiles": 139,
   "unassigned": []
 }

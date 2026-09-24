@@ -24,3 +24,11 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: node scripts/release-gate.mjs
+      # `npm run test:mutation` runs in no other workflow, and it once went
+      # red unnoticed: its hand-kept exclusion list fell behind the tests.
+      # A dry run is Stryker's initial test pass over the instrumented
+      # sandbox with no mutants tested, about a minute. The exclusion rule
+      # itself is checked on every PR by test/stryker-exclusions.test.ts.
+      - name: Stryker dry run (the mutation setup still runs)
+        run: npx stryker run --dryRunOnly
+        timeout-minutes: 10

@@ -61,6 +61,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { sourceText } from './support/source-text.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -593,8 +594,8 @@ describe('Wave C1-Amend — Stores regression nets', () => {
             expect(docBlock).toContain('@returns');
         });
 
-        it('rebuildIndex() has @throws / @param / @returns JSDoc', () => {
-            const src = readFileSync('src/ops/rebuild.ts', 'utf-8');
+        it('rebuildIndex() has @throws / @param / @returns JSDoc', (ctx) => {
+            const src = sourceText('src/ops/rebuild.ts', ctx);
             const exportIdx = src.indexOf('export async function rebuildIndex');
             expect(exportIdx).toBeGreaterThan(0);
             const beforeExport = src.slice(0, exportIdx);
@@ -631,8 +632,8 @@ describe('Wave C1-Amend — Stores regression nets', () => {
             expect(docBlock).toContain('@throws');
         });
 
-        it('verify() has @throws / @param / @returns JSDoc', () => {
-            const src = readFileSync('src/ops/verify.ts', 'utf-8');
+        it('verify() has @throws / @param / @returns JSDoc', (ctx) => {
+            const src = sourceText('src/ops/verify.ts', ctx);
             const exportIdx = src.indexOf('export async function verify');
             expect(exportIdx).toBeGreaterThan(0);
             const beforeExport = src.slice(0, exportIdx);
@@ -643,8 +644,8 @@ describe('Wave C1-Amend — Stores regression nets', () => {
             expect(docBlock).toContain('@returns');
         });
 
-        it('checkStale() has @throws / @param / @returns JSDoc', () => {
-            const src = readFileSync('src/ops/rebuild.ts', 'utf-8');
+        it('checkStale() has @throws / @param / @returns JSDoc', (ctx) => {
+            const src = sourceText('src/ops/rebuild.ts', ctx);
             const exportIdx = src.indexOf('export async function checkStale');
             expect(exportIdx).toBeGreaterThan(0);
             const beforeExport = src.slice(0, exportIdx);
@@ -703,15 +704,15 @@ describe('Wave C1-Amend — Stores regression nets', () => {
             expect(docBlock).toContain('@returns');
         });
 
-        it('at least one @example in src/ops/ JSDoc', () => {
+        it('at least one @example in src/ops/ JSDoc', (ctx) => {
             // STORES-C-010 acceptance: at least one @example block across src/ops/
-            const files = [
-                'src/ops/doctor.ts',
-                'src/ops/verify.ts',
-                'src/ops/rebuild.ts',
-                'src/ops/backup.ts',
+            const texts = [
+                sourceText('src/ops/doctor.ts', ctx),
+                sourceText('src/ops/verify.ts', ctx),
+                sourceText('src/ops/rebuild.ts', ctx),
+                sourceText('src/ops/backup.ts', ctx),
             ];
-            const anyExample = files.some((f) => readFileSync(f, 'utf-8').includes('@example'));
+            const anyExample = texts.some((t) => t.includes('@example'));
             expect(anyExample, 'at least one @example in src/ops/').toBe(true);
         });
     });

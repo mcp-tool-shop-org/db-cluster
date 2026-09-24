@@ -1,0 +1,1 @@
+const src = readFileSync(`${ROOT}/src/kernel/target.ts`, "utf8");

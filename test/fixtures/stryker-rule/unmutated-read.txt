@@ -1,0 +1,1 @@
+const src = readFileSync(join(ROOT, 'src', 'kernel', 'other.ts'), 'utf8');
