@@ -438,21 +438,30 @@ describe('Wave A3 — Stores regression nets', () => {
     // check still type-checks ~205 files, hence the explicit budget; under
     // `npx` they took 3.3-5.8 s on the Windows CI cells and timed out
     // against vitest's 5 s default.
+    //
+    // TypeScript 6+ refuses file arguments while a tsconfig.json sits in
+    // the working directory (TS5112) unless given --ignoreConfig, which
+    // 5.x rejects as unknown, so the flag follows the installed major.
+    // `--types node` names the @types package the contracts need
+    // (Buffer, node:crypto); TS 6+ no longer loads it by default.
 
     describe('STORES-R2-002 — import* hooks are contract-required', () => {
         const repoRoot = process.cwd();
         const TSC_BUDGET_MS = 30_000;
         const requireFromTest = createRequire(import.meta.url);
         const tscPackageJson = requireFromTest.resolve('typescript/package.json');
-        const tscBin = join(dirname(tscPackageJson), requireFromTest(tscPackageJson).bin.tsc);
+        const tscPackage = requireFromTest(tscPackageJson) as { version: string; bin: { tsc: string } };
+        const tscBin = join(dirname(tscPackageJson), tscPackage.bin.tsc);
+        const ignoreConfig = Number(tscPackage.version.split('.')[0]) >= 6 ? ['--ignoreConfig'] : [];
 
         const tscCheck = (fixturePath: string): { ok: boolean; output: string } => {
             try {
                 const out = execFileSync(
                     process.execPath,
                     [
-                        tscBin, '--noEmit', '--strict', '--target', 'es2022',
-                        '--module', 'nodenext', '--moduleResolution', 'nodenext', fixturePath,
+                        tscBin, ...ignoreConfig, '--noEmit', '--strict', '--target', 'es2022',
+                        '--module', 'nodenext', '--moduleResolution', 'nodenext',
+                        '--types', 'node', fixturePath,
                     ],
                     { cwd: repoRoot, encoding: 'utf-8', stdio: 'pipe' },
                 );
