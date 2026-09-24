@@ -19,7 +19,7 @@ npx db-cluster doctor [--json]
 - Artifact store directory writable, hash file readable.
 - Index store reachable, count consistent.
 - Ledger store reachable, last event timestamp readable.
-- Postgres connection (if `DB_CLUSTER_POSTGRES_URL` set) — pool acquirable, migration status.
+- Postgres (when `DB_CLUSTER_CANONICAL_BACKEND=postgres`) — the pool answers a query and the required tables exist.
 - Policy file loadable (if `DB_CLUSTER_POLICIES_FILE` set).
 
 Output is a list of `HealthCheck` objects (`status` ∈ `healthy | degraded | unverified | missing | stale | unreachable | corrupt`), with the cluster-level worst-of severity ordering applied.
@@ -68,12 +68,12 @@ Read-only. Pair with `rebuild index` to repair.
 ## Backup: `backup`
 
 ```bash
-npx db-cluster backup [-o <file>] [--force-overwrite] [--yes]
+npx db-cluster backup [-o <file>] [--force] [--yes]
 ```
 
 Exports cluster state as portable JSON: entities, artifacts (content base64-encoded + SHA-256 checksum), events, receipts. Backup is **content-complete** — restore reconstructs the cluster including raw artifact bytes.
 
-`--force-overwrite` (gated by `--yes`) replaces an existing backup file. Without it, `BackupTargetExistsError` is raised with a hint pointing to a freshly-timestamped filename.
+`--force` (or `--yes`) replaces an existing backup file. Without either, `backup` stops before reading the stores and exits 73 (`BACKUP_TARGET_EXISTS`), with a hint suggesting a timestamped filename.
 
 ## Restore: `restore`
 

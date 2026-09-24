@@ -21,9 +21,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { join, resolve, dirname } from 'node:path';
+import { join, resolve, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -258,27 +258,37 @@ describe('Wave C1-Amend CI/Docs regression — SHA-CIDOCS-C-SHBA-001 Node 18 →
     it('examples/quickstart/README.md does NOT contain "Node.js 18"', () => {
         const text = readFileSync(join(ROOT, 'examples/quickstart/README.md'), 'utf8');
         expect(/Node\.?js?\s+18/i.test(text)).toBe(false);
-        expect(/Node\.?js?\s+20\+/.test(text)).toBe(true);
+        // The floor moved again on 2026-09-24 (engines >=22.12).
+        expect(/Node\.?js?\s+22\.12\+/.test(text)).toBe(true);
     });
 
-    it('family probe: no Node 18+ claims linger anywhere in user-facing files', () => {
+    it('family probe: no stale Node floor (18, or 20+) lingers anywhere in user-facing files', () => {
+        // Discovered, not listed. A hand-kept list of eight files missed the
+        // site handbook, which still said "Node.js 20+" after the floor moved
+        // to 22.12, and never looked at the README translations.
+        const walk = (dir: string, pattern: RegExp): string[] =>
+            (readdirSync(join(ROOT, dir), { recursive: true }) as string[])
+                .map((p) => `${dir}/${p.split(sep).join('/')}`)
+                .filter((p) => pattern.test(p) && !p.includes('node_modules'));
         const userFacing = [
+            ...readdirSync(ROOT).filter((f) => /^README(\.[\w-]+)?\.md$/.test(f)),
+            ...walk('docs', /\.md$/),
+            ...walk('examples', /\/README\.md$/),
+            ...walk('site/src/content/docs', /\.mdx?$/),
+        ];
+        // The walk must reach the pages it exists to cover, or it proves nothing.
+        expect(userFacing).toEqual(expect.arrayContaining([
             'README.md',
-            'examples/quickstart/README.md',
-            'examples/agent-safe-app-db/README.md',
-            'examples/project-memory-cluster/README.md',
-            'examples/research-evidence-cluster/README.md',
-            'examples/sdk/README.md',
+            'README.ja.md',
+            'README.pt-BR.md',
             'docs/quickstart.md',
             'docs/handbook.md',
-        ];
-        const offenders: string[] = [];
-        for (const f of userFacing) {
-            const p = join(ROOT, f);
-            if (!existsSync(p)) continue;
-            const text = readFileSync(p, 'utf8');
-            if (/Node\.?js?\s+18/i.test(text)) offenders.push(f);
-        }
+            'examples/quickstart/README.md',
+            'examples/sdk/README.md',
+            'site/src/content/docs/handbook/getting-started.md',
+        ]));
+        const offenders = userFacing.filter((f) =>
+            /Node\.?js?\s+(18|20\+)/i.test(readFileSync(join(ROOT, f), 'utf8')));
         expect(offenders).toEqual([]);
     });
 });

@@ -226,9 +226,11 @@ db-cluster policy test --principal '{"id":"external","name":"External","roles":[
 
 ## Store management
 
+Every data command opens its stores on the backend named by `DB_CLUSTER_CANONICAL_BACKEND`, which can be `local`, `postgres` or `sqlite` (unset means `local`). Postgres also needs `DB_CLUSTER_POSTGRES_URL`. Only the canonical store is selected this way; artifact, index and ledger stay local. An unknown value or a missing URL exits 78 (`INVALID_BACKEND_CONFIG`).
+
 ### `db-cluster stores verify`
 
-Verify store backend configuration and connectivity.
+Verify store backend configuration and connectivity. For Postgres it checks the connection and migrations; for SQLite, that the database opens; for local, that the cluster directory exists.
 
 ```bash
 db-cluster stores verify
@@ -236,7 +238,7 @@ db-cluster stores verify
 
 ### `db-cluster stores migrate`
 
-Run pending migrations for physical backends.
+Run pending migrations for physical backends. Postgres applies the canonical schema. SQLite migrates whenever the database opens, so this just opens it. Local needs none.
 
 ```bash
 db-cluster stores migrate
@@ -244,7 +246,7 @@ db-cluster stores migrate
 
 ### `db-cluster stores list`
 
-List configured backends.
+List configured backends: the canonical backend from `DB_CLUSTER_CANONICAL_BACKEND`, and local for the other stores.
 
 ```bash
 db-cluster stores list
@@ -312,11 +314,12 @@ db-cluster rebuild check --json
 
 ### `db-cluster backup`
 
-Export cluster state to JSON.
+Export cluster state to JSON. With `-o`, an existing file is not overwritten unless you pass `--force` (or `--yes`): the command stops before reading the stores and exits 73 (`BACKUP_TARGET_EXISTS`).
 
 ```bash
 db-cluster backup
 db-cluster backup -o ./cluster-backup.json
+db-cluster backup -o ./cluster-backup.json --force
 ```
 
 ### `db-cluster restore <file>`
@@ -413,7 +416,7 @@ additive — the stderr line is never suppressed). The shape is:
 `code` is the stable typed-error code (the same one the exit code maps from),
 `message` is the path-scrubbed headline, and `hint` is the remediation hint
 (or `null` when the code has none). **Exit codes are unchanged** — the structured
-error object is purely additive; the `0 / 1 / 65 / 70 / 77 / 78` sysexits map in
+error object is purely additive; the `0 / 1 / 65 / 70 / 73 / 77 / 78` sysexits map in
 [Exit Codes](#exit-codes) is intact. A consumer can read the JSON from stdout and
 still branch on `$?`.
 
@@ -428,26 +431,31 @@ The CLI maps every typed error to a stable POSIX exit code (`<sysexits.h>`). Ope
 | `COMMAND_QUEUE_CORRUPT` | `70` | `EX_SOFTWARE` | `pending-commands.json` unreadable | `db-cluster validate <id>` after manual edit |
 | `COMMAND_QUEUE_PERSISTENCE_LOST` | `70` | `EX_SOFTWARE` | Marker file present but queue file deleted | `db-cluster validate <id>` after partial restore |
 | `RECEIPT_FAILED` | `70` | `EX_SOFTWARE` | Store mutated but receipt write failed | `db-cluster commit <id>` when ledger is full |
-| `PROVENANCE_MISSING` | `70` | `EX_SOFTWARE` | Subject has no lineage events | `db-cluster trace <uri>` on a record without provenance |
+| `LEDGER_CYCLE_DETECTED` | `70` | `EX_SOFTWARE` | parentEventId chain has a cycle | `db-cluster trace <uri>` over a corrupted ledger |
+| `BUFFER_SIDE_CHANNEL_NOT_SUPPORTED` | `70` | `EX_SOFTWARE` | Adapter can't stage Buffer payloads | (reserved for v0.2 remote adapters) |
+| `BACKUP_TARGET_EXISTS` | `73` | `EX_CANTCREAT` | The backup output file already exists | `db-cluster backup -o existing.json` without `--force` |
 | `CONTENT_HASH_MISMATCH` | `65` | `EX_DATAERR` | propose-time hash mismatch on `ingest_artifact` | `db-cluster propose '{"verb":"ingest_artifact","payload":{"contentHash":"deadbeef..","content":..}}'` |
 | `INVALID_CONTENT_HASH` | `65` | `EX_DATAERR` | Hash isn't 64-char lowercase hex | `db-cluster ingest --hash bogus123` |
 | `STAGED_CONTENT_TAMPERED` | `65` | `EX_DATAERR` | Staging file rewritten between propose and commit | `db-cluster commit <id>` after manual staging-dir edit |
 | `INVALID_CONTENT_SHAPE` | `65` | `EX_DATAERR` | `payload.content` is JSON-roundtripped Buffer | propose with `content: {type:'Buffer', data:[...]}` |
+| `INVALID_ACTOR` | `65` | `EX_DATAERR` | A mutation's actor (`actorId`, `proposedBy`, `approvedBy`, `rejectedBy`, `compensatedBy`) is missing or blank | Not reachable from the CLI, which always supplies one (`--actor`, `DB_CLUSTER_OPERATOR`, the OS user); an SDK or MCP call with `approvedBy: ""` |
+| `INVALID_CLUSTER_URI` | `65` | `EX_DATAERR` | URI doesn't match `cluster://<store>/<id>`, or names an unknown store | `db-cluster resolve 'not a uri'`; `trace`, `why` and `lineage` too |
+| `COMMAND_VALIDATION_FAILED` | `65` | `EX_DATAERR` | A command's payload failed its verb's validation checks | `db-cluster entity create --kind note --name ""` |
 | `IMPORT_CONFLICT` | `65` | `EX_DATAERR` | Restore record id matches but content differs | `db-cluster restore tampered-backup.json` |
-| `LEDGER_CYCLE_DETECTED` | `65` | `EX_DATAERR` | parentEventId chain has a cycle | `db-cluster trace <uri>` over a corrupted ledger |
+| `IMPORT_SNAPSHOT_NOT_SUPPORTED` | `65` | `EX_DATAERR` | A store cannot restore records under their original ids | Not reachable with the shipped adapters, which all can; `db-cluster restore <file>` into a custom adapter without `importSnapshot` |
 | `INVALID_POLICY_CONFIG` | `78` | `EX_CONFIG` | Policy YAML failed validation | `db-cluster --policy bad.yaml ...` |
+| `INVALID_REDACTION_RULE` | `78` | `EX_CONFIG` | Redaction rule failed schema validation | malformed `redactionRules` in policy YAML |
 | `INVALID_ROTATE_TIMESTAMP` | `78` | `EX_CONFIG` | `rotate(beforeTimestamp)` not ISO-8601 | `db-cluster ledger rotate "not-a-date"` |
 | `ROTATE_BOUNDARY_IN_FUTURE` | `78` | `EX_CONFIG` | rotate boundary is in the future | `db-cluster ledger rotate 2099-01-01` |
+| `INVALID_BACKEND_CONFIG` | `78` | `EX_CONFIG` | Unknown `DB_CLUSTER_CANONICAL_BACKEND`, or `postgres` without `DB_CLUSTER_POSTGRES_URL` | `DB_CLUSTER_CANONICAL_BACKEND=mysql db-cluster stats` |
 | `NOT_FOUND` | `1` | (generic) | Object missing in named store | `db-cluster inspect bogus-id` |
+| `PROVENANCE_MISSING` | `1` | (generic) | Subject has no lineage events | `db-cluster trace <uri>` on a record without provenance |
 | `RESOLVE_NOT_FOUND` | `1` | (generic) | URI cannot be resolved to owner truth | `db-cluster resolve cluster://canonical/bogus` |
-| `INVALID_CLUSTER_URI` | `1` | (generic) | URI doesn't match `cluster://<store>/<id>` shape | `db-cluster resolve 'not a uri'` |
 | `COMMAND_NOT_VALIDATED` | `1` | (generic) | Cannot commit an unvalidated command | `db-cluster commit <id>` before `validate <id>` |
 | `COMMAND_NOT_FOUND` | `1` | (generic) | Command id missing from queue | `db-cluster validate bogus-id` |
 | `COMMAND_REJECTED` | `1` | (generic) | Cannot operate on a rejected command | `db-cluster commit <id>` on a rejected command |
 | `COMMAND_ALREADY_TERMINAL` | `1` | (generic) | Command in terminal status (committed/rejected/compensated) | `db-cluster approve <id>` on a committed command |
 | `INVALID_STATE_TRANSITION` | `1` | (generic) | Transition not legal for current status | `db-cluster commit <id>` directly on a proposed command |
-| `INVALID_REDACTION_RULE` | `78` | `EX_CONFIG` | Redaction rule failed schema validation | malformed `redactionRules` in policy YAML |
-| `BUFFER_SIDE_CHANNEL_NOT_SUPPORTED` | `1` | (generic) | Adapter can't stage Buffer payloads | (reserved for v0.2 remote adapters) |
 | (anything else / unhandled) | `1` | (generic) | Generic failure — inspect stderr | crash without a typed error |
 
 ### Branching on exit codes

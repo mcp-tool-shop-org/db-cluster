@@ -5,8 +5,8 @@
  *
  *   1. INJECT-004 (I6) — destructive-CLI non-TTY fail-closed.
  *      The destructive commands (`restore`, `rebuild index` / `index
- *      rebuild`, `compensate`, `backup --force-overwrite`) all route
- *      through the single `destructiveCommand` HOF (`src/cli.ts`), so
+ *      rebuild`, `compensate`) all route through the single
+ *      `destructiveCommand` HOF (`src/cli.ts`), so
  *      non-TTY-without-`--yes` refusal is uniform BY CONSTRUCTION. These
  *      tests PIN that behavior so a future refactor that splits the HOF
  *      (or special-cases one sibling) cannot silently open a destructive

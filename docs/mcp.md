@@ -50,8 +50,8 @@ Or in MCP host configuration:
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `DB_CLUSTER_DIR` | No (defaults to `.db-cluster` in cwd) | Cluster data directory. Explicit operator override for a location outside cwd; a `config.json` `clusterDir` is contained to cwd. |
-| `DB_CLUSTER_POSTGRES_URL` | No | Postgres connection for canonical store |
-| `DB_CLUSTER_CANONICAL_BACKEND` | No (defaults to `local`) | Backend for canonical store (`local` or `postgres`) |
+| `DB_CLUSTER_POSTGRES_URL` | When the canonical backend is `postgres` | Postgres connection URL for the canonical store |
+| `DB_CLUSTER_CANONICAL_BACKEND` | No (defaults to `local`) | Backend for the canonical store: `local`, `postgres`, or `sqlite` (needs the optional `better-sqlite3` driver). The artifact, index and ledger stores stay local. An unknown value, or `postgres` without a URL, fails every tool call with `INVALID_BACKEND_CONFIG`; nothing falls back to local stores. |
 | `DB_CLUSTER_PRINCIPAL` | No | JSON-encoded `Principal` (schema-validated, fail-closed on malformed input). |
 | `DB_CLUSTER_POLICIES_FILE` | No | Path to a policies JSON file (sandboxed against cwd). |
 | `DB_CLUSTER_MCP_ALLOW_PRIVILEGED` | No (default: ai-facing) | **Opt-in** to the privileged (`internal` / `cluster-admin`) posture. Absent, the server stays in the ai-facing zone with redaction ON. *(Provisional name — see the release notes for the final flag.)* |

@@ -51,7 +51,7 @@ db-cluster index stale
 db-cluster index explain <record-id>
 
 # Backup / restore
-db-cluster backup [-o <file>] [--force-overwrite] [--yes]
+db-cluster backup [-o <file>] [--force] [--yes]
 db-cluster restore <file> [--yes]
 
 # Policy
@@ -88,11 +88,12 @@ db-cluster uses the **sysexits.h** convention. Codes are **stable across version
 | Exit | Sysexits | Typed-error codes mapped here |
 |-----:|----------|-------------------------------|
 | 0 | EX_OK | success |
-| 1 | (general) | `NOT_FOUND`, `PROVENANCE_MISSING`, `COMMAND_NOT_VALIDATED`, `COMMAND_REJECTED`, usage error |
-| 65 | EX_DATAERR | `CONTENT_HASH_MISMATCH`, `INVALID_CONTENT_HASH`, `STAGED_CONTENT_TAMPERED`, `IMPORT_CONFLICT`, `INVALID_CONTENT_SHAPE` |
+| 1 | (general) | `NOT_FOUND`, `PROVENANCE_MISSING`, `RESOLVE_NOT_FOUND`, `COMMAND_NOT_VALIDATED`, `COMMAND_REJECTED`, `COMMAND_NOT_FOUND`, `COMMAND_ALREADY_TERMINAL`, `INVALID_STATE_TRANSITION`, usage error |
+| 65 | EX_DATAERR | `CONTENT_HASH_MISMATCH`, `INVALID_CONTENT_HASH`, `STAGED_CONTENT_TAMPERED`, `IMPORT_CONFLICT`, `INVALID_CONTENT_SHAPE`, `INVALID_ACTOR`, `INVALID_CLUSTER_URI`, `IMPORT_SNAPSHOT_NOT_SUPPORTED`, `COMMAND_VALIDATION_FAILED` |
 | 70 | EX_SOFTWARE | `CORRUPT_STORE`, `COMMAND_QUEUE_CORRUPT`, `COMMAND_QUEUE_PERSISTENCE_LOST`, `LEDGER_CYCLE_DETECTED`, `RECEIPT_FAILED`, `BUFFER_SIDE_CHANNEL_NOT_SUPPORTED` |
+| 73 | EX_CANTCREAT | `BACKUP_TARGET_EXISTS` |
 | 77 | EX_NOPERM | `POLICY_DENIED` |
-| 78 | EX_CONFIG | `INVALID_POLICY_CONFIG`, `INVALID_REDACTION_RULE`, `INVALID_ROTATE_TIMESTAMP`, `ROTATE_BOUNDARY_IN_FUTURE` |
+| 78 | EX_CONFIG | `INVALID_POLICY_CONFIG`, `INVALID_REDACTION_RULE`, `INVALID_ROTATE_TIMESTAMP`, `ROTATE_BOUNDARY_IN_FUTURE`, `INVALID_BACKEND_CONFIG` |
 
 Run `db-cluster --help-exit-codes` to print the current table from the live CLI.
 
@@ -131,6 +132,7 @@ When piped (`db-cluster doctor --json | jq`), or when `--no-color` is set, or wh
 | `DB_CLUSTER_POLICIES_FILE` | Path to a policies JSON file (path-sandboxed against cwd). |
 | `DB_CLUSTER_OPERATOR` | Operator name for the actor field (used when `--actor` not passed). |
 | `DB_CLUSTER_POSTGRES_URL` | Postgres connection string for the canonical store backend. For TLS, include `sslmode=require` in the string (the `pg` driver honours it); db-cluster does not configure SSL/TLS itself in v1.0.0. |
+| `DB_CLUSTER_CANONICAL_BACKEND` | Backend for the canonical store: `local` (the default), `postgres`, or `sqlite`. An unknown value, or `postgres` without a URL, exits 78 (`INVALID_BACKEND_CONFIG`). |
 | `NO_COLOR` | Any non-empty value disables ANSI color (https://no-color.org). |
 | `DEBUG` | `1` enables raw stack traces on STDERR. |
 

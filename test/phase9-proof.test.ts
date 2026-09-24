@@ -30,12 +30,16 @@ describe('Phase 9 Proof Suite — Operations, Rebuild, and Recovery', () => {
         kernel = new ClusterKernel(stores, { dataDir: tmpDir });
 
         // Seed data: entity, artifact, mutation
-        await kernel.createEntity({ kind: 'document', name: 'ops-manual', attributes: { format: 'markdown' } });
-        await kernel.createEntity({ kind: 'config', name: 'cluster-settings', attributes: { version: '1.0' } });
+        // Every seed call names its actor: the kernel refuses an actor-less
+        // mutation (INVALID_ACTOR). These three used to omit it and recorded
+        // provenance with no actor.
+        await kernel.createEntity({ kind: 'document', name: 'ops-manual', attributes: { format: 'markdown' }, actorId: 'operator' });
+        await kernel.createEntity({ kind: 'config', name: 'cluster-settings', attributes: { version: '1.0' }, actorId: 'operator' });
         await kernel.ingestArtifact({
             filename: 'schema.sql',
             content: Buffer.from('CREATE TABLE test (id UUID);'),
             mimeType: 'text/sql',
+            actorId: 'operator',
         });
 
         // Create a mutation to produce a receipt (KERNEL-006: validate first)
