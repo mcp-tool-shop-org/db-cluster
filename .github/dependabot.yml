@@ -14,6 +14,13 @@ updates:
     commit-message:
       prefix: "deps"
       include: scope
+    ignore:
+      # TypeScript 7 drops the JS compiler API that scripts/jsdoc-gate.mjs and
+      # scripts/checks/sqlite-sql-safety.mjs parse with (7.0 offers it only
+      # under typescript/unstable/*). Stay on 6.x until they are ported
+      # (Director, 2026-09-24).
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
     groups:
       typescript-toolchain:
         patterns:
