@@ -10,6 +10,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ClusterSDK } from '../sdk/cluster-sdk.js';
 import type { SDKOptions } from '../sdk/cluster-sdk.js';
+import { backendConfigFromEnv } from '../adapters/factory.js';
 import type { Principal, Policy, TrustZone, VisibilityRule } from '../types/policy.js';
 import {
     sanitizeArtifactForOutput,
@@ -191,7 +192,12 @@ function failClosedOnInvalidPrincipal(reason: string, source: string): never {
 }
 
 export function buildSDKOptions(): SDKOptions {
-    const base: SDKOptions = { clusterDir: CLUSTER_DIR };
+    // Backend selection (DB_CLUSTER_CANONICAL_BACKEND / DB_CLUSTER_POSTGRES_URL).
+    // Validated: an unknown backend or a missing URL throws
+    // InvalidBackendConfigError, which the tool call reports as an error
+    // envelope. Nothing falls back to local stores.
+    const { backends, postgresUrl } = backendConfigFromEnv(CLUSTER_DIR);
+    const base: SDKOptions = { clusterDir: CLUSTER_DIR, backends, ...(postgresUrl ? { postgresUrl } : {}) };
 
     let principal: Principal | undefined;
     const principalJson = process.env.DB_CLUSTER_PRINCIPAL;
@@ -1486,6 +1492,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+    // A SQLite handle closes (and checkpoints its WAL) when the server exits;
+    // a Postgres pool is created with allowExitOnIdle and needs no hook.
+    process.once('exit', () => _sdk?.sqliteDb?.close());
     const transport = new StdioServerTransport();
     await server.connect(transport);
 }

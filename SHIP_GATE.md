@@ -18,9 +18,9 @@
 
 ### Default safety posture
 
-- [x] `[cli|mcp|desktop]` Dangerous actions (kill, delete, restart) require explicit `--allow-*` flag (2026-05-27) — `destructiveCommand` HOF wraps `restore`, `rebuild index`, `index rebuild`, `compensate`, `backup --force-overwrite`; gated by `--yes` flag + interactive TTY confirmation
+- [x] `[cli|mcp|desktop]` Dangerous actions (kill, delete, restart) require explicit `--allow-*` flag (2026-05-27) — `destructiveCommand` HOF wraps `restore`, `rebuild index`, `index rebuild`, `compensate`; gated by `--yes` flag + interactive TTY confirmation. `backup` refuses to overwrite an existing output file (exit 73, `BACKUP_TARGET_EXISTS`) unless `--force` or `--yes` is passed (2026-09-24)
 - [x] `[cli|mcp|desktop]` File operations constrained to known directories (2026-05-27; clusterDir containment 2026-05-29) — `.db-cluster/` is the only write target. The cluster directory is the working-directory `.db-cluster/` by default; a `config.json` `clusterDir` is **contained to cwd** (EGRESS-002), and `DB_CLUSTER_DIR` is the explicit operator override for a location outside cwd. `DB_CLUSTER_POLICIES_FILE` is path-sandboxed against cwd (lexical + realpath, blocks symlink escape); artifact reads bounded to user-supplied paths.
-- [x] `[mcp]` Network egress off by default (2026-05-27) — 16 MCP tools all local-only; Postgres connection only when `DB_CLUSTER_POSTGRES_URL` explicitly set
+- [x] `[mcp]` Network egress off by default (re-verified 2026-09-24) — the 19 MCP tools use local stores unless `DB_CLUSTER_CANONICAL_BACKEND=postgres` selects a Postgres canonical store, which also needs `DB_CLUSTER_POSTGRES_URL`; `test/backend-env-surfaces.test.ts` covers both paths
 - [x] `[mcp]` Stack traces never exposed — structured error results only (2026-05-27) — `src/mcp/sanitize.ts::redactError` + `AiErrorEnvelope` shape; `--debug` flag (CLI only, stderr) is the sole reveal path
 
 ## B. Error Handling

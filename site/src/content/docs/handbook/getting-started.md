@@ -9,13 +9,13 @@ This guide gets db-cluster running in under 5 minutes. It walks the **core truth
 
 ## Prerequisites
 
-- **Node.js 20+** (enforced via `engines.node` in `package.json`).
+- **Node.js 22.12+** (enforced via `engines.node` in `package.json`).
 - **npm** (or `pnpm` / `yarn`).
 
 Optional for the Postgres canonical backend:
 
 - **PostgreSQL 16+**.
-- `DB_CLUSTER_POSTGRES_URL` environment variable (e.g. `postgres://user:pass@host:5432/db`).
+- `DB_CLUSTER_CANONICAL_BACKEND=postgres` to select it, and the `DB_CLUSTER_POSTGRES_URL` environment variable to reach it (e.g. `postgres://user:pass@host:5432/db`).
 - For TLS, put `sslmode=require` in the connection string itself — the `pg` driver honours it. db-cluster does **not** configure SSL/TLS in v1.0.0 and there is no `DB_CLUSTER_POSTGRES_SSL` variable; the connection is plaintext unless the URL (or a TLS proxy / private network) enforces it.
 
 ## Install

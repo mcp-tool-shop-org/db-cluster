@@ -131,9 +131,11 @@ string enforces it (e.g. `sslmode=require`, which the `pg` driver honours), a
 TLS-terminating proxy, or a private network. Driver-managed TLS config is
 planned for a future release.
 
-The MCP server tools read + write the local stores only — they never reach the
-network, and structured `AiErrorEnvelope` responses never leak stack traces or
-filesystem paths. **The MCP server defaults to the `ai-facing` trust zone with
+By default the MCP server tools read + write the local stores and never reach
+the network; the one exception is a Postgres canonical store, which you select
+with `DB_CLUSTER_CANONICAL_BACKEND=postgres`. Structured `AiErrorEnvelope`
+responses never leak stack traces or filesystem paths.
+**The MCP server defaults to the `ai-facing` trust zone with
 redaction ON:** artifact content and sensitive entity attributes are stripped at
 the boundary by default, and no MCP tool returns raw artifact bytes. An operator
 who needs the privileged (`internal` / `cluster-admin`) posture must explicitly
@@ -144,7 +146,7 @@ unless the command is in `approved` status — the caller must first call
 `cluster_approve_mutation`, and the refusal is a structured `AiErrorEnvelope`,
 not a partial write. (Trusted in-process SDK callers are unaffected — this gate
 is MCP-surface only.) Destructive CLI commands (`restore`, `rebuild index`,
-`compensate`, `backup --force-overwrite`) require an explicit `--yes` flag plus
+`compensate`) require an explicit `--yes` flag plus
 an interactive confirmation on TTY.
 
 The full threat model — data touched, data NOT touched, permissions required,

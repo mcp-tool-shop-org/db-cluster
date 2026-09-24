@@ -17,7 +17,19 @@ export type ResolvedObject =
     | { kind: 'event'; uri: string; store: 'ledger'; object: ProvenanceEvent }
     | { kind: 'receipt'; uri: string; store: 'receipt'; object: Receipt };
 
+/**
+ * A well-formed cluster URI whose owner store holds no such object. The CLI's
+ * `resolve` surfaces it as `RESOLVE_NOT_FOUND`, exit 1, with a hint.
+ *
+ * Resolver-layer error (extends Error, not ClusterError). Carries the code /
+ * remediationHint / retryable fields that the CLI exit-code map and the MCP
+ * boundary read; before it did, the CLI printed no hint.
+ */
 export class ResolveError extends Error {
+    public readonly code = 'RESOLVE_NOT_FOUND';
+    public readonly remediationHint: string =
+        'The cluster URI does not resolve. Confirm the store name and ID with `db-cluster find <query>`.';
+    public readonly retryable: boolean = false;
     constructor(
         public readonly uri: string,
         message: string,

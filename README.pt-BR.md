@@ -124,9 +124,7 @@ o force (por exemplo, `sslmode=require`, que o driver `pg` respeita), um
 proxy de terminação TLS ou uma rede privada. A configuração de TLS gerenciada pelo driver é
 planejada para uma versão futura.
 
-As ferramentas do servidor MCP leem e gravam apenas os armazenamentos locais — elas nunca alcançam a
-rede, e as respostas estruturadas `AiErrorEnvelope` nunca vazam rastreamentos de pilha ou
-caminhos do sistema de arquivos. **O servidor MCP assume por padrão a zona de confiança `ai-facing` com
+Por padrão, as ferramentas do servidor MCP leem e gravam os armazenamentos locais e nunca acessam a rede; a única exceção é um armazenamento canônico Postgres, que você seleciona com `DB_CLUSTER_CANONICAL_BACKEND=postgres`. As respostas estruturadas `AiErrorEnvelope` nunca revelam rastreamentos de pilha ou caminhos do sistema de arquivos. **O servidor MCP assume por padrão a zona de confiança `ai-facing` com
 redação ATIVADA:** o conteúdo do artefato e os atributos de entidade confidenciais são removidos
 na fronteira por padrão, e nenhuma ferramenta MCP retorna bytes de artefato brutos. Um operador
 que precisa da postura privilegiada (`internal` / `cluster-admin`) deve optar explicitamente
@@ -137,7 +135,7 @@ a menos que o comando esteja no status `aprovado` — o chamador deve primeiro c
 `cluster_approve_mutation`, e a recusa é um `AiErrorEnvelope` estruturado,
 e não uma gravação parcial. (Os chamadores de SDK confiáveis no processo não são afetados — este portão
 é apenas na superfície do MCP.) Os comandos da CLI destrutivos (`restore`, `rebuild index`,
-`compensate`, `backup --force-overwrite`) exigem uma flag explícita `--yes` mais
+`compensate`) exigem uma flag explícita `--yes` mais
 uma confirmação interativa no TTY.
 
 O modelo de ameaças completo — dados acessados, dados NÃO acessados, permissões necessárias,
