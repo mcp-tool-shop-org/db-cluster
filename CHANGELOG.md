@@ -8,11 +8,15 @@ All notable user-facing changes to db-cluster. This project follows [semantic ve
 
 - **Node.js 22.12 or later is required.** `engines.node` is now `>=22.12` (was `>=20`). Node 20 reached end-of-life on 2026-04-30, and the dependencies had already moved past it: the CLI's `commander` 15 requires Node 22.12, and the optional SQLite driver `better-sqlite3` 13 requires Node 22. CI tests Node 22 and 24 on Linux and Windows.
 
+- **A malformed cluster URI exits 65, not 1.** `resolve`, `trace`, `why` and `lineage` report a URI that is malformed or names an unknown store as `INVALID_CLUSTER_URI`: exit 65 (`EX_DATAERR`) with a `→ try:` hint. It used to fall through to a generic exit 1 with no hint, although the MCP server already reported the code. `resolve` on a well-formed URI that names nothing still exits 1, now with `RESOLVE_NOT_FOUND`'s hint. `ClusterUriError` and `ResolveError` carry `code`, `remediationHint` and `retryable` like the other typed errors; the MCP envelopes are unchanged.
+
 ### Fixes
 
 - **Kernel mutations require an actor.** `createEntity`, `ingestArtifact`, `linkEvidence`, `proposeMutation`, `approveMutation`, `rejectMutation`, `commitMutation`, `compensateMutation` and `rebuildIndex` now reject a missing or blank actor with the typed `INVALID_ACTOR` error (CLI exit 65) before touching any store. Previously the local backend recorded provenance with no actor, and the SQLite backend failed only after the write, leaving an orphaned mutation. The CLI always supplies an actor; SDK and MCP callers that omitted one, or sent an empty string, now get the error.
 
 - **The CLI and MCP server honor `DB_CLUSTER_CANONICAL_BACKEND`.** Both surfaces used to build local stores unconditionally, so a documented Postgres configuration was silently served from local JSON. Every CLI data command and the MCP server now open the canonical store on the configured backend: `local` (the default), `postgres` with `DB_CLUSTER_POSTGRES_URL`, or `sqlite`, which is new on these surfaces. An unknown value, or `postgres` without a URL, fails closed with `INVALID_BACKEND_CONFIG` (CLI exit 78) instead of falling back to local stores. `createCluster` applies the same check to every store's backend name. With `postgres` selected, MCP tool calls now connect to that Postgres host; the README and SECURITY.md trust model say so.
+
+- **Every exit-code table matches the CLI.** `docs/cli.md` gave `PROVENANCE_MISSING` as exit 70 (the CLI exits 1), `LEDGER_CYCLE_DETECTED` as 65 (70) and `BUFFER_SIDE_CHANNEL_NOT_SUPPORTED` as 1 (70), and the runbooks repeated two of those. The table `--help-exit-codes` prints, the runbooks and the site handbook also left out up to ten codes, including 73 (`BACKUP_TARGET_EXISTS`). A test now checks all five tables against the CLI's exit-code map.
 
 ### Notes
 
