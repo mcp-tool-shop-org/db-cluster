@@ -1,5 +1,8 @@
 # --- Measured CI cost (dogfood-swarm SKILL item 8) --------------------------
-# ~29 billable min per push (6 jobs), derived from run 34123484614
+# 14-18 billable min per run (4 jobs), measured from runs 35999888689 and
+# 35999892702 on 2026-09-24, after the Node 20 cells came out (end-of-life;
+# engines >=22.12). Each Linux job billed 2 min, each Windows job 4-8.
+# Before that: ~29 (6 jobs), derived from run 34123484614
 # on 2026-09-07, which cost 119 min across 9 jobs BEFORE the macOS cells
 # came out. 3 macOS cells (node 20/22/24) each ran ~2.3 min of wall time and each billed 30 min at the x10 macOS rate.
 # This package ships to npm and publishes no darwin artifact, so those cells
