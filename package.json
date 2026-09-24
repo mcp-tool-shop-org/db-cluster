@@ -94,9 +94,9 @@
   "homepage": "https://github.com/mcp-tool-shop-org/db-cluster#readme",
   "devDependencies": {
     "@ast-grep/cli": "^0.43.0",
-    "@stryker-mutator/core": "^9.6.1",
-    "@stryker-mutator/typescript-checker": "^9.6.1",
-    "@stryker-mutator/vitest-runner": "^9.6.1",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/typescript-checker": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.2",
     "@types/pg": "^8.20.0",
