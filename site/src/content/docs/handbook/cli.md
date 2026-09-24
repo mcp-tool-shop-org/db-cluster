@@ -51,7 +51,7 @@ db-cluster index stale
 db-cluster index explain <record-id>
 
 # Backup / restore
-db-cluster backup [-o <file>] [--force-overwrite] [--yes]
+db-cluster backup [-o <file>] [--force] [--yes]
 db-cluster restore <file> [--yes]
 
 # Policy

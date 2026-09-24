@@ -314,11 +314,12 @@ db-cluster rebuild check --json
 
 ### `db-cluster backup`
 
-Export cluster state to JSON.
+Export cluster state to JSON. With `-o`, an existing file is not overwritten unless you pass `--force` (or `--yes`): the command stops before reading the stores and exits 73 (`BACKUP_TARGET_EXISTS`).
 
 ```bash
 db-cluster backup
 db-cluster backup -o ./cluster-backup.json
+db-cluster backup -o ./cluster-backup.json --force
 ```
 
 ### `db-cluster restore <file>`
@@ -432,7 +433,7 @@ The CLI maps every typed error to a stable POSIX exit code (`<sysexits.h>`). Ope
 | `RECEIPT_FAILED` | `70` | `EX_SOFTWARE` | Store mutated but receipt write failed | `db-cluster commit <id>` when ledger is full |
 | `LEDGER_CYCLE_DETECTED` | `70` | `EX_SOFTWARE` | parentEventId chain has a cycle | `db-cluster trace <uri>` over a corrupted ledger |
 | `BUFFER_SIDE_CHANNEL_NOT_SUPPORTED` | `70` | `EX_SOFTWARE` | Adapter can't stage Buffer payloads | (reserved for v0.2 remote adapters) |
-| `BACKUP_TARGET_EXISTS` | `73` | `EX_CANTCREAT` | The backup output file already exists | Not from `db-cluster backup`, which checks first and exits `1`; an embedder calling `backup()` with an existing `outputPath` |
+| `BACKUP_TARGET_EXISTS` | `73` | `EX_CANTCREAT` | The backup output file already exists | `db-cluster backup -o existing.json` without `--force` |
 | `CONTENT_HASH_MISMATCH` | `65` | `EX_DATAERR` | propose-time hash mismatch on `ingest_artifact` | `db-cluster propose '{"verb":"ingest_artifact","payload":{"contentHash":"deadbeef..","content":..}}'` |
 | `INVALID_CONTENT_HASH` | `65` | `EX_DATAERR` | Hash isn't 64-char lowercase hex | `db-cluster ingest --hash bogus123` |
 | `STAGED_CONTENT_TAMPERED` | `65` | `EX_DATAERR` | Staging file rewritten between propose and commit | `db-cluster commit <id>` after manual staging-dir edit |

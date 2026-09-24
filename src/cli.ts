@@ -2506,28 +2506,19 @@ program
         // Wave C1-Amend fix-up (V2-C1-005): wire onProgress to the
         // backup ops contract. Backup walks every record in every
         // store, so the channel is useful for clusters of any size.
+        //
+        // STORES-C-006 / SURFACE-C-007: refuse to silently overwrite. With
+        // -o, ops/backup.ts owns both the guard and the write: it checks the
+        // target before walking the stores and throws BackupTargetExistsError,
+        // which exits 73 (EX_CANTCREAT) with its hint. This action used to
+        // repeat the check after the walk and exit 1. The path goes through
+        // as typed, so the message can name a bare filename; the CLI's
+        // boundary scrubber hides anything that includes a directory.
         const data = await backup(stores, {
             onProgress: makeProgressRenderer('backup'),
+            ...(opts.output ? { outputPath: opts.output, force: !!(opts.force || opts.yes) } : {}),
         });
-        const json = JSON.stringify(data, null, 2);
         if (opts.output) {
-            const outPath = resolve(opts.output);
-            // STORES-C-006 / SURFACE-C-007 (Wave C1-Amend): refuse to
-            // silently overwrite. The Stores agent owns the upstream
-            // ImportConflict-style check; the surface layer adds a
-            // simple existence + --force guard so operators don't
-            // accidentally clobber a prior backup file.
-            if (existsSync(outPath) && !opts.force && !opts.yes) {
-                process.stderr.write(
-                    `Refusing to overwrite existing file: ${outPath}\n`,
-                );
-                process.stderr.write(
-                    `  → try: pass --force to overwrite, or choose a different --output path.\n`,
-                );
-                process.exit(1);
-            }
-            const { writeFileSync } = await import('node:fs');
-            writeFileSync(outPath, json, 'utf-8');
             // Wave C1-Amend fix-up (V2-C1-013): success message for
             // `backup -o <file>` belongs on stderr, not stdout. The
             // whole point of -o is to write payload to the file; piping
@@ -2537,7 +2528,7 @@ program
                 process.stderr.write(`Backup written to ${opts.output}\n`);
             }
         } else {
-            console.log(json);
+            console.log(JSON.stringify(data, null, 2));
         }
     }));
 
