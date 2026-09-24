@@ -107,7 +107,21 @@ export function uriForObject(obj: { id: string; owner: string }): string {
     return formatClusterUri(store, obj.id);
 }
 
+/**
+ * A cluster URI that is malformed, names an unknown store, or has an empty
+ * id. Every CLI command that takes a URI (`resolve`, `trace`, `why`,
+ * `lineage`) surfaces it as `INVALID_CLUSTER_URI`, exit 65 (EX_DATAERR).
+ *
+ * URI-layer error (extends Error, not ClusterError: src/uri/ does not import
+ * the kernel hierarchy). Carries the code / remediationHint / retryable fields
+ * that the CLI exit-code map and the MCP boundary read; before it did, the
+ * CLI fell through to a generic exit 1 with no hint.
+ */
 export class ClusterUriError extends Error {
+    public readonly code = 'INVALID_CLUSTER_URI';
+    public readonly remediationHint: string =
+        'URI must match `cluster://<store>/<id>`. Re-form the URI and retry.';
+    public readonly retryable: boolean = false;
     constructor(message: string) {
         super(message);
         this.name = 'ClusterUriError';

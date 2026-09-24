@@ -21,26 +21,9 @@
  * documents an unreachable-from-CLI code in the comment block above the
  * describe.
  *
- * Exit-code map (canonical, mirrored from src/cli.ts:260-282):
- *   POLICY_DENIED                     → 77 (EX_NOPERM)
- *   NOT_FOUND                         → 1
- *   PROVENANCE_MISSING                → 1
- *   CORRUPT_STORE                     → 70 (EX_SOFTWARE)
- *   COMMAND_QUEUE_CORRUPT             → 70
- *   COMMAND_QUEUE_PERSISTENCE_LOST    → 70
- *   LEDGER_CYCLE_DETECTED             → 70
- *   INVALID_CONTENT_HASH              → 65 (EX_DATAERR)
- *   CONTENT_HASH_MISMATCH             → 65
- *   STAGED_CONTENT_TAMPERED           → 65
- *   IMPORT_CONFLICT                   → 65
- *   INVALID_CONTENT_SHAPE             → 65
- *   BUFFER_SIDE_CHANNEL_NOT_SUPPORTED → 70
- *   COMMAND_NOT_VALIDATED             → 1
- *   COMMAND_REJECTED                  → 1
- *   RECEIPT_FAILED                    → 70
- *   INVALID_REDACTION_RULE            → 78 (EX_CONFIG)
- *   INVALID_POLICY_CONFIG             → 78
- *   default                           → 1
+ * The exit-code map is `typedErrorToExitCode` in src/cli.ts. It is not
+ * copied here: test/exit-code-tables-regression.test.ts checks every table
+ * that restates it against the source.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -371,6 +354,39 @@ describe('TESTS-C-004 — CLI live exit-code assertions per typed-error code', (
         }
     });
 
+    // ─── INVALID_CLUSTER_URI → 65 EX_DATAERR, RESOLVE_NOT_FOUND → 1 ────────
+    // ClusterUriError and ResolveError used to carry no `code`. MCP maps them
+    // by class name, but the CLI keys on `err.code`, so both fell through to
+    // a generic exit 1 with no hint. One cluster serves every case: none of
+    // these commands writes.
+    describe('URI errors', () => {
+        let dir: string;
+        beforeAll(() => {
+            ({ dir } = initCluster('uri-errors'));
+        });
+        afterAll(() => {
+            rmSync(dir, { recursive: true, force: true });
+        });
+
+        it.each([
+            ['resolve', 'not a uri'],
+            ['trace', 'cluster://nope/123'],
+            ['why', 'not a uri'],
+            ['lineage', 'cluster://nope/123'],
+        ])('INVALID_CLUSTER_URI exits 65 (EX_DATAERR) with `→ try:` for `%s %s`', (command, uri) => {
+            const result = runCli([command, uri], { cwd: dir });
+            expect(result.status).toBe(65);
+            expect(result.stderr).toMatch(/→\s*try:.*cluster:\/\/<store>\/<id>/);
+        });
+
+        it('RESOLVE_NOT_FOUND exits 1 with `→ try:` for a well-formed URI that names nothing', () => {
+            const result = runCli(['resolve', 'cluster://canonical/missing-id'], { cwd: dir });
+            expect(result.status).toBe(1);
+            expect(result.stderr).toMatch(/Entity not found: missing-id/);
+            expect(result.stderr).toMatch(/→\s*try:.*db-cluster find/);
+        });
+    });
+
     // FAMILY-PROBE: scan typedErrorToExitCode source and confirm every code in
     // the map either has a live spawn test above OR is unreachable from CLI.
     it('FAMILY-PROBE: every typedErrorToExitCode code is either live-asserted or documented unreachable', () => {
@@ -389,6 +405,8 @@ describe('TESTS-C-004 — CLI live exit-code assertions per typed-error code', (
             'COMMAND_NOT_VALIDATED',
             'CONTENT_HASH_MISMATCH',
             'INVALID_BACKEND_CONFIG',
+            'INVALID_CLUSTER_URI',
+            'RESOLVE_NOT_FOUND',
         ]);
         // Codes that cannot be triggered from CLI through normal user paths
         // (kernel-internal failure modes only reachable via embedded SDK use,
@@ -410,11 +428,9 @@ describe('TESTS-C-004 — CLI live exit-code assertions per typed-error code', (
             // domain-specific test files (stores-regression for adapter
             // errors; kernel-regression for command lifecycle).
             'BACKUP_TARGET_EXISTS', // covered in wave-c1-stores-regression.test.ts (backup overwrite guard)
-            'INVALID_CLUSTER_URI', // resolve-time URI validation; cli surface throws elsewhere
             'INVALID_ROTATE_TIMESTAMP', // ledger rotate command; not exercised in this file
             'ROTATE_BOUNDARY_IN_FUTURE', // ledger rotate command; not exercised in this file
             'IMPORT_SNAPSHOT_NOT_SUPPORTED', // adapter-shape rejection; covered in stores tests
-            'RESOLVE_NOT_FOUND', // resolve subcommand; covered in surface-regression
             'COMMAND_NOT_FOUND', // lifecycle command id miss; covered in kernel-regression
             'COMMAND_ALREADY_TERMINAL', // lifecycle transition guard; covered in kernel-regression
             'INVALID_STATE_TRANSITION', // lifecycle transition guard; covered in kernel-regression

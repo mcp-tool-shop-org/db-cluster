@@ -468,6 +468,11 @@ export class ClusterSDK {
      * boundary invariant, not a policy-gated one. The `default: never`
      * arm makes a future 6th ResolvedObject store type a compile error
      * rather than a silent raw-return regression.
+     *
+     * @throws ClusterUriError (`INVALID_CLUSTER_URI`) when the URI is
+     *         malformed or names an unknown store.
+     * @throws ResolveError (`RESOLVE_NOT_FOUND`) when the owner store holds
+     *         no object with that id.
      */
     async resolve(uri: string): Promise<{ store: string; object: unknown }> {
         const resolved = await this.resolver.resolve(uri);
@@ -508,8 +513,9 @@ export class ClusterSDK {
      * @param uri Cluster URI (`cluster://<store>/<id>`).
      * @param options Trace direction, depth, include flags.
      * @returns Navigable provenance graph.
-     * @throws NotFoundError when the URI does not resolve.
-     * @throws InvalidClusterUriError when URI is malformed.
+     * @throws ClusterUriError (`INVALID_CLUSTER_URI`) when the URI is
+     *         malformed or names an unknown store. A well-formed URI that
+     *         names no object does not throw: the graph reports it as a gap.
      *
      * @example
      * const graph = await sdk.traceObject('cluster://canonical/abc', {
@@ -534,7 +540,10 @@ export class ClusterSDK {
      *
      * @param uri Cluster URI to explain.
      * @returns Multi-line prose explanation.
-     * @throws NotFoundError when the URI does not resolve.
+     * @throws ClusterUriError (`INVALID_CLUSTER_URI`) when the URI is
+     *         malformed or names an unknown store. A well-formed URI that
+     *         names no object does not throw: the explanation says it was
+     *         not found.
      *
      * @example
      * const story = await sdk.why('cluster://canonical/abc');

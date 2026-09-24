@@ -8,19 +8,26 @@
  * |------|----------------|-----------------------------------------------|
  * |   0  | EX_OK          | success                                       |
  * |   1  | (general)      | unrecognized error; NOT_FOUND;                |
- * |      |                | PROVENANCE_MISSING; COMMAND_NOT_VALIDATED;    |
- * |      |                | COMMAND_REJECTED; usage errors                |
- * |  65  | EX_DATAERR     | CONTENT_HASH_MISMATCH;                        |
- * |      |                | INVALID_CONTENT_HASH; STAGED_CONTENT_TAMPERED;|
- * |      |                | IMPORT_CONFLICT; INVALID_CONTENT_SHAPE;       |
- * |      |                | INVALID_ACTOR                                 |
+ * |      |                | PROVENANCE_MISSING; RESOLVE_NOT_FOUND;        |
+ * |      |                | COMMAND_NOT_VALIDATED; COMMAND_REJECTED;      |
+ * |      |                | COMMAND_NOT_FOUND; COMMAND_ALREADY_TERMINAL;  |
+ * |      |                | INVALID_STATE_TRANSITION; usage errors        |
+ * |  65  | EX_DATAERR     | CONTENT_HASH_MISMATCH; INVALID_CONTENT_HASH;  |
+ * |      |                | STAGED_CONTENT_TAMPERED; IMPORT_CONFLICT;     |
+ * |      |                | INVALID_CONTENT_SHAPE; INVALID_ACTOR;         |
+ * |      |                | INVALID_CLUSTER_URI;                          |
+ * |      |                | IMPORT_SNAPSHOT_NOT_SUPPORTED;                |
+ * |      |                | COMMAND_VALIDATION_FAILED                     |
  * |  70  | EX_SOFTWARE    | CORRUPT_STORE; COMMAND_QUEUE_CORRUPT;         |
  * |      |                | COMMAND_QUEUE_PERSISTENCE_LOST;               |
  * |      |                | LEDGER_CYCLE_DETECTED; RECEIPT_FAILED;        |
  * |      |                | BUFFER_SIDE_CHANNEL_NOT_SUPPORTED             |
+ * |  73  | EX_CANTCREAT   | BACKUP_TARGET_EXISTS                          |
  * |  77  | EX_NOPERM      | POLICY_DENIED                                 |
  * |  78  | EX_CONFIG      | INVALID_POLICY_CONFIG;                        |
  * |      |                | INVALID_REDACTION_RULE;                       |
+ * |      |                | INVALID_ROTATE_TIMESTAMP;                     |
+ * |      |                | ROTATE_BOUNDARY_IN_FUTURE;                    |
  * |      |                | INVALID_BACKEND_CONFIG                        |
  *
  * Run `db-cluster --help-exit-codes` to print the current table. CI
@@ -1157,16 +1164,20 @@ const EXIT_CODE_TABLE = [
     '| Exit | Sysexits     | Typed-error codes mapped here                        |',
     '|------|--------------|------------------------------------------------------|',
     '|   0  | EX_OK        | success                                              |',
-    '|   1  | (general)    | NOT_FOUND, PROVENANCE_MISSING,                       |',
-    '|      |              | COMMAND_NOT_VALIDATED, COMMAND_REJECTED, usage error |',
+    '|   1  | (general)    | NOT_FOUND, PROVENANCE_MISSING, RESOLVE_NOT_FOUND,    |',
+    '|      |              | COMMAND_NOT_VALIDATED, COMMAND_REJECTED,             |',
+    '|      |              | COMMAND_NOT_FOUND, COMMAND_ALREADY_TERMINAL,         |',
+    '|      |              | INVALID_STATE_TRANSITION, usage error                |',
     '|  65  | EX_DATAERR   | CONTENT_HASH_MISMATCH, INVALID_CONTENT_HASH,         |',
     '|      |              | STAGED_CONTENT_TAMPERED, IMPORT_CONFLICT,            |',
-    '|      |              | INVALID_CONTENT_SHAPE,                               |',
-    '|      |              | INVALID_ACTOR                                        |',
+    '|      |              | INVALID_CONTENT_SHAPE, INVALID_ACTOR,                |',
+    '|      |              | INVALID_CLUSTER_URI, IMPORT_SNAPSHOT_NOT_SUPPORTED,  |',
+    '|      |              | COMMAND_VALIDATION_FAILED                            |',
     '|  70  | EX_SOFTWARE  | CORRUPT_STORE, COMMAND_QUEUE_CORRUPT,                |',
     '|      |              | COMMAND_QUEUE_PERSISTENCE_LOST,                      |',
     '|      |              | LEDGER_CYCLE_DETECTED, RECEIPT_FAILED,               |',
     '|      |              | BUFFER_SIDE_CHANNEL_NOT_SUPPORTED                    |',
+    '|  73  | EX_CANTCREAT | BACKUP_TARGET_EXISTS                                 |',
     '|  77  | EX_NOPERM    | POLICY_DENIED                                        |',
     '|  78  | EX_CONFIG    | INVALID_POLICY_CONFIG, INVALID_REDACTION_RULE,       |',
     '|      |              | INVALID_ROTATE_TIMESTAMP, ROTATE_BOUNDARY_IN_FUTURE, |',
