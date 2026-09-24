@@ -12,7 +12,8 @@
  * |      |                | COMMAND_REJECTED; usage errors                |
  * |  65  | EX_DATAERR     | CONTENT_HASH_MISMATCH;                        |
  * |      |                | INVALID_CONTENT_HASH; STAGED_CONTENT_TAMPERED;|
- * |      |                | IMPORT_CONFLICT; INVALID_CONTENT_SHAPE        |
+ * |      |                | IMPORT_CONFLICT; INVALID_CONTENT_SHAPE;       |
+ * |      |                | INVALID_ACTOR                                 |
  * |  70  | EX_SOFTWARE    | CORRUPT_STORE; COMMAND_QUEUE_CORRUPT;         |
  * |      |                | COMMAND_QUEUE_PERSISTENCE_LOST;               |
  * |      |                | LEDGER_CYCLE_DETECTED; RECEIPT_FAILED;        |
@@ -535,6 +536,7 @@ export function typedErrorToExitCode(code: string): number {
         case 'COMMAND_ALREADY_TERMINAL': return 1;
         case 'INVALID_STATE_TRANSITION': return 1;
         case 'COMMAND_VALIDATION_FAILED': return 65;
+        case 'INVALID_ACTOR': return 65;
         default: return 1;
     }
 }
@@ -793,6 +795,8 @@ function remediationForCode(code: string): string | undefined {
             return 'Ledger rotate boundary cannot be in the future. Pass a past timestamp.';
         case 'INVALID_CLUSTER_URI':
             return 'URIs must match `cluster://<store>/<id>`. Re-form the URI and retry.';
+        case 'INVALID_ACTOR':
+            return 'Name the actor: pass --actor <id> or set DB_CLUSTER_OPERATOR to a non-empty id, then retry.';
         case 'RESOLVE_NOT_FOUND':
             return 'The URI does not resolve. Confirm the store name and ID with `db-cluster find <query>`.';
         case 'BACKUP_TARGET_EXISTS':
@@ -1137,7 +1141,8 @@ const EXIT_CODE_TABLE = [
     '|      |              | COMMAND_NOT_VALIDATED, COMMAND_REJECTED, usage error |',
     '|  65  | EX_DATAERR   | CONTENT_HASH_MISMATCH, INVALID_CONTENT_HASH,         |',
     '|      |              | STAGED_CONTENT_TAMPERED, IMPORT_CONFLICT,            |',
-    '|      |              | INVALID_CONTENT_SHAPE                                |',
+    '|      |              | INVALID_CONTENT_SHAPE,                               |',
+    '|      |              | INVALID_ACTOR                                        |',
     '|  70  | EX_SOFTWARE  | CORRUPT_STORE, COMMAND_QUEUE_CORRUPT,                |',
     '|      |              | COMMAND_QUEUE_PERSISTENCE_LOST,                      |',
     '|      |              | LEDGER_CYCLE_DETECTED, RECEIPT_FAILED,               |',

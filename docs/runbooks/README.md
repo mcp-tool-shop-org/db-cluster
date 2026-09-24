@@ -45,6 +45,7 @@ Every typed-error class in the kernel + adapter hierarchy maps to a runbook (or 
 | `RotateBoundaryInFutureError` | `ROTATE_BOUNDARY_IN_FUTURE` | inline — use a past or current boundary |
 | `BufferSideChannelNotSupportedError` | `BUFFER_SIDE_CHANNEL_NOT_SUPPORTED` | inline — use a local-adapter cluster |
 | `InvalidContentShapeError` | `INVALID_CONTENT_SHAPE` | inline — pass a real Buffer or contentHash string |
+| `InvalidActorError` | `INVALID_ACTOR` | inline — name the actor: pass its id as a non-empty string |
 | `PolicyDeniedError` | `POLICY_DENIED` | inline — request the named capability; CLI exit 77 |
 | `ClusterUriError` | `INVALID_CLUSTER_URI` | inline — check the URI shape `cluster://<store>/<id>` |
 | `ResolveError` | `RESOLVE_NOT_FOUND` | inline — verify URI; the record may have been compensated |

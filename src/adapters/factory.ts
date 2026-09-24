@@ -291,7 +291,7 @@ const DEFAULT_SAFE_PRINCIPAL: Principal = {
  *   import { createSafeCluster } from '@mcptoolshop/db-cluster';
  *   const cluster = createSafeCluster({ rootDir: '.db-cluster' });
  *   const { entity } = await cluster.kernel.createEntity({
- *       kind: 'note', name: 'hello', attributes: {},
+ *       kind: 'note', name: 'hello', attributes: {}, actorId: 'operator',
  *   });
  *   const health = await cluster.doctor();
  */

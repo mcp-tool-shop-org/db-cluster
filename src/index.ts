@@ -103,6 +103,7 @@ export {
     StagedContentTamperedError,
     BufferSideChannelNotSupportedError,
     InvalidContentShapeError,
+    InvalidActorError,
 } from './kernel/errors.js';
 export { PolicyDeniedError } from './kernel/policy-enforced-kernel.js';
 // Adapter integrity error (PROV-001) — thrown by the artifact store's

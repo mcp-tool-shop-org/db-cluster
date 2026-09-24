@@ -85,6 +85,7 @@ export const CLUSTER_ERROR_CODES = [
     'CORRUPT_STORE',
     'IMPORT_CONFLICT',
     'IMPORT_SNAPSHOT_NOT_SUPPORTED',
+    'INVALID_ACTOR',
     'INVALID_CLUSTER_URI',
     'INVALID_CONTENT_HASH',
     'INVALID_CONTENT_SHAPE',
@@ -535,5 +536,53 @@ export class InvalidContentShapeError extends ClusterError {
         );
         this.name = 'InvalidContentShapeError';
         this.actualShape = actualShape;
+    }
+}
+
+/**
+ * Raised by every kernel mutator when its actor argument (`actorId`,
+ * `proposedBy`, `approvedBy`, `rejectedBy`, `compensatedBy`) is missing,
+ * not a string, or blank, BEFORE any store is touched.
+ *
+ * The actor lands in provenance and receipts, under the tamper-evidence
+ * hash. Without this check the local ledger recorded actor-less events,
+ * and the SQLite ledger's NOT NULL constraint failed only after the store
+ * write, leaving an orphaned mutation (RECEIPT_FAILED). Blank strings
+ * passed both.
+ *
+ * Recovery: re-issue the call with the id of whoever performs it.
+ */
+export class InvalidActorError extends ClusterError {
+    public readonly code: ClusterErrorCode = 'INVALID_ACTOR';
+    public readonly remediationHint: string =
+        'Pass the id of the person or service performing the action as a ' +
+        'non-empty string. Every mutation records its actor in provenance and ' +
+        'receipts, so the kernel refuses to write one without it. The CLI ' +
+        'supplies it from --actor or DB_CLUSTER_OPERATOR; programmatic and MCP ' +
+        'callers must pass it explicitly.';
+    /** The argument that failed, e.g. `actorId` or `approvedBy`. */
+    public readonly field: string;
+    /** What was received instead: `undefined`, `null`, `blank`, or a type name. */
+    public readonly received: string;
+    constructor(field: string, value: unknown) {
+        const received =
+            value === undefined ? 'undefined'
+                : value === null ? 'null'
+                    : typeof value === 'string' ? 'blank'
+                        : typeof value;
+        super(`${field} must name the actor as a non-empty string; received ${received}.`);
+        this.name = 'InvalidActorError';
+        this.field = field;
+        this.received = received;
+    }
+}
+
+/**
+ * Throw {@link InvalidActorError} unless `value` is a non-blank string.
+ * Kernel mutators call this before touching any store.
+ */
+export function assertActor(field: string, value: unknown): asserts value is string {
+    if (typeof value !== 'string' || value.trim() === '') {
+        throw new InvalidActorError(field, value);
     }
 }
