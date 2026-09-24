@@ -194,6 +194,14 @@ So most covered mutants run no test and are reported as Survived: on this
 repo a full run reports 8.96%, and `coverageAnalysis: 'all'` gives the
 identical result. The trust check turns that into a failed run. Until a fixed
 runner ships, measure with Vitest 4.1.x installed. The dry run is unaffected.
+To tell when it ships: watch for a `@stryker-mutator/vitest-runner` release
+after 10.0.0 that includes [stryker-js#6214](https://github.com/stryker-mutator/stryker-js/pull/6214)
+(still open on 2026-09-24); Dependabot's `stryker` group will propose it. On
+that PR, with the repo's Vitest 5, run
+`npx stryker run --mutate src/kernel/errors.ts && node scripts/stryker-trust-check.mjs`
+(about 2 minutes). On 10.0.0 the trust check fails, 126 of 126 survivors
+having run no test; with the fix it passes, and `errors.ts` scores close to
+its Vitest 4 figure below.
 
 **Score, measured 2026-09-24** on main's source at `f1d79e0`, with Vitest
 4.1.11 installed in a scratch worktree. One full run took 17 minutes on 14
@@ -215,8 +223,15 @@ workers; the old `coverageAnalysis: 'off'` setting was estimated at 28 hours.
 | `src/ops/rebuild.ts` | 33.06 | 44.57 | 41 | 51 | 32 |
 | `src/mcp/server.ts` | 28.79 | 37.37 | 321 | 538 | 256 |
 | `src/sdk/cluster-sdk.ts` | 26.03 | 37.25 | 19 | 32 | 22 |
-| `src/kernel/policy-enforced-kernel.ts` | 24.25 | 33.87 | 105 | 205 | 123 |
-| `src/kernel/errors.ts` | 13.53 | 13.74 | 18 | 113 | 2 |
+| `src/kernel/policy-enforced-kernel.ts` † | 84.76 | 85.35 | 367 | 63 | 3 |
+| `src/kernel/errors.ts` † | 69.17 | 69.17 | 92 | 41 | 0 |
+
+† Re-measured 2026-09-24, after `test/kernel-errors-contract.test.ts` and
+`test/policy-kernel-scoping.test.ts` added tests for these files' surviving
+mutants: a run scoped to the two files (`--mutate`), Vitest 4.1.11, trust
+check passing. They scored 13.53 (18 killed, 113 survived, 2 no coverage)
+and 24.25 (105 killed, 205 survived, 123 no coverage) in the full run. The
+other rows and the totals above are that full run's.
 
 The score is a baseline to improve against, not a gate. The Wave B1-Amend
 decision, the v2 dogfood-swarm protocol's verifier-3 substitution, still
