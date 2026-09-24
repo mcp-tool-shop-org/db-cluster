@@ -116,7 +116,7 @@ See [`docs/cli.md`](docs/cli.md) for the full CLI reference (including the typed
 
 ## Prerequisites
 
-- Node.js 20+ (enforced via `engines.node` in `package.json`)
+- Node.js 22.12+ (enforced via `engines.node` in `package.json`)
 - npm
 
 ## Trust model

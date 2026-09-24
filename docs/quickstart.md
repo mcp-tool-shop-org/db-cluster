@@ -4,7 +4,7 @@ Get db-cluster running in under 5 minutes. This guide proves the core truth loop
 
 ## Prerequisites
 
-- Node.js 20+ (the `engines.node` field in `package.json` enforces this on
+- Node.js 22.12+ (the `engines.node` field in `package.json` enforces this on
   install; older Node versions are unsupported because the release-gate
   script uses `readdirSync(..., { recursive: true })`, a Node-18.17+ API,
   and the CI matrix tests against 20 / 22 / 24)

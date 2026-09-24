@@ -109,7 +109,7 @@ db-cluster receipts
 
 ## 先决条件
 
-- Node.js 20+（通过 `package.json` 中的 `engines.node` 强制执行）
+- Node.js 22.12+（通过 `package.json` 中的 `engines.node` 强制执行）
 - npm
 
 ## 信任模型

@@ -50,7 +50,7 @@
 - [x] `[all]` Dependency scanning runs in CI (2026-05-27) — `.github/dependabot.yml` configured for npm + github-actions ecosystems
 - [x] `[all]` Automated dependency update mechanism exists (2026-05-27) — Dependabot weekly schedule with grouped updates (typescript-toolchain, stryker, vitest, mcp-sdk)
 - [x] `[npm]` `npm pack --dry-run` includes: dist/, README.md, CHANGELOG.md, LICENSE (2026-05-27) — release-gate stage `[3/9] Package` verifies; `package.json` `files` array enforces
-- [x] `[npm]` `engines.node` set (2026-05-27) — `">=20"` in package.json
+- [x] `[npm]` `engines.node` set (2026-09-24) — `">=22.12"` in package.json
 - [x] `[npm]` Lockfile committed (2026-05-27) — `package-lock.json` present
 - [ ] `[vsix]` SKIP: db-cluster does not ship as a .vsix
 - [ ] `[desktop]` SKIP: db-cluster does not ship as a desktop installer

@@ -108,7 +108,7 @@ db-cluster receipts
 
 ## 前提条件
 
-- Node.js 20+（`package.json`の`engines.node`によって強制されます）
+- Node.js 22.12+（`package.json`の`engines.node`によって強制されます）
 - npm
 
 ## 信頼モデル

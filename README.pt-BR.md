@@ -109,7 +109,7 @@ Consulte [`docs/cli.md`](docs/cli.md) para obter a referência completa da CLI (
 
 ## Pré-requisitos
 
-- Node.js 20+ (aplicado por meio de `engines.node` em `package.json`)
+- Node.js 22.12+ (aplicado por meio de `engines.node` em `package.json`)
 - npm
 
 ## Modelo de confiança

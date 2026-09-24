@@ -12,7 +12,7 @@ A development team's project memory â€” meeting notes, decisions, repos, tasks â
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22.12+
 - npm or pnpm
 - `@mcptoolshop/db-cluster` installed (`npm install @mcptoolshop/db-cluster` or local `npm link`)
 

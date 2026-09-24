@@ -34,7 +34,7 @@ rm -rf .db-cluster
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22.12+
 - db-cluster installed (`npm install -g db-cluster` or `npm link` from repo root)
 
 ## Postgres path (optional)
