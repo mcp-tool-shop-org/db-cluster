@@ -14,8 +14,8 @@
  *  - The promoted type contracts: `Entity.version` is required;
  *    `Receipt.integrityHash` / `ProvenanceEvent.integrityHash` are required;
  *    `CanonicalStore.create()` rejects a caller-supplied `version`. These are
- *    the `@ts-expect-error` "FULL invariant" proofs — they fail the `tsc` /
- *    `npm run lint` gate if the field is ever demoted back to optional/absent.
+ *    the `@ts-expect-error` "FULL invariant" proofs — they fail
+ *    `npm run lint` if the field is ever demoted back to optional/absent.
  *
  * Isolation note: this file deliberately does NOT import adapters, kernel, or
  * ops. It compiles and passes while the downstream implementations are still
@@ -23,10 +23,16 @@
  * make the rest of the tree green.
  *
  * Type-check note: `vitest run` strips types (esbuild) and does NOT enforce the
- * `@ts-expect-error` directives below — those are enforced by `tsc --noEmit`
- * (`npm run lint`) / the release gate. Each negative case is therefore ALSO
- * written so the surrounding expression evaluates at runtime, keeping the file
- * exercised under `vitest run` while the directive guards the type contract.
+ * `@ts-expect-error` directives below. `npm run lint` does, through its
+ * `lint:typetests` step: tsconfig.typetests.json type-checks this file, CI runs
+ * lint on every cell, and release.yml runs it before publishing. The project's
+ * own `tsc --noEmit` covers only src/, so until that step existed (2026-09-24)
+ * nothing enforced these directives; demoting `Receipt.integrityHash`,
+ * `ProvenanceEvent.integrityHash` or the create() input passed every gate. A
+ * test file that adds type proofs must be listed in tsconfig.typetests.json.
+ * Each negative case is ALSO written so the surrounding expression evaluates at
+ * runtime, keeping the file exercised under `vitest run` while the directive
+ * guards the type contract.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -182,14 +188,15 @@ describe('Wave S2-A1 — Integrity contracts & types', () => {
         });
     });
 
-    // ─── FULL-invariant TYPE proofs (enforced by tsc / npm run lint) ───────
+    // ─── FULL-invariant TYPE proofs (enforced by npm run lint:typetests) ────
     //
     // These are the contract-promotion proofs. Each `@ts-expect-error` sits on
     // an expression that is a genuine type error AFTER Wave S2-A1 (the field is
     // now required / forbidden). If a field is ever demoted, the error
-    // disappears and `tsc` fails with an "unused @ts-expect-error" — surfacing
-    // the regression at the type-check gate. The expressions also evaluate at
-    // runtime so the block is exercised under `vitest run`.
+    // disappears and `npm run lint` fails with TS2578 (unused
+    // '@ts-expect-error') — surfacing the regression at the type-check gate.
+    // The expressions also evaluate at runtime so the block is exercised under
+    // `vitest run`.
     describe('FULL-invariant — promoted type contracts (tsc-enforced)', () => {
         it('S2A1-T14: an Entity literal missing `version` is a type error', () => {
             // @ts-expect-error — `version` is required on Entity (Wave S2-A1).
