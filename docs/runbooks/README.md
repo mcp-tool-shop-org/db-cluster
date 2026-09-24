@@ -47,6 +47,7 @@ Every typed-error class in the kernel + adapter hierarchy maps to a runbook (or 
 | `InvalidContentShapeError` | `INVALID_CONTENT_SHAPE` | inline — pass a real Buffer or contentHash string |
 | `InvalidActorError` | `INVALID_ACTOR` | inline — name the actor: pass its id as a non-empty string |
 | `PolicyDeniedError` | `POLICY_DENIED` | inline — request the named capability; CLI exit 77 |
+| `InvalidBackendConfigError` | `INVALID_BACKEND_CONFIG` | inline — set `DB_CLUSTER_CANONICAL_BACKEND` to local, postgres or sqlite (and `DB_CLUSTER_POSTGRES_URL` for postgres); CLI exit 78 |
 | `ClusterUriError` | `INVALID_CLUSTER_URI` | inline — check the URI shape `cluster://<store>/<id>` |
 | `ResolveError` | `RESOLVE_NOT_FOUND` | inline — verify URI; the record may have been compensated |
 | `CommandValidationFailedError` | (validation result is `failed`) | inline — inspect `result.checks[]` and re-propose with corrected payload |
@@ -63,7 +64,7 @@ When the CLI surfaces a typed error, it maps to a stable POSIX exit code:
 | `65` | `EX_DATAERR` | Data integrity failure (`CONTENT_HASH_MISMATCH`, `INVALID_CONTENT_HASH`, `STAGED_CONTENT_TAMPERED`, `INVALID_CONTENT_SHAPE`, `LEDGER_CYCLE_DETECTED`, `IMPORT_CONFLICT`) |
 | `70` | `EX_SOFTWARE` | Internal failure (`CORRUPT_STORE`, `COMMAND_QUEUE_CORRUPT`, `COMMAND_QUEUE_PERSISTENCE_LOST`, `RECEIPT_FAILED`, `PROVENANCE_MISSING`) |
 | `77` | `EX_NOPERM` | Permission denied (`POLICY_DENIED`) |
-| `78` | `EX_CONFIG` | Configuration error (`INVALID_POLICY_CONFIG`, `INVALID_ROTATE_TIMESTAMP`, `ROTATE_BOUNDARY_IN_FUTURE`) |
+| `78` | `EX_CONFIG` | Configuration error (`INVALID_POLICY_CONFIG`, `INVALID_ROTATE_TIMESTAMP`, `ROTATE_BOUNDARY_IN_FUTURE`, `INVALID_BACKEND_CONFIG`) |
 | `1` | (generic) | Anything else — including unhandled `Error`. Investigate via stderr. |
 
 See [`docs/cli.md`](../cli.md) "Exit Codes" for the full table with example triggers.

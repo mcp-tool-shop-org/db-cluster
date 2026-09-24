@@ -20,7 +20,8 @@
  * |      |                | BUFFER_SIDE_CHANNEL_NOT_SUPPORTED             |
  * |  77  | EX_NOPERM      | POLICY_DENIED                                 |
  * |  78  | EX_CONFIG      | INVALID_POLICY_CONFIG;                        |
- * |      |                | INVALID_REDACTION_RULE                        |
+ * |      |                | INVALID_REDACTION_RULE;                       |
+ * |      |                | INVALID_BACKEND_CONFIG                        |
  *
  * Run `db-cluster --help-exit-codes` to print the current table. CI
  * scripts should branch on these codes — they are stable across versions.
@@ -33,7 +34,8 @@ import { dirname, resolve, join, sep } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { userInfo } from 'node:os';
-import { createLocalCluster } from './adapters/local/index.js';
+import { createCluster, backendConfigFromEnv } from './adapters/factory.js';
+import type { ClusterWithPool } from './adapters/factory.js';
 import { ClusterKernel } from './kernel/cluster-kernel.js';
 import { PolicyEnforcedKernel } from './kernel/policy-enforced-kernel.js';
 import { formatClusterUri, parseClusterUri, isClusterUri } from './uri/index.js';
@@ -288,12 +290,27 @@ function loadPolicyConfig(): PolicyConfig | null {
  * This is the routes-converge fix: same input → same warning across CLI
  * and MCP boundaries.
  */
+/**
+ * Open the cluster's stores on the configured backend:
+ * DB_CLUSTER_CANONICAL_BACKEND (local | postgres | sqlite, default local) and
+ * DB_CLUSTER_POSTGRES_URL. An unknown backend or a missing URL fails closed
+ * with INVALID_BACKEND_CONFIG (exit 78) instead of falling back to local
+ * stores. The SQLite handle closes when the process exits; the Postgres pool
+ * is created with allowExitOnIdle, so an idle pool never holds a command open.
+ */
+function openStores(): ClusterWithPool {
+    const cluster = createCluster(backendConfigFromEnv(CLUSTER_DIR));
+    const sqliteDb = cluster.sqliteDb;
+    if (sqliteDb) process.once('exit', () => sqliteDb.close());
+    return cluster;
+}
+
 function getKernel(): ClusterKernel | PolicyEnforcedKernel {
     if (!existsSync(CLUSTER_DIR)) {
         console.error('No cluster found. Run `db-cluster init` first.');
         process.exit(1);
     }
-    const stores = createLocalCluster(CLUSTER_DIR);
+    const stores = openStores().stores;
     const config = loadPolicyConfig();
     if (config && ((config.policies && config.policies.length > 0) || (config.trustZones && config.trustZones.length > 0) || (config.visibilityRules && config.visibilityRules.length > 0))) {
         // SURFACE-B-009: emit the no-principal warning at the CLI boundary
@@ -523,6 +540,7 @@ export function typedErrorToExitCode(code: string): number {
         case 'RECEIPT_FAILED': return 70;
         case 'INVALID_REDACTION_RULE': return 78; // EX_CONFIG
         case 'INVALID_POLICY_CONFIG': return 78;
+        case 'INVALID_BACKEND_CONFIG': return 78;
         // Wave C1-Amend fix-up (V3-C1-015 + V1-C1-001 + V1-C1-002):
         // close the 9-code arm gap so adapter + lifecycle typed errors
         // surface their proper sysexits code instead of collapsing to 1.
@@ -797,6 +815,8 @@ function remediationForCode(code: string): string | undefined {
             return 'URIs must match `cluster://<store>/<id>`. Re-form the URI and retry.';
         case 'INVALID_ACTOR':
             return 'Name the actor: pass --actor <id> or set DB_CLUSTER_OPERATOR to a non-empty id, then retry.';
+        case 'INVALID_BACKEND_CONFIG':
+            return 'Set DB_CLUSTER_CANONICAL_BACKEND to local, postgres or sqlite (unset means local), and DB_CLUSTER_POSTGRES_URL when it is postgres. Check with `db-cluster stores verify`.';
         case 'RESOLVE_NOT_FOUND':
             return 'The URI does not resolve. Confirm the store name and ID with `db-cluster find <query>`.';
         case 'BACKUP_TARGET_EXISTS':
@@ -993,7 +1013,7 @@ async function takeAutoSnapshot(operationName: string): Promise<string> {
     const { writeFileSync, mkdirSync } = await import('node:fs');
     const { randomBytes } = await import('node:crypto');
     const { backup } = await import('./ops/backup.js');
-    const stores = createLocalCluster(CLUSTER_DIR);
+    const stores = openStores().stores;
     const isoTs = new Date().toISOString().replace(/[:.]/g, '-');
     // Wave C1-Amend fix-up (V2-C1-010): two concurrent destructive ops
     // within the same millisecond would collide on the snapshot
@@ -1149,7 +1169,8 @@ const EXIT_CODE_TABLE = [
     '|      |              | BUFFER_SIDE_CHANNEL_NOT_SUPPORTED                    |',
     '|  77  | EX_NOPERM    | POLICY_DENIED                                        |',
     '|  78  | EX_CONFIG    | INVALID_POLICY_CONFIG, INVALID_REDACTION_RULE,       |',
-    '|      |              | INVALID_ROTATE_TIMESTAMP, ROTATE_BOUNDARY_IN_FUTURE  |',
+    '|      |              | INVALID_ROTATE_TIMESTAMP, ROTATE_BOUNDARY_IN_FUTURE, |',
+    '|      |              | INVALID_BACKEND_CONFIG                               |',
     '',
     'These exit codes are stable across versions. CI scripts may branch on them.',
     'For per-command tunable behavior, run `db-cluster <command> --help`.',
@@ -1206,7 +1227,7 @@ program
             return;
         }
         mkdirSync(CLUSTER_DIR, { recursive: true });
-        createLocalCluster(CLUSTER_DIR);
+        openStores();
         console.log(cliColor.success('Cluster initialized at .db-cluster/'));
         console.log('  canonical/  — entities, state');
         console.log('  artifact/   — raw files, evidence');
@@ -1747,15 +1768,19 @@ program
         // SDK's `ClusterSDK` constructor emits the no-principal warning
         // (cluster-sdk.ts:159-162) when policies are configured but no
         // principal was supplied.
+        const { backends, postgresUrl } = backendConfigFromEnv(CLUSTER_DIR);
         const sdk = policyConfigured
             ? new ClusterSDK({
                 clusterDir: CLUSTER_DIR,
+                backends,
+                postgresUrl,
                 policies: config!.policies,
                 trustZones: config!.trustZones,
                 visibilityRules: config!.visibilityRules,
                 principal: config!.principal,
             })
-            : new ClusterSDK({ clusterDir: CLUSTER_DIR });
+            : new ClusterSDK({ clusterDir: CLUSTER_DIR, backends, postgresUrl });
+        process.once('exit', () => sdk.sqliteDb?.close());
 
         const resolved = await sdk.resolve(uri);
         // Belt-and-suspenders: even on the no-policy SDK path the CLI
@@ -2110,8 +2135,11 @@ stores
     .command('verify')
     .description('Verify store backend configuration and connectivity')
     .action(cliCommand(async () => {
-        const canonicalBackend = process.env.DB_CLUSTER_CANONICAL_BACKEND ?? 'local';
-        const postgresUrl = process.env.DB_CLUSTER_POSTGRES_URL;
+        // Validated: an unknown backend or a missing URL fails closed
+        // (INVALID_BACKEND_CONFIG, exit 78) before anything is reported.
+        const backendConfig = backendConfigFromEnv(CLUSTER_DIR);
+        const canonicalBackend = backendConfig.backends?.canonical ?? 'local';
+        const postgresUrl = backendConfig.postgresUrl;
 
         console.log('Store Backend Configuration');
         console.log('═══════════════════════════════════════');
@@ -2156,6 +2184,16 @@ stores
                 console.error(`  ✗ Postgres connection failed: ${redactErrorMessage(err)}`);
                 process.exit(1);
             }
+        } else if (canonicalBackend === 'sqlite') {
+            // Opening the database runs its migrations and proves the driver
+            // loads; a missing driver is SqliteDriverUnavailableError.
+            try {
+                openStores();
+                console.log('  ✓ SQLite database: .db-cluster/sqlite/cluster.db');
+            } catch (err: any) {
+                console.error(`  ✗ SQLite backend unavailable: ${redactErrorMessage(err)}`);
+                process.exit(1);
+            }
         } else {
             const clusterExists = existsSync(CLUSTER_DIR);
             if (clusterExists) {
@@ -2173,9 +2211,16 @@ stores
     .command('migrate')
     .description('Run pending store migrations')
     .action(cliCommand(async () => {
-        const canonicalBackend = process.env.DB_CLUSTER_CANONICAL_BACKEND ?? 'local';
-        const postgresUrl = process.env.DB_CLUSTER_POSTGRES_URL;
+        const backendConfig = backendConfigFromEnv(CLUSTER_DIR);
+        const canonicalBackend = backendConfig.backends?.canonical ?? 'local';
+        const postgresUrl = backendConfig.postgresUrl;
 
+        if (canonicalBackend === 'sqlite') {
+            // SQLite applies pending migrations every time the database opens.
+            openStores();
+            console.log('✓ SQLite schema ready (migrations run on open): .db-cluster/sqlite/cluster.db');
+            return;
+        }
         if (canonicalBackend !== 'postgres') {
             console.log('No migrations needed for local backend.');
             return;
@@ -2201,7 +2246,7 @@ stores
     .command('list')
     .description('List configured store backends')
     .action(cliCommand(async () => {
-        const canonicalBackend = process.env.DB_CLUSTER_CANONICAL_BACKEND ?? 'local';
+        const canonicalBackend = backendConfigFromEnv(CLUSTER_DIR).backends?.canonical ?? 'local';
         console.log('Backend     Store');
         console.log('─────────── ──────────');
         console.log(`${canonicalBackend.padEnd(12)}canonical`);
@@ -2217,7 +2262,7 @@ program
     .description('Run full cluster health assessment. Output is sorted by severity (errors first, then warnings, then healthy). A footer surfaces the top fix when the cluster is degraded.')
     .option('--json', 'Output as JSON')
     .action(cliCommand(async (opts) => {
-        const stores = createLocalCluster(CLUSTER_DIR);
+        const { stores, pool } = openStores();
         const { doctor } = await import('./ops/doctor.js');
         // AGG-B1-6 (Wave B1-Amend fix-up): thread `dataDir` + `commandQueue`
         // so the `no_orphan_staging` check actually runs. Pre-fix `doctor(
@@ -2228,6 +2273,8 @@ program
         const health = await doctor(stores, {
             dataDir: CLUSTER_DIR,
             commandQueue,
+            // A Postgres canonical store gets its migration-registry check.
+            ...(pool ? { postgresPool: pool } : {}),
             // Wave C1-Amend fix-up (V2-C1-005): wire onProgress to the
             // doctor ops contract — STORES-C-002 ships the channel; the
             // CLI consumer was missing.
@@ -2304,7 +2351,7 @@ program
     .option('--json', 'Output as JSON')
     .option('--sample <n>', 'Max records to sample per store', '100')
     .action(cliCommand(async (opts) => {
-        const stores = createLocalCluster(CLUSTER_DIR);
+        const stores = openStores().stores;
         const { verify } = await import('./ops/verify.js');
         // Wave S2-A1 fix-up (Task 2): thread a CommandQueue so the
         // `command_receipt_bijection` check actually runs. verify() SKIPS that
@@ -2353,7 +2400,7 @@ program
     .description('Show cluster entity / command / receipt counts (cheap aggregation; no per-operation signal counters).')
     .option('--json', 'Output as JSON')
     .action(cliCommand(async (opts) => {
-        const stores = createLocalCluster(CLUSTER_DIR);
+        const stores = openStores().stores;
         // Mirrors the doctor/verify actions' CommandQueue(CLUSTER_DIR) idiom.
         const { CommandQueue } = await import('./kernel/command-queue.js');
         const commandQueue = new CommandQueue(CLUSTER_DIR);
@@ -2390,7 +2437,7 @@ rebuild
     .option('--yes', 'Skip confirmation prompt (alias for --force)')
     .option('--json', 'Output as JSON')
     .action(destructiveCommand(async (opts) => {
-        const stores = createLocalCluster(CLUSTER_DIR);
+        const stores = openStores().stores;
         const { rebuildIndex } = await import('./ops/rebuild.js');
         const result = await rebuildIndex(stores, {
             dryRun: opts.dryRun,
@@ -2418,7 +2465,7 @@ rebuild
     .description('Check for stale or orphan index records')
     .option('--json', 'Output as JSON')
     .action(cliCommand(async (opts) => {
-        const stores = createLocalCluster(CLUSTER_DIR);
+        const stores = openStores().stores;
         const { checkStale } = await import('./ops/rebuild.js');
         const stale = await checkStale(stores);
         if (opts.json) {
@@ -2443,7 +2490,7 @@ program
     .option('--force', 'Overwrite an existing output file')
     .option('--yes', 'Skip overwrite confirmation prompt (alias for --force when --output points at an existing file)')
     .action(cliCommand(async (opts) => {
-        const stores = createLocalCluster(CLUSTER_DIR);
+        const stores = openStores().stores;
         const { backup } = await import('./ops/backup.js');
         // Wave C1-Amend fix-up (V2-C1-005): wire onProgress to the
         // backup ops contract. Backup walks every record in every
@@ -2491,7 +2538,7 @@ program
     .option('--force', 'Skip confirmation prompt (also --yes)')
     .option('--yes', 'Skip confirmation prompt (alias for --force)')
     .action(destructiveCommand(async (file: string, opts: { json?: boolean; dryRun?: boolean }) => {
-        const stores = createLocalCluster(CLUSTER_DIR);
+        const stores = openStores().stores;
         const { restore } = await import('./ops/backup.js');
         const raw = readFileSync(resolve(file), 'utf-8');
         const data = safeJsonParse(raw, 'backup file');

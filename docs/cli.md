@@ -226,9 +226,11 @@ db-cluster policy test --principal '{"id":"external","name":"External","roles":[
 
 ## Store management
 
+Every data command opens its stores on the backend named by `DB_CLUSTER_CANONICAL_BACKEND`, which can be `local`, `postgres` or `sqlite` (unset means `local`). Postgres also needs `DB_CLUSTER_POSTGRES_URL`. Only the canonical store is selected this way; artifact, index and ledger stay local. An unknown value or a missing URL exits 78 (`INVALID_BACKEND_CONFIG`).
+
 ### `db-cluster stores verify`
 
-Verify store backend configuration and connectivity.
+Verify store backend configuration and connectivity. For Postgres it checks the connection and migrations; for SQLite, that the database opens; for local, that the cluster directory exists.
 
 ```bash
 db-cluster stores verify
@@ -236,7 +238,7 @@ db-cluster stores verify
 
 ### `db-cluster stores migrate`
 
-Run pending migrations for physical backends.
+Run pending migrations for physical backends. Postgres applies the canonical schema. SQLite migrates whenever the database opens, so this just opens it. Local needs none.
 
 ```bash
 db-cluster stores migrate
@@ -244,7 +246,7 @@ db-cluster stores migrate
 
 ### `db-cluster stores list`
 
-List configured backends.
+List configured backends: the canonical backend from `DB_CLUSTER_CANONICAL_BACKEND`, and local for the other stores.
 
 ```bash
 db-cluster stores list
@@ -439,6 +441,7 @@ The CLI maps every typed error to a stable POSIX exit code (`<sysexits.h>`). Ope
 | `INVALID_POLICY_CONFIG` | `78` | `EX_CONFIG` | Policy YAML failed validation | `db-cluster --policy bad.yaml ...` |
 | `INVALID_ROTATE_TIMESTAMP` | `78` | `EX_CONFIG` | `rotate(beforeTimestamp)` not ISO-8601 | `db-cluster ledger rotate "not-a-date"` |
 | `ROTATE_BOUNDARY_IN_FUTURE` | `78` | `EX_CONFIG` | rotate boundary is in the future | `db-cluster ledger rotate 2099-01-01` |
+| `INVALID_BACKEND_CONFIG` | `78` | `EX_CONFIG` | Unknown `DB_CLUSTER_CANONICAL_BACKEND`, or `postgres` without `DB_CLUSTER_POSTGRES_URL` | `DB_CLUSTER_CANONICAL_BACKEND=mysql db-cluster stats` |
 | `NOT_FOUND` | `1` | (generic) | Object missing in named store | `db-cluster inspect bogus-id` |
 | `RESOLVE_NOT_FOUND` | `1` | (generic) | URI cannot be resolved to owner truth | `db-cluster resolve cluster://canonical/bogus` |
 | `INVALID_CLUSTER_URI` | `1` | (generic) | URI doesn't match `cluster://<store>/<id>` shape | `db-cluster resolve 'not a uri'` |

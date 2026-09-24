@@ -118,7 +118,7 @@ export { formatForUser, errorToAiEnvelope } from './policy/error-formatter.js';
 // The root exports ONLY the policed factory. The raw store factories
 // (createCluster / createClusterFromEnv / createLocalCluster) are NOT
 // re-exported here — they are reachable only via '@mcptoolshop/db-cluster/unsafe'.
-export { createSafeCluster } from './adapters/factory.js';
+export { createSafeCluster, InvalidBackendConfigError } from './adapters/factory.js';
 export type { SafeCluster, SafeClusterConfig, ClusterConfig, ClusterWithPool } from './adapters/factory.js';
 
 // --- Ops ---

@@ -563,10 +563,10 @@ A canonical store backed by Postgres is still a canonical store. It still owns e
 
 | Store | Backends |
 |-------|----------|
-| Canonical | local filesystem, Postgres |
-| Artifact | local filesystem |
-| Index | local filesystem |
-| Ledger | local filesystem |
+| Canonical | local filesystem, Postgres, SQLite |
+| Artifact | local filesystem, SQLite |
+| Index | local filesystem, SQLite |
+| Ledger | local filesystem, SQLite |
 
 ### 10.3 Postgres canonical store
 
@@ -585,7 +585,9 @@ db-cluster migration-status
 db-cluster verify-schema
 ```
 
-Local fallback: if `DB_CLUSTER_CANONICAL_BACKEND` is not set, all stores use local filesystem. Postgres is opt-in.
+Selection: the CLI and the MCP server read `DB_CLUSTER_CANONICAL_BACKEND`, which can be `local` (the default when unset), `postgres`, or `sqlite`. Only the canonical store is chosen this way; the artifact, index and ledger stores stay local. An all-SQLite cluster is built through the package API, `createSafeCluster({ rootDir, backends })`. An unknown value, or `postgres` without `DB_CLUSTER_POSTGRES_URL`, stops the command with `INVALID_BACKEND_CONFIG` (CLI exit 78). Nothing falls back to local stores.
+
+For SQLite, run `export DB_CLUSTER_CANONICAL_BACKEND=sqlite` with the optional `better-sqlite3` driver installed. The database lives at `.db-cluster/sqlite/cluster.db` and migrates whenever it opens.
 
 ### 10.4 Non-goals (not yet)
 

@@ -37,6 +37,19 @@ rm -rf .db-cluster
 - Node.js 22.12+
 - db-cluster installed (`npm install -g db-cluster` or `npm link` from repo root)
 
+## SQLite path (optional)
+
+To keep the canonical store in one embedded database file, install the optional `better-sqlite3` driver and run:
+
+```bash
+export DB_CLUSTER_CANONICAL_BACKEND=sqlite
+
+db-cluster init
+db-cluster doctor
+```
+
+The database is created at `.db-cluster/sqlite/cluster.db` and migrates whenever it opens.
+
 ## Postgres path (optional)
 
 To run with Postgres canonical backend:
