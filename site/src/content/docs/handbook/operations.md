@@ -19,7 +19,7 @@ npx db-cluster doctor [--json]
 - Artifact store directory writable, hash file readable.
 - Index store reachable, count consistent.
 - Ledger store reachable, last event timestamp readable.
-- Postgres connection (if `DB_CLUSTER_POSTGRES_URL` set) — pool acquirable, migration status.
+- Postgres (when `DB_CLUSTER_CANONICAL_BACKEND=postgres`) — the pool answers a query and the required tables exist.
 - Policy file loadable (if `DB_CLUSTER_POLICIES_FILE` set).
 
 Output is a list of `HealthCheck` objects (`status` ∈ `healthy | degraded | unverified | missing | stale | unreachable | corrupt`), with the cluster-level worst-of severity ordering applied.

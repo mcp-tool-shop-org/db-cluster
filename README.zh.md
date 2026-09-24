@@ -116,7 +116,7 @@ db-cluster receipts
 
 db-cluster 在**本地**运行。它读取 + 写入您指向的目录中的 `.db-cluster/` 目录，并读取您传递给 `ingest` 的工件。默认情况下，**没有网络出口**，并且**没有遥测数据**。唯一的可选外部连接是到 Postgres 主机，如果您设置了 `DB_CLUSTER_POSTGRES_URL`。**db-cluster 在 v1.0.0 中不会为该连接配置 SSL/TLS**——除非您的连接字符串强制执行（例如 `sslmode=require`，`pg` 驱动程序会遵守），或者使用 TLS 终止代理，或者使用专用网络，否则传输是纯文本。驱动程序管理的 TLS 配置计划用于未来的版本。
 
-MCP 服务器工具仅读取 + 写入本地存储——它们永远不会到达网络，并且结构化的 `AiErrorEnvelope` 响应绝不会泄露堆栈跟踪或文件系统路径。**MCP 服务器默认设置为“面向 AI”的信任区域，内容屏蔽已开启：**工件内容和敏感实体属性默认在边界处被删除，并且没有 MCP 工具会返回原始工件字节。需要特权（“内部”/“集群管理员”）权限的操作员必须通过环境变量显式选择加入（暂定为 `DB_CLUSTER_MCP_ALLOW_PRIVILEGED`；参见 [`docs/mcp.md`](docs/mcp.md)）。**MCP 写入工具强制执行批准：**`cluster_commit_mutation` 和 `cluster_compensate_mutation` 除非命令处于“已批准”状态，否则拒绝写入——调用者必须首先调用 `cluster_approve_mutation`，并且拒绝将是一个结构化的 `AiErrorEnvelope`，而不是部分写入。（受信任的进程内 SDK 调用不受影响——此网关仅适用于 MCP 表面。）破坏性 CLI 命令（`restore`、`rebuild index`、`compensate`、`backup --force-overwrite`）需要显式的 `--yes` 标志，以及在 TTY 上的交互式确认。
+默认情况下，MCP 服务器工具会读取和写入本地存储，并且不会访问网络；唯一的例外是 Postgres 标准存储，您可以通过 `DB_CLUSTER_CANONICAL_BACKEND=postgres` 来选择它。结构化的 `AiErrorEnvelope` 响应绝不会泄露堆栈跟踪或文件系统路径。**MCP 服务器默认设置为“面向 AI”的信任区域，内容屏蔽已开启：**工件内容和敏感实体属性默认在边界处被删除，并且没有 MCP 工具会返回原始工件字节。需要特权（“内部”/“集群管理员”）权限的操作员必须通过环境变量显式选择加入（暂定为 `DB_CLUSTER_MCP_ALLOW_PRIVILEGED`；参见 [`docs/mcp.md`](docs/mcp.md)）。**MCP 写入工具强制执行批准：**`cluster_commit_mutation` 和 `cluster_compensate_mutation` 除非命令处于“已批准”状态，否则拒绝写入——调用者必须首先调用 `cluster_approve_mutation`，并且拒绝将是一个结构化的 `AiErrorEnvelope`，而不是部分写入。（受信任的进程内 SDK 调用不受影响——此网关仅适用于 MCP 表面。）破坏性 CLI 命令（`restore`、`rebuild index`、`compensate`、`backup --force-overwrite`）需要显式的 `--yes` 标志，以及在 TTY 上的交互式确认。
 
 完整的威胁模型——涉及的数据、未涉及的数据、所需的权限、每个表面的姿态以及跟踪的残留物——位于 [`SECURITY.md`](SECURITY.md)。
 
