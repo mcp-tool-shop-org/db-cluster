@@ -29,7 +29,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22, 24]
+        # Node 20 left 2026-09-24: it reached end-of-life on 2026-04-30, and
+        # engines.node is >=22.12 (commander 15 and better-sqlite3 13 need it).
+        node: [22, 24]
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -45,7 +47,16 @@ jobs:
       - name: Atlas check
         if: matrix.node == 22 && matrix.os == 'ubuntu-latest'
         run: npx --yes @dogfood-lab/atlas@1.15.0 check
-      - run: npm ci
+      # --ignore-scripts keeps the SQLite driver. better-sqlite3 13 bundles
+      # prebuilt binaries but also ships a binding.gyp, and `npm ci` (which
+      # installs from the lockfile, where the package's `gypfile: false` is not
+      # recorded) runs an implicit `node-gyp rebuild` for it. Where that cannot
+      # compile - npm 10's node-gyp does not recognise the Windows runners'
+      # Visual Studio - npm deletes the optional package, working binary and
+      # all, and the SQLite suites skip instead of failing. @ast-grep/cli is
+      # the only dependency whose install script this job needs.
+      - run: npm ci --ignore-scripts
+      - run: npm rebuild @ast-grep/cli
       # Build first — `lint:examples` resolves `db-cluster`, `db-cluster/sdk`,
       # `db-cluster/policy` (self-reference via package.json `exports`), which
       # requires dist/ to be populated. Without a prior build, tsc cannot
@@ -54,3 +65,7 @@ jobs:
       - run: npm run build
       - run: npm run lint
       - run: npm test
+        env:
+          # A missing SQLite driver fails the run instead of skipping the
+          # SQLite suites (test/sqlite-driver-presence.test.ts).
+          DB_CLUSTER_REQUIRE_SQLITE: '1'

@@ -258,10 +258,11 @@ describe('Wave C1-Amend CI/Docs regression — SHA-CIDOCS-C-SHBA-001 Node 18 →
     it('examples/quickstart/README.md does NOT contain "Node.js 18"', () => {
         const text = readFileSync(join(ROOT, 'examples/quickstart/README.md'), 'utf8');
         expect(/Node\.?js?\s+18/i.test(text)).toBe(false);
-        expect(/Node\.?js?\s+20\+/.test(text)).toBe(true);
+        // The floor moved again on 2026-09-24 (engines >=22.12).
+        expect(/Node\.?js?\s+22\.12\+/.test(text)).toBe(true);
     });
 
-    it('family probe: no Node 18+ claims linger anywhere in user-facing files', () => {
+    it('family probe: no stale Node floor (18, or 20+) lingers anywhere in user-facing files', () => {
         const userFacing = [
             'README.md',
             'examples/quickstart/README.md',
@@ -277,7 +278,7 @@ describe('Wave C1-Amend CI/Docs regression — SHA-CIDOCS-C-SHBA-001 Node 18 →
             const p = join(ROOT, f);
             if (!existsSync(p)) continue;
             const text = readFileSync(p, 'utf8');
-            if (/Node\.?js?\s+18/i.test(text)) offenders.push(f);
+            if (/Node\.?js?\s+(18|20\+)/i.test(text)) offenders.push(f);
         }
         expect(offenders).toEqual([]);
     });

@@ -109,7 +109,7 @@ db-cluster receipts
 
 ## पूर्व आवश्यकताएँ
 
-- Node.js 20+ ( `package.json` में `engines.node` के माध्यम से लागू)
+- Node.js 22.12+ ( `package.json` में `engines.node` के माध्यम से लागू)
 - एनपीएम
 
 ## विश्वास मॉडल

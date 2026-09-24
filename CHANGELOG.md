@@ -2,6 +2,16 @@
 
 All notable user-facing changes to db-cluster. This project follows [semantic versioning](https://semver.org).
 
+## Unreleased
+
+### Breaking changes
+
+- **Node.js 22.12 or later is required.** `engines.node` is now `>=22.12` (was `>=20`). Node 20 reached end-of-life on 2026-04-30, and the dependencies had already moved past it: the CLI's `commander` 15 requires Node 22.12, and the optional SQLite driver `better-sqlite3` 13 requires Node 22. CI tests Node 22 and 24 on Linux and Windows.
+
+### Notes
+
+- **`npm ci` can drop the SQLite driver.** `better-sqlite3` 13 ships prebuilt binaries inside its npm package, but `npm ci` still attempts a `node-gyp` build of it. Where that build cannot run (no C++ toolchain, or a Visual Studio release the bundled node-gyp does not recognize), npm removes the optional package, binary and all. A plain `npm install` is unaffected. If selecting the SQLite backend fails with `SQLITE_DRIVER_UNAVAILABLE` after an `npm ci`, either give the machine a C++ toolchain or install with `npm ci --ignore-scripts` when nothing else in the project needs its install scripts. db-cluster's own CI does the latter.
+
 ## 2.0.1
 
 Documentation-only release — no code, API, or behavior changes from 2.0.0.
