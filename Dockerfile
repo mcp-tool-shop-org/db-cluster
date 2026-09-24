@@ -18,8 +18,10 @@ WORKDIR /app
 # the runtime loads prebuilds/linuxmusl-x64.node. Measured 2026-09-24 on
 # node:22-alpine (x86_64): SQLite 3.53.4, and a cluster with all four stores on
 # SQLite, written in one container and read back from a named volume in
-# another, with doctor and verify healthy. The bundled CLI and MCP server open
-# local stores; select SQLite through the package API,
+# another, with doctor and verify healthy. The bundled CLI and MCP server put
+# the canonical store on SQLite when DB_CLUSTER_CANONICAL_BACKEND=sqlite; the
+# artifact, index and ledger stores stay local. An all-SQLite cluster goes
+# through the package API,
 # `createSafeCluster({ rootDir, backends: { canonical: 'sqlite', ... } })`.
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts

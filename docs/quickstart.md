@@ -5,14 +5,15 @@ Get db-cluster running in under 5 minutes. This guide proves the core truth loop
 ## Prerequisites
 
 - Node.js 22.12+ (the `engines.node` field in `package.json` enforces this on
-  install; older Node versions are unsupported because the release-gate
-  script uses `readdirSync(..., { recursive: true })`, a Node-18.17+ API,
-  and the CI matrix tests against 20 / 22 / 24)
+  install; the `commander` 15 runtime dependency needs 22.12, the optional
+  `better-sqlite3` 13 SQLite driver needs 22, and the CI matrix tests
+  against 22 / 24)
 - npm
 
 Optional (for Postgres canonical backend):
 - PostgreSQL 16+
-- `DB_CLUSTER_POSTGRES_URL` environment variable
+- `DB_CLUSTER_CANONICAL_BACKEND=postgres` to select it, and the
+  `DB_CLUSTER_POSTGRES_URL` environment variable to reach it
 
 ## Install
 

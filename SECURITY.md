@@ -56,7 +56,7 @@ db-cluster is an **AI-native federated database cluster** that ships as an npm p
 
 ### Data NOT touched
 
-- **No network egress** by default. The MCP server tools (19 of them) read and write local stores only; none make outbound HTTP/HTTPS requests.
+- **No network egress** by default. The MCP server tools (19 of them) read and write local stores unless you select a Postgres canonical store with `DB_CLUSTER_CANONICAL_BACKEND=postgres`, which connects to your Postgres host. None of them makes outbound HTTP/HTTPS requests.
 - **No telemetry.** Nothing is collected or sent to any external service.
 - **No credentials handling.** db-cluster does not read, store, or transmit auth tokens, API keys, OAuth credentials, or passwords. The only secret it reads is the Postgres connection string from env (and only when explicitly configured).
 - **No source-file modification.** Artifact ingest reads and copies; it never writes back to the file you pointed at.
