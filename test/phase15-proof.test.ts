@@ -122,8 +122,15 @@ describe('Phase 15 — Release Readiness & Package Boundary (10 Proofs)', () => 
   });
 
   // Proof 5: files field excludes test, scripts, src
+  //
+  // --ignore-scripts: without it `npm pack` fires `prepack` (`npm run build`),
+  // a full tsc build from inside vitest, which TESTS-006 removed from every
+  // other test. The file list comes from package.json `files`, not from the
+  // build, and dist/ is built before the suite runs. The hidden build pushed
+  // this test past vitest's 5 s default on the Windows CI cells (5.2-6.1 s);
+  // the pack still spawns npm, so it keeps an explicit budget.
   it('Proof 5: npm pack dry-run excludes test/, scripts/, src/', () => {
-    const output = execSync('npm pack --dry-run 2>&1', { cwd: ROOT, encoding: 'utf-8' });
+    const output = execSync('npm pack --dry-run --ignore-scripts 2>&1', { cwd: ROOT, encoding: 'utf-8' });
 
     // Should include dist
     expect(output).toContain('dist/');
@@ -133,7 +140,7 @@ describe('Phase 15 — Release Readiness & Package Boundary (10 Proofs)', () => 
     expect(output).not.toMatch(/\bscripts\//);
     expect(output).not.toMatch(/\bsrc\//);
     expect(output).not.toContain('.test-');
-  });
+  }, 30_000);
 
   // Proof 6: examples use package imports, not relative src paths
   it('Proof 6: no example file imports from ../../src/', () => {
