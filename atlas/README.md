@@ -1,63 +1,73 @@
 # db-cluster: how it works
 
-Mapped at 2026-09-24 from commit 1374860.
+Mapped at 2026-09-30 from commit 5bbcb23 by Atlas 1.24.0.
 
 ## What this is
 
-13 parts, mostly TypeScript (256 files). Work enters through 9 doors; the busiest is CI, which reaches 5 parts. It publishes to npm and a container image. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.
+13 parts, mostly TypeScript (258 files), JavaScript (16), CSS (2), Astro (1) and HTML (1). Work enters through 9 doors; CI and Release each reach 5 parts, and CI is followed because a pull request goes through it. It publishes to npm and a container image. It deploys a site to GitHub Pages. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.
 
-## What changed since 2026-09-24 (f1d79e0)
+## What changed since 2026-09-24 (1374860)
 
-- CI now also runs test/stryker-trust-check.test.ts.
-- Release now also runs test/stryker-trust-check.test.ts.
-- 2 files added and 4 changed content, across 4 parts.
+- dashboard no longer imports src.
+- examples no longer imports src.
+- CI now also runs test/kernel-errors-contract.test.ts and test/policy-kernel-scoping.test.ts.
+- Docker Publish now also runs src/cli.ts.
+- Docker Publish now also builds src/.
+- And 4 more changes to doors.
+- .demo-rk-ops/sources is now written by scripts/repo-knowledge-ops.ts.
+- .demo-rk-update/sources is now written by scripts/repo-knowledge-update-demo.ts.
+- .doc-drift-extract is now written by scripts/doc-drift.mjs.
+- And 143 more new writers and readers of places.
+- 3 files added and 275 changed content, across 9 parts.
 
 ## What comes in
 
-1. **CI.** On a pull request; on a push; or by hand. Runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 122 more; checks examples/ and src/.
-2. **Release.** When a tag matching `v*` is pushed. Runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 122 more; checks examples/ and src/.
-3. **Release Gate.** On a push to main; when a tag matching `v*` is pushed; or by hand. Runs scripts/release-gate.mjs; checks src/.
-4. **Smoke Install.** On a pull request touching 1 path; when a tag matching `v*` is pushed; or by hand. Runs scripts/smoke-install.mjs; checks src/.
-5. **Deploy site to GitHub Pages.** On a pull request touching 2 paths; on a push to main touching 2 paths; or by hand. Runs site/astro.config.mjs and site/src/.
-6. **Docker Publish.** When a tag matching `v*` is pushed; or by hand. Runs no file this map can see.
-7. **@mcptoolshop/db-cluster** (the package people import). Loads src/index.ts.
+1. **CI.** On a pull request; on a push; or by hand. Runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 124 more; builds src/; checks examples/.
+2. **Release.** When a tag matching `v*` is pushed. Runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 124 more; builds src/; checks examples/.
+3. **Release Gate.** On a push to main; when a tag matching `v*` is pushed; or by hand. Runs scripts/completeness-checks.mjs, scripts/doc-drift.mjs, scripts/jsdoc-gate.mjs and 129 more; builds src/.
+4. **Smoke Install.** On a pull request touching 1 path; when a tag matching `v*` is pushed; or by hand. Runs scripts/smoke-install.mjs; builds src/.
+5. **Docker Publish.** When a tag matching `v*` is pushed; or by hand. Runs src/cli.ts; builds src/; packs LICENSE, README.md, docs/ and 3 more into an image.
+6. **Deploy site to GitHub Pages.** On a pull request to main touching 2 paths; on a push to main touching 2 paths; or by hand. Runs site/astro.config.mjs and site/src/.
+7. **@mcptoolshop/db-cluster** (the package people import). Loads src/index.ts, src/mcp/index.ts, src/policy/index.ts and 3 more.
 8. **db-cluster** (a command people run). Runs src/cli.ts.
 9. **db-cluster-mcp** (a command people run). Runs src/mcp/server.ts.
 
 ## What happens through CI
 
-1. The workflow runs 125 files in test; it checks examples/ in examples and src/ in src.
+1. The workflow runs 127 files in test; it builds src/ in src; it checks examples/ in examples.
 2. That reaches dashboard (1 file) and scripts (6 files).
+3. It writes to examples/dogfood-project-memory/.db-cluster, which is not tracked.
+4. It uploads coverage to Codecov.
 
 ## Who reads the results
 
-CI writes nothing this map can see.
+CI writes only to examples/dogfood-project-memory/.db-cluster, which is not tracked.
 
 ## The other doors
 
-**Release** runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 122 more, checks examples/ and src/, reaches dashboard and scripts, publishes to npm, and creates a GitHub release.
+**Release** runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 124 more, builds src/, checks examples/, reaches dashboard and scripts, writes to examples/dogfood-project-memory/.db-cluster, which is not tracked, publishes to npm, and creates a GitHub release.
 
-**Release Gate** runs scripts/release-gate.mjs and checks src/.
+**Release Gate** runs scripts/completeness-checks.mjs, scripts/doc-drift.mjs, scripts/jsdoc-gate.mjs and 129 more, builds src/, reaches dashboard, and writes to .doc-drift-extract/, .release-gate-output/ and examples/dogfood-project-memory/.db-cluster, which are not tracked.
 
-**Smoke Install** runs scripts/smoke-install.mjs and checks src/.
+**Smoke Install** runs scripts/smoke-install.mjs and builds src/.
 
-**Deploy site to GitHub Pages** runs site/astro.config.mjs and site/src/, and deploys the site.
+**Docker Publish** runs src/cli.ts, builds src/, packs LICENSE, README.md, docs/ and 3 more into an image, writes to examples/dogfood-project-memory/.db-cluster, which is not tracked, and publishes a container image.
 
-**Docker Publish** runs no file this map can see and publishes a container image.
+**Deploy site to GitHub Pages** runs site/astro.config.mjs and site/src/, and deploys the site on a push to main or by hand.
 
-**@mcptoolshop/db-cluster** (the package people import) loads src/index.ts.
+**@mcptoolshop/db-cluster** (the package people import) loads src/index.ts, src/mcp/index.ts, src/policy/index.ts and 3 more, and writes to examples/dogfood-project-memory/.db-cluster, which is not tracked.
 
-**db-cluster** (a command people run) runs src/cli.ts.
+**db-cluster** (a command people run) runs src/cli.ts and writes to examples/dogfood-project-memory/.db-cluster, which is not tracked.
 
-**db-cluster-mcp** (a command people run) runs src/mcp/server.ts.
+**db-cluster-mcp** (a command people run) runs src/mcp/server.ts and writes to examples/dogfood-project-memory/.db-cluster, which is not tracked.
 
 ## What breaks what
 
-- **src** is imported by 3 parts (dashboard, examples, scripts), and by 1 more only from tests; it sits on the path of 7 doors.
+- **src** is imported by 1 part (scripts), and by 1 more only from tests, is run as a child process by 1 part (scripts), and sits on the path of 8 doors.
 - **scripts** is imported by 1 part (the repository root), and by 1 more only from tests; it sits on the path of 4 doors.
-- **dashboard** is imported only from tests, by 1 part (test), and sits on the path of 2 doors.
+- **test** is run as a child process by 1 part (scripts) and sits on the path of 3 doors.
+- **dashboard** is imported only from tests, by 1 part (test), and sits on the path of 3 doors.
 - **examples** is imported by no other part and sits on the path of 2 doors.
-- **test** is imported by no other part and sits on the path of 2 doors.
 
 ## What tends to change together
 
@@ -88,22 +98,25 @@ Nothing in this repository writes to a tracked place this map can see.
 
 ## Hand-authored
 
-People write .github/, .stage-b-amend/, .stage-b-audit/, .verifier-outputs-b1/, .verifier-outputs/, docs/, the repository root and site/; 45 writes with paths built at run time may land here.
+People write .github/, .stage-b-amend/, .stage-b-audit/, .verifier-outputs-b1/, .verifier-outputs/, docs/, the repository root and site/; 5 writes with paths built at run time may land here.
 
 ## Where to start
 
-.github/workflows/ci.yml → test/actor-required-regression.test.ts → scripts/dashboard-snapshot.ts
+.github/workflows/ci.yml → src/index.ts → src/types/evidence-bundle.ts → src/types/entity.ts
 
 Read those in order to follow one pull request end to end.
 
 ## What this map cannot see
 
-- 1 import site could not be resolved.
-- 3 files use syntax the parser cannot read, so what they import is not known: 2 in test (a NUL character inside a string in 1 and other syntax in 1), 1 in src (an import type followed by `[]`).
-- 45 writes and 63 reads use paths built at run time and are not named here.
-- 2 writes go to places this repository does not track, so they are not listed as generated.
-- 2 writes and 1 read go to the directory the command is run in or the home directory, not to this repository.
-- 78 commands are built at run time and not followed, 74 of them in tests.
+- 17 imports could not be resolved: `dashboard/lib/apply-redaction.d.ts` imports `../../dist/dashboard/dashboard-model.js`, which a build generates; `examples/agent-safe-app-db/index.ts` imports `@mcptoolshop/db-cluster/policy`, which a build generates, twice; `examples/agent-safe-app-db/index.ts` imports `@mcptoolshop/db-cluster/sdk`, which a build generates; and 13 more.
+- 5 writes and 14 reads use paths built at run time and are not named here.
+- 7 writes go to places this repository does not track, so they are not listed as generated.
+- 47 writes and 101 reads go to a path their caller passes, not to this repository.
+- 6 writes and 3 reads go to a temporary directory, not to this repository.
+- 2 reads go to the directory the command is run in, not to this repository.
+- 1 read goes to the directory the command is run in (.db-cluster) or a path its caller passes, not to this repository.
+- 1 write goes to a temporary directory or a path its caller passes, not to this repository.
+- 1 command is built at run time and not followed, and it is in tests.
 - Statistics confidence is low: fewer than 25 source files reach 10 revisions in the window.
 
 Regenerate with `npx --yes @dogfood-lab/atlas map`.
