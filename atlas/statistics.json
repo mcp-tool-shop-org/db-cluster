@@ -1,4 +1,8 @@
 {
+  "authorship": {
+    "parts": [],
+    "places": []
+  },
   "boundaries": [
     {
       "breakage": {
@@ -192,8 +196,6 @@
           "scripts"
         ],
         "importsOnly": [
-          "dashboard",
-          "examples",
           "test"
         ]
       },
@@ -211,14 +213,16 @@
         "collapsed": false,
         "confidence": "low",
         "importsAndCoChanges": [],
-        "importsOnly": []
+        "importsOnly": [
+          "scripts"
+        ]
       },
       "cohesion": null,
       "cohesionDropped": false,
       "confidence": "full",
       "highWater": null,
       "name": "test",
-      "qualifyingSourceCommits": 41,
+      "qualifyingSourceCommits": 42,
       "rebaseline": null
     }
   ],
@@ -231,8 +235,8 @@
         "path": ".github/dependabot.yml"
       },
       {
-        "commits": 12,
-        "lines": 102,
+        "commits": 14,
+        "lines": 280,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -447,7 +451,7 @@
       },
       {
         "commits": 2,
-        "lines": 159,
+        "lines": 153,
         "path": "atlas/README.md"
       },
       {
@@ -457,18 +461,23 @@
       },
       {
         "commits": 2,
-        "lines": 949,
+        "lines": 895,
         "path": "atlas/page.json"
       },
       {
         "commits": 2,
-        "lines": 3143,
+        "lines": 3246,
         "path": "atlas/statistics.json"
       },
       {
         "commits": 2,
-        "lines": 9425,
+        "lines": 9455,
         "path": "atlas/structure.json"
+      },
+      {
+        "commits": 2,
+        "lines": 36,
+        "path": "codecov.yml"
       },
       {
         "commits": 3,
@@ -751,8 +760,8 @@
         "path": "docs/release-notes-v0.1.md"
       },
       {
-        "commits": 7,
-        "lines": 239,
+        "commits": 9,
+        "lines": 327,
         "path": "docs/release-readiness.md"
       },
       {
@@ -916,13 +925,13 @@
         "path": "examples/sdk/retrieval-bundle.ts"
       },
       {
-        "commits": 15,
-        "lines": 9635,
+        "commits": 17,
+        "lines": 9929,
         "path": "package-lock.json"
       },
       {
-        "commits": 24,
-        "lines": 172,
+        "commits": 27,
+        "lines": 176,
         "path": "package.json"
       },
       {
@@ -1109,6 +1118,11 @@
         "commits": 1,
         "lines": 122,
         "path": "scripts/stryker-exclusions.mjs"
+      },
+      {
+        "commits": 1,
+        "lines": 53,
+        "path": "scripts/stryker-trust-check.mjs"
       },
       {
         "commits": 2,
@@ -1691,8 +1705,8 @@
         "path": "src/util/tmp-paths.ts"
       },
       {
-        "commits": 3,
-        "lines": 49,
+        "commits": 2,
+        "lines": 51,
         "path": "stryker.conf.json"
       },
       {
@@ -1787,7 +1801,7 @@
       },
       {
         "commits": 2,
-        "lines": 143,
+        "lines": 150,
         "path": "test/README.md"
       },
       {
@@ -1981,6 +1995,11 @@
         "path": "test/install-smoke.test.ts"
       },
       {
+        "commits": 1,
+        "lines": 299,
+        "path": "test/kernel-errors-contract.test.ts"
+      },
+      {
         "commits": 4,
         "lines": 253,
         "path": "test/kernel.test.ts"
@@ -2054,6 +2073,11 @@
         "commits": 2,
         "lines": 664,
         "path": "test/policy-engine.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 938,
+        "path": "test/policy-kernel-scoping.test.ts"
       },
       {
         "commits": 4,
@@ -2144,6 +2168,11 @@
         "commits": 1,
         "lines": 84,
         "path": "test/stryker-exclusions.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 47,
+        "path": "test/stryker-trust-check.test.ts"
       },
       {
         "commits": 1,
@@ -2516,9 +2545,9 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-09-24T18:14:29.725Z",
+  "generatedAt": "2026-09-30T20:09:31.645Z",
   "generatedFrom": {
-    "commit": "13748608a6d25c077bed3f9f599981d3af14b4d5"
+    "commit": "5bbcb23e5383850ee4b342223e8f4a8783e393e5"
   },
   "pairs": [
     {
@@ -2720,9 +2749,9 @@
     {
       "a": "package-lock.json",
       "b": "package.json",
-      "either": 20,
-      "shared": 14,
-      "strength": 0.7
+      "either": 22,
+      "shared": 15,
+      "strength": 0.681818
     },
     {
       "a": "scripts/completeness-checks.mjs",
@@ -2763,16 +2792,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-09-24T13:47:28-04:00",
-    "inScopeFiles": 455,
+    "headDate": "2026-09-29T16:47:50-07:00",
+    "inScopeFiles": 458,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 95,
+    "qualifyingCommits": 97,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-03-28T17:47:28.000Z",
+    "since": "2026-04-02T23:47:50.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",
@@ -2782,7 +2811,9 @@
       ".tsx",
       ".mts",
       ".cts",
-      ".py"
+      ".py",
+      ".rs",
+      ".gd"
     ],
     "sourceFileReach": 20,
     "sourceFileRise": 25,

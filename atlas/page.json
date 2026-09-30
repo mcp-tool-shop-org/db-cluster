@@ -11,10 +11,8 @@
   ],
   "breaks": [
     {
-      "doors": 7,
+      "doors": 8,
       "importedBy": [
-        "dashboard",
-        "examples",
         "scripts"
       ],
       "importedByTests": [
@@ -22,7 +20,10 @@
       ],
       "kind": "part",
       "name": "src",
-      "partLabel": "src"
+      "partLabel": "src",
+      "spawnedBy": [
+        "scripts"
+      ]
     },
     {
       "doors": 4,
@@ -37,7 +38,18 @@
       "partLabel": "scripts"
     },
     {
-      "doors": 2,
+      "doors": 3,
+      "importedBy": [],
+      "importedByTests": [],
+      "kind": "part",
+      "name": "test",
+      "partLabel": "test",
+      "spawnedBy": [
+        "scripts"
+      ]
+    },
+    {
+      "doors": 3,
       "importedBy": [],
       "importedByTests": [
         "test"
@@ -53,50 +65,101 @@
       "kind": "part",
       "name": "examples",
       "partLabel": "examples"
-    },
-    {
-      "doors": 2,
-      "importedBy": [],
-      "importedByTests": [],
-      "kind": "part",
-      "name": "test",
-      "partLabel": "test"
     }
   ],
   "changes": {
     "fileCounts": {
-      "added": 2,
-      "changed": 4,
+      "added": 3,
+      "changed": 275,
       "moved": 0,
-      "parts": 4,
+      "parts": 9,
       "removed": 0
     },
     "items": [
       {
-        "kind": "door",
-        "sentence": "CI now also runs test/stryker-trust-check.test.ts.",
+        "kind": "import-removed",
+        "sentence": "dashboard no longer imports src.",
         "subjects": [
-          ".github/workflows/ci.yml",
-          "test/stryker-trust-check.test.ts"
+          "dashboard",
+          "src"
+        ]
+      },
+      {
+        "kind": "import-removed",
+        "sentence": "examples no longer imports src.",
+        "subjects": [
+          "examples",
+          "src"
         ]
       },
       {
         "kind": "door",
-        "sentence": "Release now also runs test/stryker-trust-check.test.ts.",
+        "sentence": "CI now also runs test/kernel-errors-contract.test.ts and test/policy-kernel-scoping.test.ts.",
         "subjects": [
-          ".github/workflows/release.yml",
-          "test/stryker-trust-check.test.ts"
+          ".github/workflows/ci.yml",
+          "test/kernel-errors-contract.test.ts",
+          "test/policy-kernel-scoping.test.ts"
         ]
+      },
+      {
+        "kind": "door",
+        "sentence": "Docker Publish now also runs src/cli.ts.",
+        "subjects": [
+          ".github/workflows/docker-publish.yml",
+          "src/cli.ts"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "Docker Publish now also builds src/.",
+        "subjects": [
+          ".github/workflows/docker-publish.yml",
+          "src/"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "And 4 more changes to doors.",
+        "subjects": []
+      },
+      {
+        "kind": "landing",
+        "sentence": ".demo-rk-ops/sources is now written by scripts/repo-knowledge-ops.ts.",
+        "subjects": [
+          ".demo-rk-ops/sources",
+          "scripts/repo-knowledge-ops.ts"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": ".demo-rk-update/sources is now written by scripts/repo-knowledge-update-demo.ts.",
+        "subjects": [
+          ".demo-rk-update/sources",
+          "scripts/repo-knowledge-update-demo.ts"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": ".doc-drift-extract is now written by scripts/doc-drift.mjs.",
+        "subjects": [
+          ".doc-drift-extract",
+          "scripts/doc-drift.mjs"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "And 143 more new writers and readers of places.",
+        "subjects": []
       },
       {
         "kind": "counts",
-        "sentence": "2 files added and 4 changed content, across 4 parts.",
+        "sentence": "3 files added and 275 changed content, across 9 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "f1d79e07fa601bb910a9042bdbe200599d46e303",
-      "generatedAt": "2026-09-24T17:13:46.014Z"
+      "commit": "13748608a6d25c077bed3f9f599981d3af14b4d5",
+      "generatedAt": "2026-09-24T18:14:29.725Z"
     },
     "unchanged": false
   },
@@ -167,16 +230,19 @@
     "Window: 180 days; a pair counts from 3 shared commits, since 2 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "13748608a6d25c077bed3f9f599981d3af14b4d5",
+  "commit": "5bbcb23e5383850ee4b342223e8f4a8783e393e5",
   "defaultBranch": "main",
-  "derived": "13 parts, mostly TypeScript (256 files). Work enters through 9 doors; the busiest is CI, which reaches 5 parts. It publishes to npm and a container image. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.",
+  "derived": "13 parts, mostly TypeScript (258 files), JavaScript (16), CSS (2), Astro (1) and HTML (1). Work enters through 9 doors; CI and Release each reach 5 parts, and CI is followed because a pull request goes through it. It publishes to npm and a container image. It deploys a site to GitHub Pages. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.",
   "doors": [
     {
-      "checks": [
-        "examples/",
+      "builds": [
         "src/"
       ],
-      "checksCount": 2,
+      "checks": [
+        "examples/"
+      ],
+      "checksCount": 1,
+      "checksMore": 0,
       "file": ".github/workflows/ci.yml",
       "id": ".github/workflows/ci.yml",
       "landings": [],
@@ -196,7 +262,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 126
+          "files": 128
         },
         {
           "boundary": "dashboard",
@@ -235,6 +301,7 @@
         "test/exit-code-tables-regression.test.ts",
         "test/explain.test.ts",
         "test/install-smoke.test.ts",
+        "test/kernel-errors-contract.test.ts",
         "test/kernel.test.ts",
         "test/path-traversal.test.ts",
         "test/phase10-proof.test.ts",
@@ -250,6 +317,7 @@
         "test/phase8-proof.test.ts",
         "test/phase9-proof.test.ts",
         "test/policy-engine.test.ts",
+        "test/policy-kernel-scoping.test.ts",
         "test/policy-kernel.test.ts",
         "test/policy-surface.test.ts",
         "test/postgres-canonical-store.test.ts",
@@ -336,21 +404,28 @@
         "test/wave6-policy-proof.test.ts",
         "test/wave6-proof.test.ts"
       ],
-      "runsCount": 125,
-      "sends": [],
+      "runsCount": 127,
+      "runsMore": 124,
+      "sends": [
+        "uploads coverage to Codecov"
+      ],
       "stages": [],
       "triggers": [
         "on a pull request",
         "on a push",
         "or by hand"
-      ]
+      ],
+      "untracked": "examples/dogfood-project-memory/.db-cluster, which is not tracked"
     },
     {
-      "checks": [
-        "examples/",
+      "builds": [
         "src/"
       ],
-      "checksCount": 2,
+      "checks": [
+        "examples/"
+      ],
+      "checksCount": 1,
+      "checksMore": 0,
       "file": ".github/workflows/release.yml",
       "id": ".github/workflows/release.yml",
       "landings": [],
@@ -370,7 +445,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 126
+          "files": 128
         },
         {
           "boundary": "dashboard",
@@ -409,6 +484,7 @@
         "test/exit-code-tables-regression.test.ts",
         "test/explain.test.ts",
         "test/install-smoke.test.ts",
+        "test/kernel-errors-contract.test.ts",
         "test/kernel.test.ts",
         "test/path-traversal.test.ts",
         "test/phase10-proof.test.ts",
@@ -424,6 +500,7 @@
         "test/phase8-proof.test.ts",
         "test/phase9-proof.test.ts",
         "test/policy-engine.test.ts",
+        "test/policy-kernel-scoping.test.ts",
         "test/policy-kernel.test.ts",
         "test/policy-surface.test.ts",
         "test/postgres-canonical-store.test.ts",
@@ -510,7 +587,8 @@
         "test/wave6-policy-proof.test.ts",
         "test/wave6-proof.test.ts"
       ],
-      "runsCount": 125,
+      "runsCount": 127,
+      "runsMore": 124,
       "sends": [
         "publishes to npm",
         "creates a GitHub release"
@@ -518,13 +596,16 @@
       "stages": [],
       "triggers": [
         "when a tag matching `v*` is pushed"
-      ]
+      ],
+      "untracked": "examples/dogfood-project-memory/.db-cluster, which is not tracked"
     },
     {
-      "checks": [
+      "builds": [
         "src/"
       ],
-      "checksCount": 1,
+      "checks": [],
+      "checksCount": 0,
+      "checksMore": 0,
       "file": ".github/workflows/release-gate.yml",
       "id": ".github/workflows/release-gate.yml",
       "landings": [],
@@ -534,31 +615,176 @@
         {
           "boundary": "scripts",
           "depth": 0,
-          "files": 1
+          "files": 12
         },
         {
           "boundary": "src",
           "depth": 0,
           "files": 99
+        },
+        {
+          "boundary": "test",
+          "depth": 0,
+          "files": 128
+        },
+        {
+          "boundary": "dashboard",
+          "depth": 1,
+          "files": 1
         }
       ],
       "runs": [
-        "scripts/release-gate.mjs"
+        "scripts/completeness-checks.mjs",
+        "scripts/doc-drift.mjs",
+        "scripts/jsdoc-gate.mjs",
+        "scripts/release-gate.mjs",
+        "scripts/smoke-install.mjs",
+        "test/actor-required-regression.test.ts",
+        "test/adapters.test.ts",
+        "test/backend-env-surfaces.test.ts",
+        "test/backend-parity.test.ts",
+        "test/cli-docs.test.ts",
+        "test/cli.test.ts",
+        "test/command-index-consistency.test.ts",
+        "test/command-persistence.test.ts",
+        "test/content-index.test.ts",
+        "test/contracts.test.ts",
+        "test/dashboard-command-preview.test.ts",
+        "test/dashboard-model.test.ts",
+        "test/dashboard-ops.test.ts",
+        "test/dashboard-policy-view.test.ts",
+        "test/dashboard-snapshot.test.ts",
+        "test/doctor-head-truncation-regression.test.ts",
+        "test/dogfood-mutation.test.ts",
+        "test/dogfood-ops.test.ts",
+        "test/dogfood-policy.test.ts",
+        "test/dogfood-replay.test.ts",
+        "test/dogfood-retrieval.test.ts",
+        "test/dogfood-trace.test.ts",
+        "test/exit-code-tables-regression.test.ts",
+        "test/explain.test.ts",
+        "test/install-smoke.test.ts",
+        "test/kernel-errors-contract.test.ts",
+        "test/kernel.test.ts",
+        "test/path-traversal.test.ts",
+        "test/phase10-proof.test.ts",
+        "test/phase11-proof.test.ts",
+        "test/phase12-proof.test.ts",
+        "test/phase13-proof.test.ts",
+        "test/phase14-proof.test.ts",
+        "test/phase15-proof.test.ts",
+        "test/phase2-proof.test.ts",
+        "test/phase3-proof.test.ts",
+        "test/phase4-proof.test.ts",
+        "test/phase5-proof.test.ts",
+        "test/phase8-proof.test.ts",
+        "test/phase9-proof.test.ts",
+        "test/policy-engine.test.ts",
+        "test/policy-kernel-scoping.test.ts",
+        "test/policy-kernel.test.ts",
+        "test/policy-surface.test.ts",
+        "test/postgres-canonical-store.test.ts",
+        "test/postgres-kernel-regression.test.ts",
+        "test/proof.test.ts",
+        "test/rebuild.test.ts",
+        "test/repo-knowledge-dashboard.test.ts",
+        "test/repo-knowledge-ingest.test.ts",
+        "test/repo-knowledge-mapping.test.ts",
+        "test/repo-knowledge-mutation.test.ts",
+        "test/repo-knowledge-ops.test.ts",
+        "test/repo-knowledge-retrieval.test.ts",
+        "test/resolver.test.ts",
+        "test/restore-artifacts.test.ts",
+        "test/retrieval.test.ts",
+        "test/sql-injection.test.ts",
+        "test/sqlite-driver-presence.test.ts",
+        "test/stryker-exclusions.test.ts",
+        "test/stryker-trust-check.test.ts",
+        "test/typed-error-regression.test.ts",
+        "test/uri-errors-typed-regression.test.ts",
+        "test/uri.test.ts",
+        "test/validate-before-write-regression.test.ts",
+        "test/verb-parity.test.ts",
+        "test/wave-a3-kernel-regression.test.ts",
+        "test/wave-a3-stores-regression.test.ts",
+        "test/wave-a3-surface-regression.test.ts",
+        "test/wave-a3-tests-regression.test.ts",
+        "test/wave-a4-fixup-regression.test.ts",
+        "test/wave-a4-kernel-regression.test.ts",
+        "test/wave-a4-stores-regression.test.ts",
+        "test/wave-a4-surface-regression.test.ts",
+        "test/wave-a4-tests-regression.test.ts",
+        "test/wave-b1-cidocs-regression.test.ts",
+        "test/wave-b1-fixup-regression.test.ts",
+        "test/wave-b1-kernel-regression.test.ts",
+        "test/wave-b1-stores-regression.test.ts",
+        "test/wave-b1-surface-regression.test.ts",
+        "test/wave-c1-cidocs-regression.test.ts",
+        "test/wave-c1-fixup-regression.test.ts",
+        "test/wave-c1-kernel-regression.test.ts",
+        "test/wave-c1-stores-regression.test.ts",
+        "test/wave-c1-surface-regression.test.ts",
+        "test/wave-c1-tests-cli-snapshots.test.ts",
+        "test/wave-c1-tests-dashboard-render.test.ts",
+        "test/wave-c1-tests-exit-codes.test.ts",
+        "test/wave-c1-tests-jsdoc-examples.test.ts",
+        "test/wave-c1-tests-mcp-envelope.test.ts",
+        "test/wave-phase-10-cli-color.test.ts",
+        "test/wave-s2a1-contracts-regression.test.ts",
+        "test/wave-s2a1-fixup-ops-regression.test.ts",
+        "test/wave-s2a1-fixup-wiring-regression.test.ts",
+        "test/wave-s2a1-kernel-regression.test.ts",
+        "test/wave-s2a1-local-adapters-regression.test.ts",
+        "test/wave-s2a1-ops-regression.test.ts",
+        "test/wave-s2a1-surface-regression.test.ts",
+        "test/wave-s2a2-cli-ops-regression.test.ts",
+        "test/wave-s2a2-docs-regression.test.ts",
+        "test/wave-s2a2-fixup-regression.test.ts",
+        "test/wave-s2a2-gating-regression.test.ts",
+        "test/wave-s2a2-policy-regression.test.ts",
+        "test/wave-s2a2-surfaces-regression.test.ts",
+        "test/wave-v1-callsite-regression.test.ts",
+        "test/wave-v1-ranker-regression.test.ts",
+        "test/wave-v1-retrieval-regression.test.ts",
+        "test/wave-v1-store-regression.test.ts",
+        "test/wave-v1-tests-regression.test.ts",
+        "test/wave-v2-kernel-reads.test.ts",
+        "test/wave-v2-mcp-cli.test.ts",
+        "test/wave-v2-policy-versions.test.ts",
+        "test/wave-v2-sdk.test.ts",
+        "test/wave-v2-tests-regression.test.ts",
+        "test/wave-v3-cross-adapter-integrity.test.ts",
+        "test/wave-v3-sqlite-canonical-artifact.test.ts",
+        "test/wave-v3-sqlite-foundation.test.ts",
+        "test/wave-v3-sqlite-hardening.test.ts",
+        "test/wave-v3-sqlite-index-ledger.test.ts",
+        "test/wave-v3-sqlite-parity.test.ts",
+        "test/wave-v4-cli-exit-codes.test.ts",
+        "test/wave-v4-mcp-gate-iserror.test.ts",
+        "test/wave-v5-snippet-redaction.test.ts",
+        "test/wave5-parity.test.ts",
+        "test/wave5-redaction.test.ts",
+        "test/wave6-policy-proof.test.ts",
+        "test/wave6-proof.test.ts"
       ],
-      "runsCount": 1,
+      "runsCount": 132,
+      "runsMore": 129,
       "sends": [],
       "stages": [],
       "triggers": [
         "on a push to main",
         "when a tag matching `v*` is pushed",
         "or by hand"
-      ]
+      ],
+      "untracked": ".doc-drift-extract/, .release-gate-output/ and examples/dogfood-project-memory/.db-cluster, which are not tracked"
     },
     {
-      "checks": [
+      "builds": [
         "src/"
       ],
-      "checksCount": 1,
+      "checks": [],
+      "checksCount": 0,
+      "checksMore": 0,
       "file": ".github/workflows/smoke-install.yml",
       "id": ".github/workflows/smoke-install.yml",
       "landings": [],
@@ -580,6 +806,7 @@
         "scripts/smoke-install.mjs"
       ],
       "runsCount": 1,
+      "runsMore": 0,
       "sends": [],
       "stages": [],
       "triggers": [
@@ -589,8 +816,56 @@
       ]
     },
     {
+      "builds": [
+        "src/"
+      ],
       "checks": [],
       "checksCount": 0,
+      "checksMore": 0,
+      "file": ".github/workflows/docker-publish.yml",
+      "id": ".github/workflows/docker-publish.yml",
+      "landings": [],
+      "name": "Docker Publish",
+      "packs": [
+        "LICENSE",
+        "README.md",
+        "docs/",
+        "package-lock.json",
+        "package.json",
+        "tsconfig.json"
+      ],
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "root",
+          "depth": 0,
+          "files": 5
+        },
+        {
+          "boundary": "src",
+          "depth": 0,
+          "files": 99
+        }
+      ],
+      "runs": [
+        "src/cli.ts"
+      ],
+      "runsCount": 1,
+      "runsMore": 0,
+      "sends": [
+        "publishes a container image"
+      ],
+      "stages": [],
+      "triggers": [
+        "when a tag matching `v*` is pushed",
+        "or by hand"
+      ],
+      "untracked": "examples/dogfood-project-memory/.db-cluster, which is not tracked"
+    },
+    {
+      "checks": [],
+      "checksCount": 0,
+      "checksMore": 0,
       "file": ".github/workflows/pages.yml",
       "id": ".github/workflows/pages.yml",
       "landings": [],
@@ -600,7 +875,7 @@
         {
           "boundary": "site",
           "depth": 0,
-          "files": 3
+          "files": 5
         }
       ],
       "runs": [
@@ -608,12 +883,13 @@
         "site/src/"
       ],
       "runsCount": 2,
+      "runsMore": 0,
       "sends": [
-        "deploys the site"
+        "deploys the site on a push to main or by hand"
       ],
       "stages": [],
       "triggers": [
-        "on a pull request touching 2 paths",
+        "on a pull request to main touching 2 paths",
         "on a push to main touching 2 paths",
         "or by hand"
       ]
@@ -621,26 +897,7 @@
     {
       "checks": [],
       "checksCount": 0,
-      "file": ".github/workflows/docker-publish.yml",
-      "id": ".github/workflows/docker-publish.yml",
-      "landings": [],
-      "name": "Docker Publish",
-      "pushes": false,
-      "reach": [],
-      "runs": [],
-      "runsCount": 0,
-      "sends": [
-        "publishes a container image"
-      ],
-      "stages": [],
-      "triggers": [
-        "when a tag matching `v*` is pushed",
-        "or by hand"
-      ]
-    },
-    {
-      "checks": [],
-      "checksCount": 0,
+      "checksMore": 0,
       "file": "package.json",
       "id": "package.json#@mcptoolshop/db-cluster",
       "kind": "package",
@@ -651,20 +908,28 @@
         {
           "boundary": "src",
           "depth": 0,
-          "files": 65
+          "files": 83
         }
       ],
       "runs": [
-        "src/index.ts"
+        "src/index.ts",
+        "src/mcp/index.ts",
+        "src/policy/index.ts",
+        "src/sdk/index.ts",
+        "src/types/index.ts",
+        "src/unsafe.ts"
       ],
-      "runsCount": 1,
+      "runsCount": 6,
+      "runsMore": 3,
       "sends": [],
       "stages": [],
-      "triggers": []
+      "triggers": [],
+      "untracked": "examples/dogfood-project-memory/.db-cluster, which is not tracked"
     },
     {
       "checks": [],
       "checksCount": 0,
+      "checksMore": 0,
       "file": "package.json",
       "id": "package.json#db-cluster",
       "kind": "command",
@@ -675,20 +940,23 @@
         {
           "boundary": "src",
           "depth": 0,
-          "files": 73
+          "files": 78
         }
       ],
       "runs": [
         "src/cli.ts"
       ],
       "runsCount": 1,
+      "runsMore": 0,
       "sends": [],
       "stages": [],
-      "triggers": []
+      "triggers": [],
+      "untracked": "examples/dogfood-project-memory/.db-cluster, which is not tracked"
     },
     {
       "checks": [],
       "checksCount": 0,
+      "checksMore": 0,
       "file": "package.json",
       "id": "package.json#db-cluster-mcp",
       "kind": "command",
@@ -699,32 +967,24 @@
         {
           "boundary": "src",
           "depth": 0,
-          "files": 71
+          "files": 76
         }
       ],
       "runs": [
         "src/mcp/server.ts"
       ],
       "runsCount": 1,
+      "runsMore": 0,
       "sends": [],
       "stages": [],
-      "triggers": []
+      "triggers": [],
+      "untracked": "examples/dogfood-project-memory/.db-cluster, which is not tracked"
     }
   ],
   "duplicates": [],
   "duplicatesLead": null,
   "duplicatesNote": [],
   "edges": [
-    {
-      "from": "dashboard",
-      "fromTests": false,
-      "to": "src"
-    },
-    {
-      "from": "examples",
-      "fromTests": false,
-      "to": "src"
-    },
     {
       "from": "scripts",
       "fromTests": false,
@@ -746,15 +1006,19 @@
       "to": "src"
     }
   ],
+  "engine": "1.24.0",
   "generated": [],
-  "generatedAt": "2026-09-24T18:14:29.725Z",
+  "generatedAt": "2026-09-30T20:09:31.645Z",
   "limits": [
-    "1 import site could not be resolved.",
-    "3 files use syntax the parser cannot read, so what they import is not known: 2 in test (a NUL character inside a string in 1 and other syntax in 1), 1 in src (an import type followed by `[]`).",
-    "45 writes and 63 reads use paths built at run time and are not named here.",
-    "2 writes go to places this repository does not track, so they are not listed as generated.",
-    "2 writes and 1 read go to the directory the command is run in or the home directory, not to this repository.",
-    "78 commands are built at run time and not followed, 74 of them in tests.",
+    "17 imports could not be resolved: `dashboard/lib/apply-redaction.d.ts` imports `../../dist/dashboard/dashboard-model.js`, which a build generates; `examples/agent-safe-app-db/index.ts` imports `@mcptoolshop/db-cluster/policy`, which a build generates, twice; `examples/agent-safe-app-db/index.ts` imports `@mcptoolshop/db-cluster/sdk`, which a build generates; and 13 more.",
+    "5 writes and 14 reads use paths built at run time and are not named here.",
+    "7 writes go to places this repository does not track, so they are not listed as generated.",
+    "47 writes and 101 reads go to a path their caller passes, not to this repository.",
+    "6 writes and 3 reads go to a temporary directory, not to this repository.",
+    "2 reads go to the directory the command is run in, not to this repository.",
+    "1 read goes to the directory the command is run in (.db-cluster) or a path its caller passes, not to this repository.",
+    "1 write goes to a temporary directory or a path its caller passes, not to this repository.",
+    "1 command is built at run time and not followed, and it is in tests.",
     "Statistics confidence is low: fewer than 25 source files reach 10 revisions in the window."
   ],
   "mainDoor": ".github/workflows/ci.yml",
@@ -780,20 +1044,22 @@
   "startDoor": ".github/workflows/ci.yml",
   "startHere": [
     ".github/workflows/ci.yml",
-    "test/actor-required-regression.test.ts",
-    "scripts/dashboard-snapshot.ts"
+    "src/index.ts",
+    "src/types/evidence-bundle.ts",
+    "src/types/entity.ts"
   ],
   "summary": null,
   "summaryFrom": null,
-  "testFiles": 140,
+  "testFiles": 142,
   "testedBy": {
     "dashboard": 3,
     "examples": 0,
-    "scripts": 14,
-    "src": 117
+    "scripts": 16,
+    "src": 122
   },
-  "unnamedWrites": 45,
+  "unnamedWrites": 5,
   "unread": [],
+  "unreadFiles": 0,
   "unreadNote": [],
   "untested": [
     {
