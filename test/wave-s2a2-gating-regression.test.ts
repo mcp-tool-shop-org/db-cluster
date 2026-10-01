@@ -182,6 +182,11 @@ describe('Wave S2-A2 INJECT-004 — destructive-gating fail-closed (dist/cli.js)
 });
 
 // ─── R9 / R10 ast-grep completeness rules — meta-tests ─────────────────────
+
+// Each case spawns `npx ast-grep` through a shell. On a Windows runner npx's
+// cold start alone can pass vitest's 5 s default (one case took 6.6 s on
+// 2026-10-01), so these groups get the 30 s the other spawn-heavy tests use.
+const AST_GREP_TIMEOUT = 30_000;
 //
 // These exercise the shipped rule FILES two ways:
 //
@@ -290,7 +295,7 @@ function matchFile(m: AstGrepMatch): string {
     return m.file.replace(/\\/g, '/');
 }
 
-describe('Wave S2-A2 — R9 SDK-artifact-without-sanitize completeness gate', () => {
+describe('Wave S2-A2 — R9 SDK-artifact-without-sanitize completeness gate', { timeout: AST_GREP_TIMEOUT }, () => {
     const RULE = 'R9-sdk-artifact-without-sanitize.yml';
 
     it('R9 rule file exists', () => {
@@ -318,7 +323,7 @@ describe('Wave S2-A2 — R9 SDK-artifact-without-sanitize completeness gate', ()
     });
 });
 
-describe('Wave S2-A2 — R10 path-scrub-regex-outside-redactor completeness gate', () => {
+describe('Wave S2-A2 — R10 path-scrub-regex-outside-redactor completeness gate', { timeout: AST_GREP_TIMEOUT }, () => {
     const RULE = 'R10-path-scrub-regex-outside-redactor.yml';
 
     it('R10 rule file exists', () => {
