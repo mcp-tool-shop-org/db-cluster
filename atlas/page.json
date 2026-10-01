@@ -69,47 +69,168 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 2,
-      "changed": 19,
+      "added": 32,
+      "changed": 3,
       "moved": 0,
-      "parts": 6,
+      "parts": 3,
       "removed": 0
     },
     "items": [
       {
         "kind": "door",
-        "sentence": "CI now also runs scripts/merge-child-coverage.mjs and test/merge-child-coverage.test.ts.",
+        "sentence": "CI now also runs test/coverage-adapters-factory.test.ts, test/coverage-adapters-local-artifact.test.ts, test/coverage-adapters-local-ledger-recovery.test.ts and 29 more.",
         "subjects": [
           ".github/workflows/ci.yml",
-          "scripts/merge-child-coverage.mjs",
-          "test/merge-child-coverage.test.ts"
+          "test/coverage-adapters-factory.test.ts",
+          "test/coverage-adapters-local-artifact.test.ts",
+          "test/coverage-adapters-local-ledger-recovery.test.ts",
+          "test/coverage-adapters-local-ledger.test.ts",
+          "test/coverage-adapters-postgres-store.test.ts",
+          "test/coverage-cli-config.test.ts",
+          "test/coverage-cli-data-commands.test.ts",
+          "test/coverage-cli-error-wrappers.test.ts",
+          "test/coverage-cli-ops.test.ts",
+          "test/coverage-cli-postgres-wire.test.ts",
+          "test/coverage-indexer-content.test.ts",
+          "test/coverage-kernel-cluster.test.ts",
+          "test/coverage-kernel-queue.test.ts",
+          "test/coverage-mcp-config-validator.test.ts",
+          "test/coverage-mcp-server-lifecycle.test.ts",
+          "test/coverage-mcp-server-options.test.ts",
+          "test/coverage-mcp-server-stdio.test.ts",
+          "test/coverage-mcp-server-tools.test.ts",
+          "test/coverage-ops-backup.test.ts",
+          "test/coverage-ops-dashboard-inspector.test.ts",
+          "test/coverage-ops-dashboard-model.test.ts",
+          "test/coverage-ops-dashboard-trace.test.ts",
+          "test/coverage-ops-doctor-policy.test.ts",
+          "test/coverage-ops-doctor.test.ts",
+          "test/coverage-ops-integrity.test.ts",
+          "test/coverage-ops-rebuild.test.ts",
+          "test/coverage-ops-verify.test.ts",
+          "test/coverage-provenance-trace-builder.test.ts",
+          "test/coverage-redactor-behaviors.test.ts",
+          "test/coverage-scripts-dashboard-snapshot.test.ts",
+          "test/coverage-sdk-cluster.test.ts",
+          "test/coverage-sdk-repo-knowledge-ingest.test.ts"
         ]
       },
       {
         "kind": "door",
-        "sentence": "Release Gate now also runs test/merge-child-coverage.test.ts.",
+        "sentence": "Release Gate now also runs test/coverage-adapters-factory.test.ts, test/coverage-adapters-local-artifact.test.ts, test/coverage-adapters-local-ledger-recovery.test.ts and 29 more.",
         "subjects": [
           ".github/workflows/release-gate.yml",
-          "test/merge-child-coverage.test.ts"
+          "test/coverage-adapters-factory.test.ts",
+          "test/coverage-adapters-local-artifact.test.ts",
+          "test/coverage-adapters-local-ledger-recovery.test.ts",
+          "test/coverage-adapters-local-ledger.test.ts",
+          "test/coverage-adapters-postgres-store.test.ts",
+          "test/coverage-cli-config.test.ts",
+          "test/coverage-cli-data-commands.test.ts",
+          "test/coverage-cli-error-wrappers.test.ts",
+          "test/coverage-cli-ops.test.ts",
+          "test/coverage-cli-postgres-wire.test.ts",
+          "test/coverage-indexer-content.test.ts",
+          "test/coverage-kernel-cluster.test.ts",
+          "test/coverage-kernel-queue.test.ts",
+          "test/coverage-mcp-config-validator.test.ts",
+          "test/coverage-mcp-server-lifecycle.test.ts",
+          "test/coverage-mcp-server-options.test.ts",
+          "test/coverage-mcp-server-stdio.test.ts",
+          "test/coverage-mcp-server-tools.test.ts",
+          "test/coverage-ops-backup.test.ts",
+          "test/coverage-ops-dashboard-inspector.test.ts",
+          "test/coverage-ops-dashboard-model.test.ts",
+          "test/coverage-ops-dashboard-trace.test.ts",
+          "test/coverage-ops-doctor-policy.test.ts",
+          "test/coverage-ops-doctor.test.ts",
+          "test/coverage-ops-integrity.test.ts",
+          "test/coverage-ops-rebuild.test.ts",
+          "test/coverage-ops-verify.test.ts",
+          "test/coverage-provenance-trace-builder.test.ts",
+          "test/coverage-redactor-behaviors.test.ts",
+          "test/coverage-scripts-dashboard-snapshot.test.ts",
+          "test/coverage-sdk-cluster.test.ts",
+          "test/coverage-sdk-repo-knowledge-ingest.test.ts"
         ]
       },
       {
         "kind": "door",
-        "sentence": "Release now also runs test/merge-child-coverage.test.ts.",
+        "sentence": "Release now also runs test/coverage-adapters-factory.test.ts, test/coverage-adapters-local-artifact.test.ts, test/coverage-adapters-local-ledger-recovery.test.ts and 29 more.",
         "subjects": [
           ".github/workflows/release.yml",
-          "test/merge-child-coverage.test.ts"
+          "test/coverage-adapters-factory.test.ts",
+          "test/coverage-adapters-local-artifact.test.ts",
+          "test/coverage-adapters-local-ledger-recovery.test.ts",
+          "test/coverage-adapters-local-ledger.test.ts",
+          "test/coverage-adapters-postgres-store.test.ts",
+          "test/coverage-cli-config.test.ts",
+          "test/coverage-cli-data-commands.test.ts",
+          "test/coverage-cli-error-wrappers.test.ts",
+          "test/coverage-cli-ops.test.ts",
+          "test/coverage-cli-postgres-wire.test.ts",
+          "test/coverage-indexer-content.test.ts",
+          "test/coverage-kernel-cluster.test.ts",
+          "test/coverage-kernel-queue.test.ts",
+          "test/coverage-mcp-config-validator.test.ts",
+          "test/coverage-mcp-server-lifecycle.test.ts",
+          "test/coverage-mcp-server-options.test.ts",
+          "test/coverage-mcp-server-stdio.test.ts",
+          "test/coverage-mcp-server-tools.test.ts",
+          "test/coverage-ops-backup.test.ts",
+          "test/coverage-ops-dashboard-inspector.test.ts",
+          "test/coverage-ops-dashboard-model.test.ts",
+          "test/coverage-ops-dashboard-trace.test.ts",
+          "test/coverage-ops-doctor-policy.test.ts",
+          "test/coverage-ops-doctor.test.ts",
+          "test/coverage-ops-integrity.test.ts",
+          "test/coverage-ops-rebuild.test.ts",
+          "test/coverage-ops-verify.test.ts",
+          "test/coverage-provenance-trace-builder.test.ts",
+          "test/coverage-redactor-behaviors.test.ts",
+          "test/coverage-scripts-dashboard-snapshot.test.ts",
+          "test/coverage-sdk-cluster.test.ts",
+          "test/coverage-sdk-repo-knowledge-ingest.test.ts"
         ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "CHANGELOG.md is now also read by test/coverage-sdk-repo-knowledge-ingest.test.ts.",
+        "subjects": [
+          "CHANGELOG.md",
+          "test/coverage-sdk-repo-knowledge-ingest.test.ts"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "README.md is now also read by test/coverage-sdk-repo-knowledge-ingest.test.ts.",
+        "subjects": [
+          "README.md",
+          "test/coverage-sdk-repo-knowledge-ingest.test.ts"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "examples/dogfood-project-memory/.db-cluster is now also read by test/coverage-scripts-dashboard-snapshot.test.ts.",
+        "subjects": [
+          "examples/dogfood-project-memory/.db-cluster",
+          "test/coverage-scripts-dashboard-snapshot.test.ts"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "And 3 more new writers and readers of places.",
+        "subjects": []
       },
       {
         "kind": "counts",
-        "sentence": "2 files added and 19 changed content, across 6 parts.",
+        "sentence": "32 files added and 3 changed content, across 3 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "5bbcb23e5383850ee4b342223e8f4a8783e393e5",
-      "generatedAt": "2026-09-30T20:09:31.645Z"
+      "commit": "d96918c8a72d125049a0ee359fd65d1571ab85f5",
+      "generatedAt": "2026-10-01T21:57:12.023Z"
     },
     "unchanged": false
   },
@@ -180,9 +301,9 @@
     "Window: 180 days; a pair counts from 3 shared commits, since 2 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "d96918c8a72d125049a0ee359fd65d1571ab85f5",
-  "defaultBranch": "ci/child-process-coverage",
-  "derived": "13 parts, mostly TypeScript (259 files), JavaScript (17), CSS (2), Astro (1) and HTML (1). Work enters through 9 doors; CI and Release each reach 5 parts, and CI is followed because a pull request goes through it. It publishes to npm and a container image. It deploys a site to GitHub Pages. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.",
+  "commit": "193d70c6d4f3770e0a7cfe85072c9800448f65f8",
+  "defaultBranch": "main",
+  "derived": "13 parts, mostly TypeScript (291 files), JavaScript (17), CSS (2), Astro (1) and HTML (1). Work enters through 9 doors; CI and Release each reach 5 parts, and CI is followed because a pull request goes through it. It publishes to npm and a container image. It deploys a site to GitHub Pages. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.",
   "doors": [
     {
       "builds": [
@@ -217,7 +338,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 129
+          "files": 161
         },
         {
           "boundary": "dashboard",
@@ -237,6 +358,38 @@
         "test/command-persistence.test.ts",
         "test/content-index.test.ts",
         "test/contracts.test.ts",
+        "test/coverage-adapters-factory.test.ts",
+        "test/coverage-adapters-local-artifact.test.ts",
+        "test/coverage-adapters-local-ledger-recovery.test.ts",
+        "test/coverage-adapters-local-ledger.test.ts",
+        "test/coverage-adapters-postgres-store.test.ts",
+        "test/coverage-cli-config.test.ts",
+        "test/coverage-cli-data-commands.test.ts",
+        "test/coverage-cli-error-wrappers.test.ts",
+        "test/coverage-cli-ops.test.ts",
+        "test/coverage-cli-postgres-wire.test.ts",
+        "test/coverage-indexer-content.test.ts",
+        "test/coverage-kernel-cluster.test.ts",
+        "test/coverage-kernel-queue.test.ts",
+        "test/coverage-mcp-config-validator.test.ts",
+        "test/coverage-mcp-server-lifecycle.test.ts",
+        "test/coverage-mcp-server-options.test.ts",
+        "test/coverage-mcp-server-stdio.test.ts",
+        "test/coverage-mcp-server-tools.test.ts",
+        "test/coverage-ops-backup.test.ts",
+        "test/coverage-ops-dashboard-inspector.test.ts",
+        "test/coverage-ops-dashboard-model.test.ts",
+        "test/coverage-ops-dashboard-trace.test.ts",
+        "test/coverage-ops-doctor-policy.test.ts",
+        "test/coverage-ops-doctor.test.ts",
+        "test/coverage-ops-integrity.test.ts",
+        "test/coverage-ops-rebuild.test.ts",
+        "test/coverage-ops-verify.test.ts",
+        "test/coverage-provenance-trace-builder.test.ts",
+        "test/coverage-redactor-behaviors.test.ts",
+        "test/coverage-scripts-dashboard-snapshot.test.ts",
+        "test/coverage-sdk-cluster.test.ts",
+        "test/coverage-sdk-repo-knowledge-ingest.test.ts",
         "test/dashboard-command-preview.test.ts",
         "test/dashboard-model.test.ts",
         "test/dashboard-ops.test.ts",
@@ -356,8 +509,8 @@
         "test/wave6-policy-proof.test.ts",
         "test/wave6-proof.test.ts"
       ],
-      "runsCount": 129,
-      "runsMore": 126,
+      "runsCount": 161,
+      "runsMore": 158,
       "sends": [
         "uploads coverage to Codecov"
       ],
@@ -397,7 +550,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 129
+          "files": 161
         },
         {
           "boundary": "dashboard",
@@ -421,6 +574,38 @@
         "test/command-persistence.test.ts",
         "test/content-index.test.ts",
         "test/contracts.test.ts",
+        "test/coverage-adapters-factory.test.ts",
+        "test/coverage-adapters-local-artifact.test.ts",
+        "test/coverage-adapters-local-ledger-recovery.test.ts",
+        "test/coverage-adapters-local-ledger.test.ts",
+        "test/coverage-adapters-postgres-store.test.ts",
+        "test/coverage-cli-config.test.ts",
+        "test/coverage-cli-data-commands.test.ts",
+        "test/coverage-cli-error-wrappers.test.ts",
+        "test/coverage-cli-ops.test.ts",
+        "test/coverage-cli-postgres-wire.test.ts",
+        "test/coverage-indexer-content.test.ts",
+        "test/coverage-kernel-cluster.test.ts",
+        "test/coverage-kernel-queue.test.ts",
+        "test/coverage-mcp-config-validator.test.ts",
+        "test/coverage-mcp-server-lifecycle.test.ts",
+        "test/coverage-mcp-server-options.test.ts",
+        "test/coverage-mcp-server-stdio.test.ts",
+        "test/coverage-mcp-server-tools.test.ts",
+        "test/coverage-ops-backup.test.ts",
+        "test/coverage-ops-dashboard-inspector.test.ts",
+        "test/coverage-ops-dashboard-model.test.ts",
+        "test/coverage-ops-dashboard-trace.test.ts",
+        "test/coverage-ops-doctor-policy.test.ts",
+        "test/coverage-ops-doctor.test.ts",
+        "test/coverage-ops-integrity.test.ts",
+        "test/coverage-ops-rebuild.test.ts",
+        "test/coverage-ops-verify.test.ts",
+        "test/coverage-provenance-trace-builder.test.ts",
+        "test/coverage-redactor-behaviors.test.ts",
+        "test/coverage-scripts-dashboard-snapshot.test.ts",
+        "test/coverage-sdk-cluster.test.ts",
+        "test/coverage-sdk-repo-knowledge-ingest.test.ts",
         "test/dashboard-command-preview.test.ts",
         "test/dashboard-model.test.ts",
         "test/dashboard-ops.test.ts",
@@ -540,8 +725,8 @@
         "test/wave6-policy-proof.test.ts",
         "test/wave6-proof.test.ts"
       ],
-      "runsCount": 128,
-      "runsMore": 125,
+      "runsCount": 160,
+      "runsMore": 157,
       "sends": [
         "publishes to npm",
         "creates a GitHub release"
@@ -578,7 +763,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 129
+          "files": 161
         },
         {
           "boundary": "dashboard",
@@ -602,6 +787,38 @@
         "test/command-persistence.test.ts",
         "test/content-index.test.ts",
         "test/contracts.test.ts",
+        "test/coverage-adapters-factory.test.ts",
+        "test/coverage-adapters-local-artifact.test.ts",
+        "test/coverage-adapters-local-ledger-recovery.test.ts",
+        "test/coverage-adapters-local-ledger.test.ts",
+        "test/coverage-adapters-postgres-store.test.ts",
+        "test/coverage-cli-config.test.ts",
+        "test/coverage-cli-data-commands.test.ts",
+        "test/coverage-cli-error-wrappers.test.ts",
+        "test/coverage-cli-ops.test.ts",
+        "test/coverage-cli-postgres-wire.test.ts",
+        "test/coverage-indexer-content.test.ts",
+        "test/coverage-kernel-cluster.test.ts",
+        "test/coverage-kernel-queue.test.ts",
+        "test/coverage-mcp-config-validator.test.ts",
+        "test/coverage-mcp-server-lifecycle.test.ts",
+        "test/coverage-mcp-server-options.test.ts",
+        "test/coverage-mcp-server-stdio.test.ts",
+        "test/coverage-mcp-server-tools.test.ts",
+        "test/coverage-ops-backup.test.ts",
+        "test/coverage-ops-dashboard-inspector.test.ts",
+        "test/coverage-ops-dashboard-model.test.ts",
+        "test/coverage-ops-dashboard-trace.test.ts",
+        "test/coverage-ops-doctor-policy.test.ts",
+        "test/coverage-ops-doctor.test.ts",
+        "test/coverage-ops-integrity.test.ts",
+        "test/coverage-ops-rebuild.test.ts",
+        "test/coverage-ops-verify.test.ts",
+        "test/coverage-provenance-trace-builder.test.ts",
+        "test/coverage-redactor-behaviors.test.ts",
+        "test/coverage-scripts-dashboard-snapshot.test.ts",
+        "test/coverage-sdk-cluster.test.ts",
+        "test/coverage-sdk-repo-knowledge-ingest.test.ts",
         "test/dashboard-command-preview.test.ts",
         "test/dashboard-model.test.ts",
         "test/dashboard-ops.test.ts",
@@ -721,8 +938,8 @@
         "test/wave6-policy-proof.test.ts",
         "test/wave6-proof.test.ts"
       ],
-      "runsCount": 133,
-      "runsMore": 130,
+      "runsCount": 165,
+      "runsMore": 162,
       "sends": [],
       "stages": [],
       "triggers": [
@@ -962,12 +1179,12 @@
   ],
   "engine": "1.24.0",
   "generated": [],
-  "generatedAt": "2026-10-01T21:57:12.023Z",
+  "generatedAt": "2026-10-01T22:29:19.043Z",
   "limits": [
     "17 imports could not be resolved: `dashboard/lib/apply-redaction.d.ts` imports `../../dist/dashboard/dashboard-model.js`, which a build generates; `examples/agent-safe-app-db/index.ts` imports `@mcptoolshop/db-cluster/policy`, which a build generates, twice; `examples/agent-safe-app-db/index.ts` imports `@mcptoolshop/db-cluster/sdk`, which a build generates; and 13 more.",
     "5 writes and 14 reads use paths built at run time and are not named here.",
     "7 writes go to places this repository does not track, so they are not listed as generated.",
-    "48 writes and 103 reads go to a path their caller passes, not to this repository.",
+    "50 writes and 103 reads go to a path their caller passes, not to this repository.",
     "6 writes and 3 reads go to a temporary directory, not to this repository.",
     "2 reads go to the directory the command is run in, not to this repository.",
     "1 read goes to the directory the command is run in (.db-cluster) or a path its caller passes, not to this repository.",
@@ -993,7 +1210,7 @@
   },
   "parts": 13,
   "readers": [],
-  "repo": "@mcptoolshop/db-cluster",
+  "repo": "mcp-tool-shop-org/db-cluster",
   "sequences": [],
   "startDoor": ".github/workflows/ci.yml",
   "startHere": [
@@ -1004,12 +1221,12 @@
   ],
   "summary": null,
   "summaryFrom": null,
-  "testFiles": 143,
+  "testFiles": 175,
   "testedBy": {
     "dashboard": 3,
     "examples": 0,
-    "scripts": 17,
-    "src": 122
+    "scripts": 18,
+    "src": 154
   },
   "unnamedWrites": 5,
   "unread": [],

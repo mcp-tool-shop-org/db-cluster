@@ -168,7 +168,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "scripts",
-      "qualifyingSourceCommits": 15,
+      "qualifyingSourceCommits": 16,
       "rebaseline": null
     },
     {
@@ -204,7 +204,7 @@
       "confidence": "full",
       "highWater": null,
       "name": "src",
-      "qualifyingSourceCommits": 31,
+      "qualifyingSourceCommits": 33,
       "rebaseline": null
     },
     {
@@ -222,7 +222,7 @@
       "confidence": "full",
       "highWater": null,
       "name": "test",
-      "qualifyingSourceCommits": 45,
+      "qualifyingSourceCommits": 54,
       "rebaseline": null
     }
   ],
@@ -235,8 +235,8 @@
         "path": ".github/dependabot.yml"
       },
       {
-        "commits": 17,
-        "lines": 298,
+        "commits": 18,
+        "lines": 312,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -265,8 +265,8 @@
         "path": ".github/workflows/smoke-install.yml"
       },
       {
-        "commits": 8,
-        "lines": 49,
+        "commits": 9,
+        "lines": 52,
         "path": ".gitignore"
       },
       {
@@ -450,8 +450,8 @@
         "path": "SHIP_GATE.md"
       },
       {
-        "commits": 4,
-        "lines": 315,
+        "commits": 6,
+        "lines": 389,
         "path": "atlas/README.md"
       },
       {
@@ -460,18 +460,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 4,
-        "lines": 1819,
+        "commits": 6,
+        "lines": 2083,
         "path": "atlas/page.json"
       },
       {
-        "commits": 4,
-        "lines": 3424,
+        "commits": 6,
+        "lines": 3848,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 4,
-        "lines": 29321,
+        "commits": 6,
+        "lines": 29607,
         "path": "atlas/structure.json"
       },
       {
@@ -925,13 +925,13 @@
         "path": "examples/sdk/retrieval-bundle.ts"
       },
       {
-        "commits": 20,
-        "lines": 10865,
+        "commits": 21,
+        "lines": 11789,
         "path": "package-lock.json"
       },
       {
-        "commits": 28,
-        "lines": 180,
+        "commits": 29,
+        "lines": 184,
         "path": "package.json"
       },
       {
@@ -1090,8 +1090,8 @@
         "path": "scripts/jsdoc-gate.mjs"
       },
       {
-        "commits": 1,
-        "lines": 67,
+        "commits": 2,
+        "lines": 134,
         "path": "scripts/merge-child-coverage.mjs"
       },
       {
@@ -1100,8 +1100,8 @@
         "path": "scripts/release-gate.mjs"
       },
       {
-        "commits": 1,
-        "lines": 90,
+        "commits": 3,
+        "lines": 102,
         "path": "scripts/repo-knowledge-dashboard-snapshot.ts"
       },
       {
@@ -1245,8 +1245,8 @@
         "path": "src/adapters/local/local-index-store.ts"
       },
       {
-        "commits": 5,
-        "lines": 1238,
+        "commits": 7,
+        "lines": 1268,
         "path": "src/adapters/local/local-ledger-store.ts"
       },
       {
@@ -1370,8 +1370,8 @@
         "path": "src/dashboard/dashboard-model.ts"
       },
       {
-        "commits": 1,
-        "lines": 341,
+        "commits": 3,
+        "lines": 361,
         "path": "src/dashboard/inspector-data.ts"
       },
       {
@@ -1861,6 +1861,166 @@
       },
       {
         "commits": 2,
+        "lines": 412,
+        "path": "test/coverage-adapters-factory.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 336,
+        "path": "test/coverage-adapters-local-artifact.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 152,
+        "path": "test/coverage-adapters-local-ledger-recovery.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 504,
+        "path": "test/coverage-adapters-local-ledger.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 634,
+        "path": "test/coverage-adapters-postgres-store.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 1168,
+        "path": "test/coverage-cli-config.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 1456,
+        "path": "test/coverage-cli-data-commands.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 652,
+        "path": "test/coverage-cli-error-wrappers.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 1208,
+        "path": "test/coverage-cli-ops.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 626,
+        "path": "test/coverage-cli-postgres-wire.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 510,
+        "path": "test/coverage-indexer-content.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 1392,
+        "path": "test/coverage-kernel-cluster.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 362,
+        "path": "test/coverage-kernel-queue.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 412,
+        "path": "test/coverage-mcp-config-validator.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 844,
+        "path": "test/coverage-mcp-server-lifecycle.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 680,
+        "path": "test/coverage-mcp-server-options.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 364,
+        "path": "test/coverage-mcp-server-stdio.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 592,
+        "path": "test/coverage-mcp-server-tools.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 734,
+        "path": "test/coverage-ops-backup.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 518,
+        "path": "test/coverage-ops-dashboard-inspector.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 320,
+        "path": "test/coverage-ops-dashboard-model.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 120,
+        "path": "test/coverage-ops-dashboard-trace.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 90,
+        "path": "test/coverage-ops-doctor-policy.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 622,
+        "path": "test/coverage-ops-doctor.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 664,
+        "path": "test/coverage-ops-integrity.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 446,
+        "path": "test/coverage-ops-rebuild.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 410,
+        "path": "test/coverage-ops-verify.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 1186,
+        "path": "test/coverage-provenance-trace-builder.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 1178,
+        "path": "test/coverage-redactor-behaviors.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 320,
+        "path": "test/coverage-scripts-dashboard-snapshot.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 348,
+        "path": "test/coverage-sdk-cluster.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 312,
+        "path": "test/coverage-sdk-repo-knowledge-ingest.test.ts"
+      },
+      {
+        "commits": 2,
         "lines": 135,
         "path": "test/dashboard-command-preview.test.ts"
       },
@@ -2010,8 +2170,8 @@
         "path": "test/kernel.test.ts"
       },
       {
-        "commits": 1,
-        "lines": 47,
+        "commits": 2,
+        "lines": 94,
         "path": "test/merge-child-coverage.test.ts"
       },
       {
@@ -2555,9 +2715,9 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-10-01T21:57:12.023Z",
+  "generatedAt": "2026-10-01T22:29:19.043Z",
   "generatedFrom": {
-    "commit": "d96918c8a72d125049a0ee359fd65d1571ab85f5"
+    "commit": "193d70c6d4f3770e0a7cfe85072c9800448f65f8"
   },
   "pairs": [
     {
@@ -2802,16 +2962,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-10-01T17:57:01-04:00",
-    "inScopeFiles": 460,
+    "headDate": "2026-10-01T18:28:58-04:00",
+    "inScopeFiles": 492,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 103,
+    "qualifyingCommits": 116,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-04-04T21:57:01.000Z",
+    "since": "2026-04-04T22:28:58.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",
