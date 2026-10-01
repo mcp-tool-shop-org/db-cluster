@@ -168,7 +168,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "scripts",
-      "qualifyingSourceCommits": 13,
+      "qualifyingSourceCommits": 15,
       "rebaseline": null
     },
     {
@@ -204,7 +204,7 @@
       "confidence": "full",
       "highWater": null,
       "name": "src",
-      "qualifyingSourceCommits": 30,
+      "qualifyingSourceCommits": 31,
       "rebaseline": null
     },
     {
@@ -222,7 +222,7 @@
       "confidence": "full",
       "highWater": null,
       "name": "test",
-      "qualifyingSourceCommits": 42,
+      "qualifyingSourceCommits": 45,
       "rebaseline": null
     }
   ],
@@ -235,8 +235,8 @@
         "path": ".github/dependabot.yml"
       },
       {
-        "commits": 14,
-        "lines": 280,
+        "commits": 17,
+        "lines": 298,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -265,8 +265,8 @@
         "path": ".github/workflows/smoke-install.yml"
       },
       {
-        "commits": 7,
-        "lines": 46,
+        "commits": 8,
+        "lines": 49,
         "path": ".gitignore"
       },
       {
@@ -395,43 +395,43 @@
         "path": "LICENSE"
       },
       {
-        "commits": 8,
-        "lines": 503,
+        "commits": 10,
+        "lines": 505,
         "path": "README.es.md"
       },
       {
-        "commits": 8,
-        "lines": 340,
+        "commits": 10,
+        "lines": 342,
         "path": "README.fr.md"
       },
       {
-        "commits": 8,
-        "lines": 410,
+        "commits": 10,
+        "lines": 412,
         "path": "README.hi.md"
       },
       {
-        "commits": 8,
-        "lines": 395,
+        "commits": 10,
+        "lines": 397,
         "path": "README.it.md"
       },
       {
-        "commits": 8,
-        "lines": 373,
+        "commits": 10,
+        "lines": 375,
         "path": "README.ja.md"
       },
       {
-        "commits": 34,
-        "lines": 408,
+        "commits": 36,
+        "lines": 410,
         "path": "README.md"
       },
       {
-        "commits": 8,
-        "lines": 350,
+        "commits": 10,
+        "lines": 352,
         "path": "README.pt-BR.md"
       },
       {
-        "commits": 8,
-        "lines": 408,
+        "commits": 10,
+        "lines": 410,
         "path": "README.zh.md"
       },
       {
@@ -450,8 +450,8 @@
         "path": "SHIP_GATE.md"
       },
       {
-        "commits": 2,
-        "lines": 153,
+        "commits": 4,
+        "lines": 315,
         "path": "atlas/README.md"
       },
       {
@@ -460,18 +460,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 2,
-        "lines": 895,
+        "commits": 4,
+        "lines": 1819,
         "path": "atlas/page.json"
       },
       {
-        "commits": 2,
-        "lines": 3246,
+        "commits": 4,
+        "lines": 3424,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 2,
-        "lines": 9455,
+        "commits": 4,
+        "lines": 29321,
         "path": "atlas/structure.json"
       },
       {
@@ -925,13 +925,13 @@
         "path": "examples/sdk/retrieval-bundle.ts"
       },
       {
-        "commits": 17,
-        "lines": 9929,
+        "commits": 20,
+        "lines": 10865,
         "path": "package-lock.json"
       },
       {
-        "commits": 27,
-        "lines": 176,
+        "commits": 28,
+        "lines": 180,
         "path": "package.json"
       },
       {
@@ -1090,6 +1090,11 @@
         "path": "scripts/jsdoc-gate.mjs"
       },
       {
+        "commits": 1,
+        "lines": 67,
+        "path": "scripts/merge-child-coverage.mjs"
+      },
+      {
         "commits": 10,
         "lines": 356,
         "path": "scripts/release-gate.mjs"
@@ -1105,8 +1110,8 @@
         "path": "scripts/repo-knowledge-ops.ts"
       },
       {
-        "commits": 1,
-        "lines": 96,
+        "commits": 3,
+        "lines": 100,
         "path": "scripts/repo-knowledge-update-demo.ts"
       },
       {
@@ -1130,8 +1135,8 @@
         "path": "site/astro.config.mjs"
       },
       {
-        "commits": 2,
-        "lines": 13862,
+        "commits": 4,
+        "lines": 13874,
         "path": "site/package-lock.json"
       },
       {
@@ -1555,8 +1560,8 @@
         "path": "src/policy/policy-engine.ts"
       },
       {
-        "commits": 5,
-        "lines": 799,
+        "commits": 7,
+        "lines": 803,
         "path": "src/policy/redactor.ts"
       },
       {
@@ -2006,6 +2011,11 @@
       },
       {
         "commits": 1,
+        "lines": 47,
+        "path": "test/merge-child-coverage.test.ts"
+      },
+      {
+        "commits": 1,
         "lines": 218,
         "path": "test/path-traversal.test.ts"
       },
@@ -2240,8 +2250,8 @@
         "path": "test/wave-a4-stores-regression.test.ts"
       },
       {
-        "commits": 1,
-        "lines": 327,
+        "commits": 3,
+        "lines": 335,
         "path": "test/wave-a4-surface-regression.test.ts"
       },
       {
@@ -2375,17 +2385,17 @@
         "path": "test/wave-s2a2-docs-regression.test.ts"
       },
       {
-        "commits": 2,
-        "lines": 567,
+        "commits": 4,
+        "lines": 591,
         "path": "test/wave-s2a2-fixup-regression.test.ts"
       },
       {
-        "commits": 2,
-        "lines": 363,
+        "commits": 4,
+        "lines": 381,
         "path": "test/wave-s2a2-gating-regression.test.ts"
       },
       {
-        "commits": 2,
+        "commits": 4,
         "lines": 0,
         "path": "test/wave-s2a2-policy-regression.test.ts"
       },
@@ -2545,9 +2555,9 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-09-30T20:09:31.645Z",
+  "generatedAt": "2026-10-01T21:57:12.023Z",
   "generatedFrom": {
-    "commit": "5bbcb23e5383850ee4b342223e8f4a8783e393e5"
+    "commit": "d96918c8a72d125049a0ee359fd65d1571ab85f5"
   },
   "pairs": [
     {
@@ -2567,155 +2577,155 @@
     {
       "a": "CHANGELOG.md",
       "b": "README.md",
-      "either": 38,
+      "either": 39,
       "shared": 22,
-      "strength": 0.578947
+      "strength": 0.564103
     },
     {
       "a": "README.es.md",
       "b": "README.fr.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.es.md",
       "b": "README.hi.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.es.md",
       "b": "README.it.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.es.md",
       "b": "README.ja.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.es.md",
       "b": "README.pt-BR.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.es.md",
       "b": "README.zh.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.fr.md",
       "b": "README.hi.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.fr.md",
       "b": "README.it.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.fr.md",
       "b": "README.ja.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.fr.md",
       "b": "README.pt-BR.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.fr.md",
       "b": "README.zh.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.hi.md",
       "b": "README.it.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.hi.md",
       "b": "README.ja.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.hi.md",
       "b": "README.pt-BR.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.hi.md",
       "b": "README.zh.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.it.md",
       "b": "README.ja.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.it.md",
       "b": "README.pt-BR.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.it.md",
       "b": "README.zh.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.ja.md",
       "b": "README.pt-BR.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.ja.md",
       "b": "README.zh.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
       "a": "README.pt-BR.md",
       "b": "README.zh.md",
-      "either": 8,
-      "shared": 8,
+      "either": 9,
+      "shared": 9,
       "strength": 1
     },
     {
@@ -2749,9 +2759,9 @@
     {
       "a": "package-lock.json",
       "b": "package.json",
-      "either": 22,
-      "shared": 15,
-      "strength": 0.681818
+      "either": 24,
+      "shared": 16,
+      "strength": 0.666667
     },
     {
       "a": "scripts/completeness-checks.mjs",
@@ -2792,16 +2802,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-09-29T16:47:50-07:00",
-    "inScopeFiles": 458,
+    "headDate": "2026-10-01T17:57:01-04:00",
+    "inScopeFiles": 460,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 97,
+    "qualifyingCommits": 103,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-04-02T23:47:50.000Z",
+    "since": "2026-04-04T21:57:01.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",
