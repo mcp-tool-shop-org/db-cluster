@@ -67,7 +67,7 @@ async function main() {
             proposedBy: 'agent:claude',
             reason: 'Phase 14 started',
         },
-        'operator:mikey',
+        'operator:alicedoe',
     );
     console.log(`   Committed: ${result.committed}, Receipt: ${result.receiptId}\n`);
 
