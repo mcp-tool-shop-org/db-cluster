@@ -184,6 +184,21 @@ export class LocalLedgerStore implements LedgerStore {
             } catch {
                 // best-effort
             }
+            // Repair the file BEFORE auditing. loadArray() drops the torn tail in
+            // memory only; left on disk, the audit append below (or any later
+            // receipt append) lands after the torn line, and the next start reads
+            // that line as "surrounded by valid lines" -> CORRUPT_STORE. Rewrite
+            // the file from the records that loaded, atomically. If the repair
+            // fails we skip the audit append rather than bury the torn line.
+            try {
+                const isEvents = tail === tailEvents;
+                const target = isEvents ? this.eventsPath : this.receiptsPath;
+                const tmpPath = buildRandomTmpPath(target);
+                writeFileSync(tmpPath, this.serializeNdjson(isEvents ? this.events : this.receipts));
+                renameSync(tmpPath, target);
+            } catch {
+                continue;
+            }
             // Audit the recovery as a ledger event so doctor / verify can
             // surface it. Use the synchronous internal append helper to
             // avoid the async append() path which would re-enter this

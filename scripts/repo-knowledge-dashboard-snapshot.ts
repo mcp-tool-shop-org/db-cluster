@@ -6,6 +6,7 @@
  */
 
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { createLocalCluster } from '../src/adapters/local/index.js';
 import { ClusterKernel } from '../src/kernel/cluster-kernel.js';
@@ -65,7 +66,10 @@ export async function generateRepoKnowledgeSnapshot(
 }
 
 // CLI entry point
-const isDirectRun = import.meta.url === `file:///${resolve(process.argv[1] ?? '').replace(/\\/g, '/')}`;
+// pathToFileURL gives the same `file://` form as import.meta.url on every OS. The
+// hand-built `file:///${path}` had four slashes on POSIX (the path already starts
+// with one), so on Linux and macOS the CLI never recognised its own invocation.
+const isDirectRun = import.meta.url === pathToFileURL(resolve(process.argv[1] ?? '')).href;
 
 if (isDirectRun) {
     const clusterDir = process.argv[2] ?? 'examples/dogfood-project-memory/.db-cluster';
