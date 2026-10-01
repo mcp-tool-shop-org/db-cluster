@@ -57,7 +57,8 @@
     "prepublishOnly": "node scripts/release-gate.mjs",
     "smoke:pack": "npm pack --dry-run",
     "release-gate": "node scripts/release-gate.mjs",
-    "completeness": "node scripts/completeness-checks.mjs"
+    "completeness": "node scripts/completeness-checks.mjs",
+    "coverage:children": "c8 report --temp-directory coverage/v8-children --report-dir coverage/children --reporter=json --include \"dist/**\" --include \"src/**\" --exclude-after-remap --exclude \"test/**\" && node scripts/merge-child-coverage.mjs coverage/coverage-final.json coverage/children/coverage-final.json"
   },
   "keywords": [
     "ai",
@@ -101,6 +102,7 @@
     "@types/node": "^26.6.2",
     "@types/pg": "^8.20.0",
     "@vitest/coverage-v8": "5.0.1",
+    "c8": "10.1.3",
     "fast-check": "^4.8.0",
     "typescript": "^6.0.3",
     "vitest": "^5.0.0"

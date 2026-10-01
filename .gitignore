@@ -44,3 +44,6 @@ site/node_modules/
 
 # Agent/session scratch (e.g. scheduled-task locks) — never committed
 .claude/
+
+# Coverage output (vitest, and child-process V8 coverage merged by scripts/merge-child-coverage.mjs)
+coverage/
