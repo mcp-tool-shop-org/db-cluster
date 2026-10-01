@@ -71,12 +71,24 @@ jobs:
       # TS2307 across every example file. Run order: build → lint → test.
       - run: npm run build
       - run: npm run lint
+      # On the coverage leg, NODE_V8_COVERAGE makes every node process the
+      # tests start write V8 coverage, including the dist/cli.js the CLI tests
+      # spawn, which vitest's own coverage cannot see.
       - id: tests
-        run: npm test -- --coverage.enabled=${{ env.COVERAGE_LEG == 'true' }} --reporter=default --reporter=junit --outputFile.junit=junit.xml
+        run: |
+          if [ "$COVERAGE_LEG" = 'true' ]; then export NODE_V8_COVERAGE="$GITHUB_WORKSPACE/coverage/v8-children"; fi
+          npm test -- --coverage.enabled=${{ env.COVERAGE_LEG == 'true' }} --reporter=default --reporter=junit --outputFile.junit=junit.xml
+        shell: bash
         env:
           # A missing SQLite driver fails the run instead of skipping the
           # SQLite suites (test/sqlite-driver-presence.test.ts).
           DB_CLUSTER_REQUIRE_SQLITE: '1'
+      # Map the children's coverage back to src/ through the source maps and
+      # fold it into vitest's report (scripts/merge-child-coverage.mjs: strict,
+      # vitest's statements are the universe, so nothing is inflated).
+      - name: Merge child-process coverage
+        if: ${{ env.COVERAGE_LEG == 'true' }}
+        run: npm run coverage:children
       # The codecov job below uploads what these two steps save; this job
       # never holds an OIDC token. Coverage is saved when the tests passed,
       # and test results whenever they ran, failures included, because a

@@ -13,7 +13,7 @@
           "path": ".github/dependabot.yml"
         },
         {
-          "hash": "547a4dcfa936eb542f373409ab21238ba2fcfdb925701040d41fc10daa97c296",
+          "hash": "f059b2a091223fa06467a5b9c68b797feb8f8d143a068795c0653d189d7807e8",
           "path": ".github/workflows/ci.yml"
         },
         {
@@ -650,7 +650,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "e4272f0cb385e2ed0ba7c615288f67ae169a3c1505f43bee51c630dfb2e4a0ca",
+          "hash": "1fd886c66fbe2774e0cae9a38ffaa5aeff58a173ef33ac19eb2d222ac810e6ab",
           "path": ".gitignore"
         },
         {
@@ -666,35 +666,35 @@
           "path": "LICENSE"
         },
         {
-          "hash": "8b0c01a352aa2291cb66bdc7970b073a4ba5aaeac65635134345ba99e1c0c6eb",
+          "hash": "75414783127e8609febd27665999f854e81da511237fc68218c8e8712597647c",
           "path": "README.es.md"
         },
         {
-          "hash": "b7ff52ef2e0418af9ccede6b11ef5496f3a6f6e080d831cb3e5cdcd1a7b8b91e",
+          "hash": "367af0ce70913aa3021e16d316eb87b15c337b959bba07ac9437f1a5bd770a79",
           "path": "README.fr.md"
         },
         {
-          "hash": "08cdff992535da65b4dc4b843635bbcd1db3b98a60cee75cce4ace55c80e9a8c",
+          "hash": "855f0dbf6a614ab3c7bc5a6c281ca84037f59c57e313b36fe203a72261cfcc35",
           "path": "README.hi.md"
         },
         {
-          "hash": "2dd5abcc410c06eb029be1e35ff8c8a2e2d9e825db32a5cb5d56d9f2b297a0ff",
+          "hash": "bf2f4a2b4ae38edd2e741614aeb0ef53c4a7b0074994fb8320b0c84ca97e9126",
           "path": "README.it.md"
         },
         {
-          "hash": "6c195ff7c598176c20bf10c3b013f3c70f0597e20205d25adf466a7056fb65cc",
+          "hash": "2468c5027620d3532e0ed220faaae72dc9f399d8acd4a456695032370c209e5f",
           "path": "README.ja.md"
         },
         {
-          "hash": "2dd87f82a8b28355854252e2b43b237e031ef9a1706ebc1b275b7fc7f5d3cbac",
+          "hash": "2709331ec20e9a79f3b108a6fb97daad065a6ac687d9a086a1e785c1aa69e542",
           "path": "README.md"
         },
         {
-          "hash": "501353e66317f74a4f3518cfe9956f654023e8e6ad4410e81d71fbbb8c6ed650",
+          "hash": "2503d34999ae5b2783a14059258e9b22f3296921a962fb8953a3d7222f0a40fa",
           "path": "README.pt-BR.md"
         },
         {
-          "hash": "559d1f111632be279859bb798c879c8bbb9c6164722a8944746e646f9147eeb9",
+          "hash": "d2993ac890b1531aed8fc3de01338842e0c6cf437c735ab1034e499e6b2e359c",
           "path": "README.zh.md"
         },
         {
@@ -726,11 +726,11 @@
           "path": "db-cluster-feature-pass-FEAT-S1.md"
         },
         {
-          "hash": "3e0c6139dfdcde2e20d5ce3e5f76d2bcdc5e351674740d61ccb781185999750c",
+          "hash": "bf2c0b97d613e6883d49ea15be4522116bbe83bea3c8b1cdc1f9f0468cfe6fb8",
           "path": "package-lock.json"
         },
         {
-          "hash": "ec56732590253b5e4076893a377f0fdf7c28da457b022d1c08329372b531a414",
+          "hash": "f2f6d7e5d442f1667a2c9cb1444b8925c3f44999af9e9152002451cf8f48c96d",
           "path": "package.json"
         },
         {
@@ -1180,6 +1180,17 @@
           "sequences": []
         },
         {
+          "entry": "mergeChildHits",
+          "entryRule": 1,
+          "exports": [
+            "childHitLines",
+            "mergeChildHits"
+          ],
+          "hash": "6bba4bcfb05a5dba399af96a264b9c47dcea3160aa12567a2a9ad3b6bffa48b2",
+          "path": "scripts/merge-child-coverage.mjs",
+          "sequences": []
+        },
+        {
           "entry": "run",
           "entryRule": 1,
           "failurePaths": [
@@ -1254,7 +1265,7 @@
           "path": "scripts/repo-knowledge-ops.ts"
         },
         {
-          "hash": "6683bb5f1d0e128c3f60fb866210ae0f48089e47d402e98d2c9911ce037379a8",
+          "hash": "071246433f21c159c4f601411c91bdd9874117c2e4b13ca0a73cf422119e93bf",
           "importOrder": [
             "src/adapters/local/index.ts",
             "src/kernel/cluster-kernel.ts",
@@ -1315,11 +1326,11 @@
       "origin": "authored",
       "outsidePlaces": [
         {
-          "reads": 6,
+          "reads": 8,
           "where": [
             "caller"
           ],
-          "writes": 3
+          "writes": 4
         },
         {
           "reads": 3,
@@ -1329,13 +1340,13 @@
           "writes": 6
         }
       ],
-      "outsideReads": 9,
-      "outsideWrites": 9,
+      "outsideReads": 11,
+      "outsideWrites": 10,
       "role": "code",
       "testRunners": [
         "vitest"
       ],
-      "testedBy": 16,
+      "testedBy": 17,
       "unresolvedSites": 0
     },
     {
@@ -1351,7 +1362,7 @@
           "path": "site/astro.config.mjs"
         },
         {
-          "hash": "af5d4f54dca60686724d306eb58759fb25b6f5ba4d66559ab84a968112a184e5",
+          "hash": "0607a19c4f60b635244a906c7ad2424359b50e20c4a83bc140f202abce4a941e",
           "path": "site/package-lock.json"
         },
         {
@@ -4598,7 +4609,7 @@
             "redactReceipt",
             "sanitizeWarnings"
           ],
-          "hash": "c1a591681c746a723ccd3729130a15a63fcaa0cad037665cb0a6cd25adb10611",
+          "hash": "eef9d6f843a56f739065dd700ef5d90bb54a4de58162ff3eb4f794362c615e0a",
           "importsFiles": [
             "src/policy/policy-engine.ts",
             "src/types/artifact.ts",
@@ -5712,6 +5723,14 @@
           "testFramework": "vitest"
         },
         {
+          "hash": "e65d91a2b49bdbd33e7040ef3674b970c0dfd100b4c855aa02aedd41e673e5ff",
+          "importsFiles": [
+            "scripts/merge-child-coverage.mjs"
+          ],
+          "path": "test/merge-child-coverage.test.ts",
+          "testFramework": "vitest"
+        },
+        {
           "hash": "33d88f2fe4a59bc5c4861a028d4212155059b358359bf5b614d4739519c690e5",
           "importOrder": [
             "src/adapters/local/index.ts",
@@ -6610,7 +6629,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "a454a9c6b69a649a7ce236bd4896bc934a53f975b301cc28cca32d49c2e77807",
+          "hash": "a250f2058b0209e6aa1a2b7cf4ecfa0088351c7ae0c846819fb8728c9854cc09",
           "importOrder": [
             "src/sdk/cluster-sdk.ts",
             "src/adapters/local/index.ts",
@@ -7212,7 +7231,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "8aab009cc0663ee8709a5bd13736c72f1a3d6b80bb7d3218b43a79c19f3da504",
+          "hash": "8b3a6aa9ad57ef59e2621cc684e8f9e06ca54a9ae5dc2cd76300eabc5bfac914",
           "importOrder": [
             "src/sdk/cluster-sdk.ts",
             "src/kernel/cluster-kernel.ts",
@@ -7237,7 +7256,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "47184338047f27b32ab8e7f8cce2841d8c689bd2e2a1b21b397eaaee220a66e0",
+          "hash": "430cfbe28e24d03ac5e34155ef78a6fbe11dbf48f2f2f717f511f93183e02053",
           "names": [
             "src/mcp/sanitize.ts",
             "src/policy/redactor.ts"
@@ -7249,7 +7268,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "3469b67f9966cd5b30f83088d59e4a0cc43cdcc264c931423bba434058bc90f1",
+          "hash": "fd31ea310a80b081fc3d0dc3661f411df68f4deef05a683228d34abbce025a81",
           "importOrder": [
             "test/support/source-text.ts",
             "src/policy/redactor.ts",
@@ -7759,6 +7778,14 @@
             "npm"
           ],
           "step": "7"
+        },
+        {
+          "dir": "",
+          "job": "test",
+          "programs": [
+            "npm"
+          ],
+          "step": "Merge child-process coverage"
         }
       ],
       "elsewhere": [],
@@ -7847,6 +7874,11 @@
           "files": 7
         },
         {
+          "boundary": "scripts",
+          "depth": 0,
+          "files": 7
+        },
+        {
           "boundary": "src",
           "depth": 0,
           "files": 99
@@ -7854,7 +7886,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 128
+          "files": 129
         },
         {
           "boundary": "dashboard",
@@ -7864,15 +7896,6 @@
             "from": "test/dashboard-policy-view.test.ts"
           },
           "files": 1
-        },
-        {
-          "boundary": "scripts",
-          "depth": 1,
-          "enters": {
-            "file": "scripts/dashboard-snapshot.ts",
-            "from": "test/dashboard-snapshot.test.ts"
-          },
-          "files": 6
         }
       ],
       "readers": [],
@@ -7884,6 +7907,11 @@
           "path": "examples/",
           "runKind": "checks",
           "via": "tsc tsconfig.examples.json"
+        },
+        {
+          "job": "test",
+          "path": "scripts/merge-child-coverage.mjs",
+          "runKind": "executes"
         },
         {
           "built": true,
@@ -8080,6 +8108,13 @@
           "job": "test",
           "matched": true,
           "path": "test/kernel.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "test",
+          "matched": true,
+          "path": "test/merge-child-coverage.test.ts",
           "runKind": "executes",
           "via": "vitest vitest.config.ts"
         },
@@ -8784,7 +8819,7 @@
           "via": "vitest vitest.config.ts"
         }
       ],
-      "runsCount": 129,
+      "runsCount": 131,
       "secrets": [],
       "sends": {
         "deploysPages": false,
@@ -8801,7 +8836,7 @@
         {
           "config": "vitest.config.ts",
           "coverage": true,
-          "files": 127,
+          "files": 128,
           "job": "test",
           "junit": true,
           "runner": "vitest",
@@ -9239,7 +9274,7 @@
         {
           "boundary": "scripts",
           "depth": 0,
-          "files": 12
+          "files": 13
         },
         {
           "boundary": "src",
@@ -9249,7 +9284,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 128
+          "files": 129
         },
         {
           "boundary": "dashboard",
@@ -9487,6 +9522,13 @@
           "job": "gate",
           "matched": true,
           "path": "test/kernel.test.ts",
+          "runKind": "executes",
+          "via": "scripts/release-gate.mjs → vitest vitest.config.ts"
+        },
+        {
+          "job": "gate",
+          "matched": true,
+          "path": "test/merge-child-coverage.test.ts",
           "runKind": "executes",
           "via": "scripts/release-gate.mjs → vitest vitest.config.ts"
         },
@@ -10191,7 +10233,7 @@
           "via": "scripts/release-gate.mjs → vitest vitest.config.ts"
         }
       ],
-      "runsCount": 133,
+      "runsCount": 134,
       "secrets": [],
       "sends": {
         "deploysPages": false,
@@ -10207,7 +10249,7 @@
       "tests": [
         {
           "config": "vitest.config.ts",
-          "files": 127,
+          "files": 128,
           "job": "gate",
           "runner": "vitest",
           "step": "4",
@@ -10390,7 +10432,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 128
+          "files": 129
         },
         {
           "boundary": "dashboard",
@@ -10408,7 +10450,7 @@
             "file": "scripts/dashboard-snapshot.ts",
             "from": "test/dashboard-snapshot.test.ts"
           },
-          "files": 6
+          "files": 7
         }
       ],
       "readers": [],
@@ -10616,6 +10658,13 @@
           "job": "release",
           "matched": true,
           "path": "test/kernel.test.ts",
+          "runKind": "executes",
+          "via": "vitest vitest.config.ts"
+        },
+        {
+          "job": "release",
+          "matched": true,
+          "path": "test/merge-child-coverage.test.ts",
           "runKind": "executes",
           "via": "vitest vitest.config.ts"
         },
@@ -11320,7 +11369,7 @@
           "via": "vitest vitest.config.ts"
         }
       ],
-      "runsCount": 129,
+      "runsCount": 130,
       "secrets": [
         "GITHUB_TOKEN"
       ],
@@ -11347,7 +11396,7 @@
       "tests": [
         {
           "config": "vitest.config.ts",
-          "files": 127,
+          "files": 128,
           "job": "release",
           "runner": "vitest",
           "step": "Test",
@@ -11713,8 +11762,8 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "5bbcb23e5383850ee4b342223e8f4a8783e393e5",
-    "tracked": 453
+    "commit": "d96918c8a72d125049a0ee359fd65d1571ab85f5",
+    "tracked": 455
   },
   "landings": [
     {
@@ -15579,6 +15628,6 @@
   "overlaps": [],
   "submodules": [],
   "symlinks": [],
-  "testFiles": 142,
+  "testFiles": 143,
   "unassigned": []
 }

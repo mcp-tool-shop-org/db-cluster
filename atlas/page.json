@@ -69,97 +69,47 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 3,
-      "changed": 275,
+      "added": 2,
+      "changed": 19,
       "moved": 0,
-      "parts": 9,
+      "parts": 6,
       "removed": 0
     },
     "items": [
       {
-        "kind": "import-removed",
-        "sentence": "dashboard no longer imports src.",
-        "subjects": [
-          "dashboard",
-          "src"
-        ]
-      },
-      {
-        "kind": "import-removed",
-        "sentence": "examples no longer imports src.",
-        "subjects": [
-          "examples",
-          "src"
-        ]
-      },
-      {
         "kind": "door",
-        "sentence": "CI now also runs test/kernel-errors-contract.test.ts and test/policy-kernel-scoping.test.ts.",
+        "sentence": "CI now also runs scripts/merge-child-coverage.mjs and test/merge-child-coverage.test.ts.",
         "subjects": [
           ".github/workflows/ci.yml",
-          "test/kernel-errors-contract.test.ts",
-          "test/policy-kernel-scoping.test.ts"
+          "scripts/merge-child-coverage.mjs",
+          "test/merge-child-coverage.test.ts"
         ]
       },
       {
         "kind": "door",
-        "sentence": "Docker Publish now also runs src/cli.ts.",
+        "sentence": "Release Gate now also runs test/merge-child-coverage.test.ts.",
         "subjects": [
-          ".github/workflows/docker-publish.yml",
-          "src/cli.ts"
+          ".github/workflows/release-gate.yml",
+          "test/merge-child-coverage.test.ts"
         ]
       },
       {
         "kind": "door",
-        "sentence": "Docker Publish now also builds src/.",
+        "sentence": "Release now also runs test/merge-child-coverage.test.ts.",
         "subjects": [
-          ".github/workflows/docker-publish.yml",
-          "src/"
+          ".github/workflows/release.yml",
+          "test/merge-child-coverage.test.ts"
         ]
-      },
-      {
-        "kind": "door",
-        "sentence": "And 4 more changes to doors.",
-        "subjects": []
-      },
-      {
-        "kind": "landing",
-        "sentence": ".demo-rk-ops/sources is now written by scripts/repo-knowledge-ops.ts.",
-        "subjects": [
-          ".demo-rk-ops/sources",
-          "scripts/repo-knowledge-ops.ts"
-        ]
-      },
-      {
-        "kind": "landing",
-        "sentence": ".demo-rk-update/sources is now written by scripts/repo-knowledge-update-demo.ts.",
-        "subjects": [
-          ".demo-rk-update/sources",
-          "scripts/repo-knowledge-update-demo.ts"
-        ]
-      },
-      {
-        "kind": "landing",
-        "sentence": ".doc-drift-extract is now written by scripts/doc-drift.mjs.",
-        "subjects": [
-          ".doc-drift-extract",
-          "scripts/doc-drift.mjs"
-        ]
-      },
-      {
-        "kind": "landing",
-        "sentence": "And 143 more new writers and readers of places.",
-        "subjects": []
       },
       {
         "kind": "counts",
-        "sentence": "3 files added and 275 changed content, across 9 parts.",
+        "sentence": "2 files added and 19 changed content, across 6 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "13748608a6d25c077bed3f9f599981d3af14b4d5",
-      "generatedAt": "2026-09-24T18:14:29.725Z"
+      "commit": "5bbcb23e5383850ee4b342223e8f4a8783e393e5",
+      "generatedAt": "2026-09-30T20:09:31.645Z"
     },
     "unchanged": false
   },
@@ -230,9 +180,9 @@
     "Window: 180 days; a pair counts from 3 shared commits, since 2 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "5bbcb23e5383850ee4b342223e8f4a8783e393e5",
-  "defaultBranch": "main",
-  "derived": "13 parts, mostly TypeScript (258 files), JavaScript (16), CSS (2), Astro (1) and HTML (1). Work enters through 9 doors; CI and Release each reach 5 parts, and CI is followed because a pull request goes through it. It publishes to npm and a container image. It deploys a site to GitHub Pages. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.",
+  "commit": "d96918c8a72d125049a0ee359fd65d1571ab85f5",
+  "defaultBranch": "ci/child-process-coverage",
+  "derived": "13 parts, mostly TypeScript (259 files), JavaScript (17), CSS (2), Astro (1) and HTML (1). Work enters through 9 doors; CI and Release each reach 5 parts, and CI is followed because a pull request goes through it. It publishes to npm and a container image. It deploys a site to GitHub Pages. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.",
   "doors": [
     {
       "builds": [
@@ -255,6 +205,11 @@
           "files": 7
         },
         {
+          "boundary": "scripts",
+          "depth": 0,
+          "files": 7
+        },
+        {
           "boundary": "src",
           "depth": 0,
           "files": 99
@@ -262,20 +217,16 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 128
+          "files": 129
         },
         {
           "boundary": "dashboard",
           "depth": 1,
           "files": 1
-        },
-        {
-          "boundary": "scripts",
-          "depth": 1,
-          "files": 6
         }
       ],
       "runs": [
+        "scripts/merge-child-coverage.mjs",
         "test/actor-required-regression.test.ts",
         "test/adapters.test.ts",
         "test/backend-env-surfaces.test.ts",
@@ -303,6 +254,7 @@
         "test/install-smoke.test.ts",
         "test/kernel-errors-contract.test.ts",
         "test/kernel.test.ts",
+        "test/merge-child-coverage.test.ts",
         "test/path-traversal.test.ts",
         "test/phase10-proof.test.ts",
         "test/phase11-proof.test.ts",
@@ -404,8 +356,8 @@
         "test/wave6-policy-proof.test.ts",
         "test/wave6-proof.test.ts"
       ],
-      "runsCount": 127,
-      "runsMore": 124,
+      "runsCount": 129,
+      "runsMore": 126,
       "sends": [
         "uploads coverage to Codecov"
       ],
@@ -445,7 +397,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 128
+          "files": 129
         },
         {
           "boundary": "dashboard",
@@ -455,7 +407,7 @@
         {
           "boundary": "scripts",
           "depth": 1,
-          "files": 6
+          "files": 7
         }
       ],
       "runs": [
@@ -486,6 +438,7 @@
         "test/install-smoke.test.ts",
         "test/kernel-errors-contract.test.ts",
         "test/kernel.test.ts",
+        "test/merge-child-coverage.test.ts",
         "test/path-traversal.test.ts",
         "test/phase10-proof.test.ts",
         "test/phase11-proof.test.ts",
@@ -587,8 +540,8 @@
         "test/wave6-policy-proof.test.ts",
         "test/wave6-proof.test.ts"
       ],
-      "runsCount": 127,
-      "runsMore": 124,
+      "runsCount": 128,
+      "runsMore": 125,
       "sends": [
         "publishes to npm",
         "creates a GitHub release"
@@ -615,7 +568,7 @@
         {
           "boundary": "scripts",
           "depth": 0,
-          "files": 12
+          "files": 13
         },
         {
           "boundary": "src",
@@ -625,7 +578,7 @@
         {
           "boundary": "test",
           "depth": 0,
-          "files": 128
+          "files": 129
         },
         {
           "boundary": "dashboard",
@@ -666,6 +619,7 @@
         "test/install-smoke.test.ts",
         "test/kernel-errors-contract.test.ts",
         "test/kernel.test.ts",
+        "test/merge-child-coverage.test.ts",
         "test/path-traversal.test.ts",
         "test/phase10-proof.test.ts",
         "test/phase11-proof.test.ts",
@@ -767,8 +721,8 @@
         "test/wave6-policy-proof.test.ts",
         "test/wave6-proof.test.ts"
       ],
-      "runsCount": 132,
-      "runsMore": 129,
+      "runsCount": 133,
+      "runsMore": 130,
       "sends": [],
       "stages": [],
       "triggers": [
@@ -1008,12 +962,12 @@
   ],
   "engine": "1.24.0",
   "generated": [],
-  "generatedAt": "2026-09-30T20:09:31.645Z",
+  "generatedAt": "2026-10-01T21:57:12.023Z",
   "limits": [
     "17 imports could not be resolved: `dashboard/lib/apply-redaction.d.ts` imports `../../dist/dashboard/dashboard-model.js`, which a build generates; `examples/agent-safe-app-db/index.ts` imports `@mcptoolshop/db-cluster/policy`, which a build generates, twice; `examples/agent-safe-app-db/index.ts` imports `@mcptoolshop/db-cluster/sdk`, which a build generates; and 13 more.",
     "5 writes and 14 reads use paths built at run time and are not named here.",
     "7 writes go to places this repository does not track, so they are not listed as generated.",
-    "47 writes and 101 reads go to a path their caller passes, not to this repository.",
+    "48 writes and 103 reads go to a path their caller passes, not to this repository.",
     "6 writes and 3 reads go to a temporary directory, not to this repository.",
     "2 reads go to the directory the command is run in, not to this repository.",
     "1 read goes to the directory the command is run in (.db-cluster) or a path its caller passes, not to this repository.",
@@ -1039,7 +993,7 @@
   },
   "parts": 13,
   "readers": [],
-  "repo": "mcp-tool-shop-org/db-cluster",
+  "repo": "@mcptoolshop/db-cluster",
   "sequences": [],
   "startDoor": ".github/workflows/ci.yml",
   "startHere": [
@@ -1050,11 +1004,11 @@
   ],
   "summary": null,
   "summaryFrom": null,
-  "testFiles": 142,
+  "testFiles": 143,
   "testedBy": {
     "dashboard": 3,
     "examples": 0,
-    "scripts": 16,
+    "scripts": 17,
     "src": 122
   },
   "unnamedWrites": 5,
