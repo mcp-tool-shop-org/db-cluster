@@ -330,13 +330,13 @@ describe('[V3-001] INJECT-001 production wiring — mcpCommitGateActive() + Call
 //
 // recordOrphanMutation persists `redactErrorMessage(cause)` into the ledger's
 // mutation_orphaned.detail.error. The A2 PATH_REGEX improvement added bare
-// Windows-RELATIVE path matching (`Users\mikey\AppData\secret.dat`). This
+// Windows-RELATIVE path matching (`Users\alicedoe\AppData\secret.dat`). This
 // proves that improvement reaches the IMMUTABLE ledger end-to-end: force a
 // receipt-write failure whose cause.message carries a relative path, then read
 // the persisted event back off disk and assert it is scrubbed to `<path>`.
 
 describe('[V3-003] REDACT-002 — relative-path scrub reaches the persisted ledger', () => {
-    const RELATIVE_PATH = 'Users\\mikey\\AppData\\secret.dat';
+    const RELATIVE_PATH = 'Users\\alicedoe\\AppData\\secret.dat';
 
     it('a relative path in a receipt-failure cause.message is scrubbed to <path> in the on-disk ledger', async () => {
         const parent = freshParentDir('v3003-ledger');
@@ -375,7 +375,7 @@ describe('[V3-003] REDACT-002 — relative-path scrub reaches the persisted ledg
         // The load-bearing assertion: the relative path is GONE from the
         // immutable ledger, replaced with the scrub marker.
         expect(persistedError).not.toContain(RELATIVE_PATH);
-        expect(persistedError).not.toContain('mikey');
+        expect(persistedError).not.toContain('alicedoe');
         expect(persistedError).toContain('<path>');
     });
 });
@@ -393,8 +393,8 @@ describe('[V3-003] REDACT-002 — relative-path scrub reaches the persisted ledg
 describe('FIX 3 — CLI PolicyConfigError arm scrubs the absolute policies-file path', () => {
     it('the cliCommand catch arm emits a <path>-scrubbed message for a PolicyConfigError carrying an absolute path', async () => {
         const ABS = process.platform === 'win32'
-            ? 'C:\\Users\\mikey\\AppData\\secret\\.db-cluster\\policies.json'
-            : '/home/mikey/secret/.db-cluster/policies.json';
+            ? 'C:\\Users\\alicedoe\\AppData\\secret\\.db-cluster\\policies.json'
+            : '/home/alicedoe/secret/.db-cluster/policies.json';
 
         const stderrChunks: string[] = [];
         const stderrSpy = vi
@@ -424,7 +424,7 @@ describe('FIX 3 — CLI PolicyConfigError arm scrubs the absolute policies-file 
         expect(out).toMatch(/Invalid policy config/i);
         // The load-bearing assertion: NO absolute path leaks; it is scrubbed.
         expect(out).not.toContain(ABS);
-        expect(out).not.toContain('mikey');
+        expect(out).not.toContain('alicedoe');
         expect(out).toContain('<path>');
 
         stderrSpy.mockRestore();

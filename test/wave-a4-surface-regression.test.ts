@@ -239,9 +239,9 @@ describe('SURFACE-B-003 — MCP error sanitizer (redactError)', () => {
     });
 
     it('strips absolute Windows paths from error messages', () => {
-        const err = new Error('Cannot read C:\\Users\\mikey\\AppData\\secret.json: not found');
+        const err = new Error('Cannot read C:\\Users\\alicedoe\\AppData\\secret.json: not found');
         const sanitized = redactError(err);
-        expect(sanitized.message).not.toContain('C:\\Users\\mikey\\AppData\\secret.json');
+        expect(sanitized.message).not.toContain('C:\\Users\\alicedoe\\AppData\\secret.json');
         expect(sanitized.message).toContain('<path>');
     });
 

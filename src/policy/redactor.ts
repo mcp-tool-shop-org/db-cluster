@@ -629,7 +629,7 @@ export function redactIndexSourceUri(record: { sourceId: string; sourceStore: st
  *  - Windows absolute paths (`C:\foo\bar`, `C:/foo/bar`) and UNC
  *    (`\\host\share\…`).
  *  - Home-relative (`~/foo`) and dot-relative (`./foo`, `../foo`) paths.
- *  - **Bare relative paths** (`Users\mikey\AppData\secret.dat`,
+ *  - **Bare relative paths** (`Users\alicedoe\AppData\secret.dat`,
  *    `foo/bar/baz`) — a run of path-segment characters joined by at least
  *    one `/` or `\` separator. This is the REDACT-002 addition: pre-fix the
  *    regex required a drive / UNC / leading-slash anchor, so a bare
