@@ -1,23 +1,27 @@
 # db-cluster: how it works
 
-Mapped at 2026-10-01 from commit d96918c by Atlas 1.24.0.
+Mapped at 2026-10-01 from commit 193d70c by Atlas 1.24.0.
 
 ## What this is
 
-13 parts, mostly TypeScript (259 files), JavaScript (17), CSS (2), Astro (1) and HTML (1). Work enters through 9 doors; CI and Release each reach 5 parts, and CI is followed because a pull request goes through it. It publishes to npm and a container image. It deploys a site to GitHub Pages. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.
+13 parts, mostly TypeScript (291 files), JavaScript (17), CSS (2), Astro (1) and HTML (1). Work enters through 9 doors; CI and Release each reach 5 parts, and CI is followed because a pull request goes through it. It publishes to npm and a container image. It deploys a site to GitHub Pages. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.
 
-## What changed since 2026-09-30 (5bbcb23)
+## What changed since 2026-10-01 (d96918c)
 
-- CI now also runs scripts/merge-child-coverage.mjs and test/merge-child-coverage.test.ts.
-- Release Gate now also runs test/merge-child-coverage.test.ts.
-- Release now also runs test/merge-child-coverage.test.ts.
-- 2 files added and 19 changed content, across 6 parts.
+- CI now also runs test/coverage-adapters-factory.test.ts, test/coverage-adapters-local-artifact.test.ts, test/coverage-adapters-local-ledger-recovery.test.ts and 29 more.
+- Release Gate now also runs test/coverage-adapters-factory.test.ts, test/coverage-adapters-local-artifact.test.ts, test/coverage-adapters-local-ledger-recovery.test.ts and 29 more.
+- Release now also runs test/coverage-adapters-factory.test.ts, test/coverage-adapters-local-artifact.test.ts, test/coverage-adapters-local-ledger-recovery.test.ts and 29 more.
+- CHANGELOG.md is now also read by test/coverage-sdk-repo-knowledge-ingest.test.ts.
+- README.md is now also read by test/coverage-sdk-repo-knowledge-ingest.test.ts.
+- examples/dogfood-project-memory/.db-cluster is now also read by test/coverage-scripts-dashboard-snapshot.test.ts.
+- And 3 more new writers and readers of places.
+- 32 files added and 3 changed content, across 3 parts.
 
 ## What comes in
 
-1. **CI.** On a pull request; on a push; or by hand. Runs scripts/merge-child-coverage.mjs, test/actor-required-regression.test.ts, test/adapters.test.ts and 126 more; builds src/; checks examples/.
-2. **Release.** When a tag matching `v*` is pushed. Runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 125 more; builds src/; checks examples/.
-3. **Release Gate.** On a push to main; when a tag matching `v*` is pushed; or by hand. Runs scripts/completeness-checks.mjs, scripts/doc-drift.mjs, scripts/jsdoc-gate.mjs and 130 more; builds src/.
+1. **CI.** On a pull request; on a push; or by hand. Runs scripts/merge-child-coverage.mjs, test/actor-required-regression.test.ts, test/adapters.test.ts and 158 more; builds src/; checks examples/.
+2. **Release.** When a tag matching `v*` is pushed. Runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 157 more; builds src/; checks examples/.
+3. **Release Gate.** On a push to main; when a tag matching `v*` is pushed; or by hand. Runs scripts/completeness-checks.mjs, scripts/doc-drift.mjs, scripts/jsdoc-gate.mjs and 162 more; builds src/.
 4. **Smoke Install.** On a pull request touching 1 path; when a tag matching `v*` is pushed; or by hand. Runs scripts/smoke-install.mjs; builds src/.
 5. **Docker Publish.** When a tag matching `v*` is pushed; or by hand. Runs src/cli.ts; builds src/; packs LICENSE, README.md, docs/ and 3 more into an image.
 6. **Deploy site to GitHub Pages.** On a pull request to main touching 2 paths; on a push to main touching 2 paths; or by hand. Runs site/astro.config.mjs and site/src/.
@@ -27,7 +31,7 @@ Mapped at 2026-10-01 from commit d96918c by Atlas 1.24.0.
 
 ## What happens through CI
 
-1. The workflow runs scripts/merge-child-coverage.mjs in scripts and 128 files in test; it builds src/ in src; it checks examples/ in examples.
+1. The workflow runs scripts/merge-child-coverage.mjs in scripts and 160 files in test; it builds src/ in src; it checks examples/ in examples.
 2. That reaches dashboard (1 file).
 3. It writes to examples/dogfood-project-memory/.db-cluster, which is not tracked.
 4. It uploads coverage to Codecov.
@@ -38,9 +42,9 @@ CI writes only to examples/dogfood-project-memory/.db-cluster, which is not trac
 
 ## The other doors
 
-**Release** runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 125 more, builds src/, checks examples/, reaches dashboard and scripts, writes to examples/dogfood-project-memory/.db-cluster, which is not tracked, publishes to npm, and creates a GitHub release.
+**Release** runs test/actor-required-regression.test.ts, test/adapters.test.ts, test/backend-env-surfaces.test.ts and 157 more, builds src/, checks examples/, reaches dashboard and scripts, writes to examples/dogfood-project-memory/.db-cluster, which is not tracked, publishes to npm, and creates a GitHub release.
 
-**Release Gate** runs scripts/completeness-checks.mjs, scripts/doc-drift.mjs, scripts/jsdoc-gate.mjs and 130 more, builds src/, reaches dashboard, and writes to .doc-drift-extract/, .release-gate-output/ and examples/dogfood-project-memory/.db-cluster, which are not tracked.
+**Release Gate** runs scripts/completeness-checks.mjs, scripts/doc-drift.mjs, scripts/jsdoc-gate.mjs and 162 more, builds src/, reaches dashboard, and writes to .doc-drift-extract/, .release-gate-output/ and examples/dogfood-project-memory/.db-cluster, which are not tracked.
 
 **Smoke Install** runs scripts/smoke-install.mjs and builds src/.
 
@@ -104,7 +108,7 @@ Read those in order to follow one pull request end to end.
 - 17 imports could not be resolved: `dashboard/lib/apply-redaction.d.ts` imports `../../dist/dashboard/dashboard-model.js`, which a build generates; `examples/agent-safe-app-db/index.ts` imports `@mcptoolshop/db-cluster/policy`, which a build generates, twice; `examples/agent-safe-app-db/index.ts` imports `@mcptoolshop/db-cluster/sdk`, which a build generates; and 13 more.
 - 5 writes and 14 reads use paths built at run time and are not named here.
 - 7 writes go to places this repository does not track, so they are not listed as generated.
-- 48 writes and 103 reads go to a path their caller passes, not to this repository.
+- 50 writes and 103 reads go to a path their caller passes, not to this repository.
 - 6 writes and 3 reads go to a temporary directory, not to this repository.
 - 2 reads go to the directory the command is run in, not to this repository.
 - 1 read goes to the directory the command is run in (.db-cluster) or a path its caller passes, not to this repository.

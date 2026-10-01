@@ -19,6 +19,7 @@ import type {
     FreshnessStatus,
 } from './dashboard-model.js';
 import { storeToSourceType, buildUri } from './dashboard-model.js';
+import { formatClusterUri } from '../uri/index.js';
 
 /**
  * Inspect a canonical entity and build a full DashboardObject.
@@ -28,7 +29,10 @@ export async function inspectEntity(kernel: ClusterKernel, entityId: string): Pr
     const uri = buildUri('canonical', 'entity', entity.id);
 
     // Provenance
-    const graph = await kernel.traceObject(uri, { direction: 'backward' });
+    // The trace builder resolves the canonical `cluster://<store>/<id>` form, not the
+    // dashboard's `<store>/<type>/<id>` identity URI.  Passing the latter traced a
+    // "[MISSING]" gap node instead of the object's real provenance.
+    const graph = await kernel.traceObject(formatClusterUri('canonical', entity.id), { direction: 'backward' });
     const provenanceGraph = mapProvenanceGraph(graph);
 
     // Receipts
@@ -70,7 +74,7 @@ export async function inspectArtifact(kernel: ClusterKernel, artifactId: string)
     // Fall back to direct inspection if available
     const uri = buildUri('artifact', 'source', artifactId);
 
-    const graph = await kernel.traceObject(uri, { direction: 'backward' });
+    const graph = await kernel.traceObject(formatClusterUri('artifact', artifactId), { direction: 'backward' });
     const provenanceGraph = mapProvenanceGraph(graph);
 
     const receipts = await kernel.listReceipts({ limit: 50 });
@@ -104,7 +108,7 @@ export async function inspectIndexRecord(kernel: ClusterKernel, recordId: string
     const explanation = await kernel.explainIndex(recordId);
     const uri = buildUri('index', 'record', recordId);
 
-    const graph = await kernel.traceObject(uri, { direction: 'backward' });
+    const graph = await kernel.traceObject(formatClusterUri('index', recordId), { direction: 'backward' });
     const provenanceGraph = mapProvenanceGraph(graph);
 
     const warnings: DashboardWarning[] = [];
