@@ -2,7 +2,7 @@
 
 All notable user-facing changes to db-cluster. This project follows [semantic versioning](https://semver.org).
 
-## Unreleased
+## 3.0.0
 
 ### Breaking changes
 
@@ -21,6 +21,12 @@ All notable user-facing changes to db-cluster. This project follows [semantic ve
 - **One-call mutators validate before they write.** `createEntity` stored the entity and its index record before checking its input, so `db-cluster entity create --kind note --name ""` exited 65 (`COMMAND_VALIDATION_FAILED`) with the entity already stored and no command, receipt or provenance recording it. It now applies the proposal path's checks first and writes nothing on a refusal. `ingestArtifact` now checks its input the same way. A missing filename is refused with `COMMAND_VALIDATION_FAILED`: the local backend used to store the artifact anyway, and SQLite leaked a raw `NOT NULL` error. Missing or JSON-roundtripped content gets `INVALID_CONTENT_SHAPE` where a raw `TypeError` escaped before. `compensateMutation` validates before it sweeps a leftover staging file.
 
 - **Every exit-code table matches the CLI.** `docs/cli.md` gave `PROVENANCE_MISSING` as exit 70 (the CLI exits 1), `LEDGER_CYCLE_DETECTED` as 65 (70) and `BUFFER_SIDE_CHANNEL_NOT_SUPPORTED` as 1 (70), and the runbooks repeated two of those. The table `--help-exit-codes` prints, the runbooks and the site handbook also left out up to ten codes, including 73 (`BACKUP_TARGET_EXISTS`). A test now checks all five tables against the CLI's exit-code map.
+
+- **The dashboard inspector shows an object's real provenance.** Inspecting an entity, artifact or index record traced the dashboard's `cluster://<store>/<type>/<id>` identity URI, which the trace builder does not resolve, so every inspection showed a single "[MISSING] … not found" node. It now traces the canonical `cluster://<store>/<id>`; the dashboard's own URIs are unchanged.
+
+- **A torn ledger tail no longer makes the ledger unopenable.** After an interrupted write, `LocalLedgerStore` dropped the torn last line in memory but left it on disk, so the recovery event, or the next receipt, landed after it, and the following start failed with `CORRUPT_STORE`. The affected events or receipts file is now rewritten atomically from the records that loaded before the recovery is recorded. The unreadable fragment is not kept; the `ledger_tail_corruption_recovered` event records how many lines were discarded and from which file.
+
+- **The repo-knowledge dashboard snapshot script runs on Linux and macOS.** Its entry-point check built `file:///${path}`, which has four slashes on POSIX and never matched, so the script did nothing there. It now uses `pathToFileURL`.
 
 ### Notes
 
