@@ -58,9 +58,9 @@
 ## E. Identity (soft gate — does not block ship)
 
 - [x] `[all]` Logo in README header (2026-05-27) — brand repo `mcp-tool-shop-org/brand/logos/db-cluster/readme.png` (commit `12675c2`); rendered at the top of README.md
-- [ ] `[all]` Translations (polyglot-mcp, 8 languages) — Phase 10 §3c (user runs translation script before release commit)
-- [ ] `[org]` Landing page (@mcptoolshop/site-theme) — Phase 10 §4 (site/ scaffold) + §5 (handbook)
-- [ ] `[all]` GitHub repo metadata: description, homepage, topics — Phase 10 §6 (`gh repo edit`)
+- [x] `[all]` Translations (polyglot-mcp, 8 languages) (2026-10-01) — README.md plus 7 translations (es, fr, hi, it, ja, pt-BR, zh); README unchanged for 3.0.0 apart from the Codecov badge line
+- [x] `[org]` Landing page (@mcptoolshop/site-theme) (2026-10-01) — https://mcp-tool-shop-org.github.io/db-cluster/ and its handbook both answer 200
+- [x] `[all]` GitHub repo metadata: description, homepage, topics (2026-10-01) — description set, homepage the landing page, 14 topics
 
 ---
 

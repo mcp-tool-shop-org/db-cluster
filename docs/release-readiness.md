@@ -32,7 +32,7 @@ Phase 15 originally self-declared PASS without continuous verification, with
 TypeScript examples that did not typecheck and a release-gate drift check that
 only worked on Windows. Wave A1 of the dogfood-swarm Stage A amend pass added:
 
-- A `.github/workflows/` directory wiring CI (Node 20/22 × ubuntu/windows),
+- A `.github/workflows/` directory wiring CI (Node 22/24 × ubuntu/windows),
   release-gate (push to main + tag), and smoke-install (tag push).
 - A portable Node-native drift check in `scripts/release-gate.mjs`
   (previously Windows-only `findstr`).
