@@ -1,21 +1,14 @@
 # db-cluster: how it works
 
-Mapped at 2026-10-01 from commit 193d70c by Atlas 1.24.0.
+Mapped at 2026-11-11 from commit 0ae53ee by Atlas 1.26.0.
 
 ## What this is
 
 13 parts, mostly TypeScript (291 files), JavaScript (17), CSS (2), Astro (1) and HTML (1). Work enters through 9 doors; CI and Release each reach 5 parts, and CI is followed because a pull request goes through it. It publishes to npm and a container image. It deploys a site to GitHub Pages. People run db-cluster and db-cluster-mcp. People import @mcptoolshop/db-cluster.
 
-## What changed since 2026-10-01 (d96918c)
+## What changed since 2026-10-01 (193d70c)
 
-- CI now also runs test/coverage-adapters-factory.test.ts, test/coverage-adapters-local-artifact.test.ts, test/coverage-adapters-local-ledger-recovery.test.ts and 29 more.
-- Release Gate now also runs test/coverage-adapters-factory.test.ts, test/coverage-adapters-local-artifact.test.ts, test/coverage-adapters-local-ledger-recovery.test.ts and 29 more.
-- Release now also runs test/coverage-adapters-factory.test.ts, test/coverage-adapters-local-artifact.test.ts, test/coverage-adapters-local-ledger-recovery.test.ts and 29 more.
-- CHANGELOG.md is now also read by test/coverage-sdk-repo-knowledge-ingest.test.ts.
-- README.md is now also read by test/coverage-sdk-repo-knowledge-ingest.test.ts.
-- examples/dogfood-project-memory/.db-cluster is now also read by test/coverage-scripts-dashboard-snapshot.test.ts.
-- And 3 more new writers and readers of places.
-- 32 files added and 3 changed content, across 3 parts.
+Nothing structural changed since 2026-10-01; 7 files changed content.
 
 ## What comes in
 
